@@ -1,0 +1,23 @@
+name: Bauen und testen / Build and test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  firmware:
+    name: Firmware prüfen / Verify firmware
+    runs-on: ubuntu-latest
+    steps:
+      - name: Quellcode laden / Check out source
+        uses: actions/checkout@v4
+      - name: Python einrichten / Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Werkzeuge installieren / Install tools
+        run: pip install platformio cryptography
+      - name: Tests ausführen / Run tests
+        run: python -m unittest discover -s tests -p "test_*.py"
+      - name: Firmware bauen / Build firmware
+        run: platformio run

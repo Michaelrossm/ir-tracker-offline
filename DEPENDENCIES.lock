@@ -1,0 +1,10 @@
+# DE: Reproduzierbare direkte Build-Abhängigkeiten für 1.0.0-beta.1
+# EN: Reproducible direct build dependencies for 1.0.0-beta.1
+platformio-platform = espressif32@7.0.1
+framework = arduino
+framework-arduinoespressif32 = 3.20017.241212+sha.dcc1105b
+ArduinoJson = 6.21.6
+PubSubClient = 2.8.0
+WebSockets = 2.7.3
+toolchain-riscv32-esp = 8.4.0+2021r2-patch5
+esptoolpy = 4.11.0

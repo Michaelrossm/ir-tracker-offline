@@ -1,0 +1,18 @@
+* text=auto
+*.cpp text eol=lf
+*.h text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ini text eol=lf
+*.csv text eol=lf
+*.lock text eol=lf
+*.ps1 text eol=lf
+*.pem text eol=lf
+*.jpeg binary
+*.jpg binary
+*.png binary
+*.bin binary
+*.irfw binary
+*.zip binary
