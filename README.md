@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.0.0 Beta
+# IR Tracker Offline — 1.0.1 Beta
 
 **Deutsch** | [English](#english)
 
@@ -16,7 +16,7 @@ Lokale, cloudfreie Firmware für einen ESP32-C3-basierten IR-Stromzähler-Tracke
 - bis zu drei WLANs; automatischer zeitbegrenzter Setup-Hotspot als Rückfall
 - Home Assistant über MQTT Discovery
 - JSON, CSV, Prometheus/OpenMetrics, Influx-Ausgabe und Shelly-kompatible Leseendpunkte
-- signierte WLAN-Firmwareupdates
+- signierte manuelle WLAN-Updates sowie sichere GitHub-Prüfung mit optionaler automatischer Installation
 - Einstellungs-/Historienbackup, Selbsttest und Diagnose
 - browserlokale Farbauswahl und Sprache Deutsch/Englisch
 - Eco-Modus, adaptiver WLAN-Sendepegel und abschaltbare optionale Schnittstellen
@@ -62,7 +62,7 @@ Local, cloud-free firmware for an ESP32-C3-based IR electricity meter tracker. C
 - up to three Wi-Fi networks; automatic time-limited setup hotspot fallback
 - Home Assistant MQTT Discovery
 - JSON, CSV, Prometheus/OpenMetrics, Influx output and read-only Shelly-compatible endpoints
-- signed Wi-Fi firmware updates
+- signed manual Wi-Fi updates plus secure GitHub checks and optional automatic installation
 - settings/history backup, guided self-test and diagnostics
 - browser-local colors and German/English language selection
 - Eco mode, adaptive Wi-Fi transmit power and optional interfaces that can be disabled

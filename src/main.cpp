@@ -1,12 +1,13 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <DNSServer.h>
-#include <ESPmDNS.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <Update.h>
 #include <esp_heap_caps.h>
 #include <esp_ota_ops.h>
@@ -28,10 +29,15 @@
 #include "EnergyManager.h"
 #include "EventLog.h"
 #include "FirmwareSigningPublicKey.h"
+#include "GithubRootCertificates.h"
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.0.0-beta.1";
+constexpr char kFirmwareVersion[] = "1.0.1-beta.1";
+constexpr char kGithubReleasesApi[] =
+    "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
+constexpr char kGithubAssetPrefix[] =
+    "https://github.com/Michaelrossm/ir-tracker-offline/releases/download/";
 constexpr char kFirmwareAuthor[] = "Michael Roßmann";
 constexpr char kFirmwareLicense[] = "PolyForm Noncommercial 1.0.0";
 constexpr uint8_t kWifiSlots = 3;
@@ -48,6 +54,9 @@ constexpr uint32_t kEcoCpuMhz = 80;
 constexpr uint32_t kPerformanceCpuMhz = 160;
 constexpr uint32_t kWifiPowerStableMs = 3UL * 60UL * 1000UL;
 constexpr uint32_t kWifiPowerEvaluateMs = 60UL * 1000UL;
+constexpr uint32_t kGithubInitialCheckMs = 5UL * 60UL * 1000UL;
+constexpr uint32_t kGithubCheckIntervalMs = 24UL * 60UL * 60UL * 1000UL;
+constexpr size_t kGithubMaximumPackageBytes = 4UL * 1024UL * 1024UL;
 constexpr size_t kTelegramMax = 2048;
 constexpr uint8_t kDefaultRxPin = 3;
 constexpr int8_t kDefaultTxPin = 6;
@@ -97,6 +106,8 @@ struct Config {
   bool ecoMode = true;
   bool ecoLedOff = true;
   bool adaptiveWifiPower = true;
+  bool githubUpdateCheck = true;
+  bool githubAutoInstall = false;
 } config;
 
 struct MeterValues {
@@ -130,7 +141,6 @@ String deviceId;
 uint8_t wifiCandidate = 0;
 uint8_t wifiTried = 0;
 uint32_t wifiCandidateStartedMs = 0;
-bool mdnsRunning = false;
 bool ntpConfigured = false;
 bool otaUploadAuthorized = false;
 bool otaUploadOk = false;
@@ -157,6 +167,47 @@ uint32_t wifiTxPowerErrors = 0;
 uint32_t wifiModeErrors = 0;
 bool wifiTxPowerRuntimeFault = false;
 bool wifiMinModemSleepActive = false;
+
+struct GithubUpdateState {
+  bool checking = false;
+  bool installing = false;
+  bool available = false;
+  bool checked = false;
+  String version;
+  String assetName;
+  String assetUrl;
+  String error;
+  size_t assetSize = 0;
+  uint32_t lastAttemptMs = 0;
+  time_t lastSuccess = 0;
+} githubUpdate;
+
+// DE: Die gefuehrte GPIO-Suche veraendert nur die laufende UART-Konfiguration.
+// Sie speichert nichts und stellt die normale Konfiguration nach Erfolg, Fehler
+// oder Abbruch wieder her. | EN: The guided GPIO scan only changes the running
+// UART configuration. It stores nothing and always restores normal operation.
+struct GpioScanState {
+  bool active = false;
+  bool complete = false;
+  bool found = false;
+  uint8_t pins[11] = {};
+  uint32_t bauds[5] = {};
+  uint8_t pinCount = 0;
+  uint8_t baudCount = 0;
+  uint8_t pinIndex = 0;
+  uint8_t baudIndex = 0;
+  int8_t currentPin = -1;
+  uint32_t currentBaud = 0;
+  int8_t foundPin = -1;
+  uint32_t foundBaud = 0;
+  uint16_t tested = 0;
+  uint16_t total = 0;
+  uint32_t candidateStartedMs = 0;
+  uint32_t baselineTelegrams = 0;
+  String error;
+} gpioScan;
+
+constexpr uint32_t kGpioScanWindowMs = 2200;
 
 const char *wifiTxProfileName() {
   switch (wifiTxProfile) {
@@ -675,6 +726,8 @@ void loadConfig() {
   config.ecoMode = prefs.getBool("eco_mode", true);
   config.ecoLedOff = prefs.getBool("eco_led_off", true);
   config.adaptiveWifiPower = prefs.getBool("wifi_power_auto", true);
+  config.githubUpdateCheck = prefs.getBool("gh_check", true);
+  config.githubAutoInstall = prefs.getBool("gh_auto", false);
   energyConfig.driver = static_cast<EnergyManager::Driver>(
       prefs.getUChar("em_drv", 0));
   energyConfig.enabled = prefs.getBool("em_enable", false);
@@ -772,6 +825,8 @@ void saveConfig() {
   prefs.putBool("eco_mode", config.ecoMode);
   prefs.putBool("eco_led_off", config.ecoLedOff);
   prefs.putBool("wifi_power_auto", config.adaptiveWifiPower);
+  prefs.putBool("gh_check", config.githubUpdateCheck);
+  prefs.putBool("gh_auto", config.githubAutoInstall);
   prefs.putUChar("em_drv", static_cast<uint8_t>(energyConfig.driver));
   prefs.putBool("em_enable", energyConfig.enabled);
   prefs.putBool("em_dry", energyConfig.dryRun);
@@ -1174,6 +1229,110 @@ void consumeMeterByte(uint8_t value) {
   }
 }
 
+void resetSmlCapture() {
+  telegram.clear();
+  startMatched = 0;
+  capturing = false;
+  smlTrailerRemaining = 0;
+}
+
+void restoreMeterSerialAfterScan() {
+  meterSerial.end();
+  resetSmlCapture();
+  meterSerial.begin(config.baud, SERIAL_8N1, config.rxPin, config.txPin);
+  if (config.ledPin >= 0) {
+    pinMode(config.ledPin, OUTPUT);
+    digitalWrite(config.ledPin, config.ledInverted);
+  }
+}
+
+void finishGpioScan(bool found, const String &error = "") {
+  gpioScan.active = false;
+  gpioScan.complete = true;
+  gpioScan.found = found;
+  gpioScan.error = error;
+  restoreMeterSerialAfterScan();
+  eventLog.add(found ? "INFO" : "WARN", "GPIO_SCAN",
+               found ? "IR-Eingang durch CRC-gueltiges SML-Telegramm bestaetigt"
+                     : "GPIO-Suche ohne gueltiges SML-Telegramm beendet");
+}
+
+void beginGpioScanCandidate() {
+  if (gpioScan.pinIndex >= gpioScan.pinCount) {
+    finishGpioScan(false, "no_valid_sml_telegram");
+    return;
+  }
+  gpioScan.currentPin = gpioScan.pins[gpioScan.pinIndex];
+  gpioScan.currentBaud = gpioScan.bauds[gpioScan.baudIndex];
+  meterSerial.end();
+  resetSmlCapture();
+  pinMode(gpioScan.currentPin, INPUT);
+  meterSerial.begin(gpioScan.currentBaud, SERIAL_8N1,
+                    gpioScan.currentPin, -1);
+  gpioScan.baselineTelegrams = meter.telegrams;
+  gpioScan.candidateStartedMs = millis();
+}
+
+void startGpioScan() {
+  if (gpioScan.active) return;
+  irPulse.active = false;
+  apatorUnlock.active = false;
+  gpioScan = GpioScanState{};
+  gpioScan.active = true;
+
+  // DE: Den aktuellen Wert zuerst wirklich pruefen, danach alle anderen
+  // zulaessigen C3-Trackerpins. | EN: Really test the current value first,
+  // followed by every other allowed C3 tracker pin.
+  gpioScan.pins[gpioScan.pinCount++] = config.rxPin;
+  for (uint8_t pin = 0; pin <= 10; ++pin)
+    if (pin != config.rxPin) gpioScan.pins[gpioScan.pinCount++] = pin;
+
+  gpioScan.bauds[gpioScan.baudCount++] = config.baud;
+  const uint32_t commonBauds[] = {9600, 19200, 38400, 115200};
+  for (uint32_t baud : commonBauds)
+    if (baud != config.baud) gpioScan.bauds[gpioScan.baudCount++] = baud;
+  gpioScan.total = gpioScan.pinCount * gpioScan.baudCount;
+  requestCpuBoost("gpio_scan");
+  beginGpioScanCandidate();
+}
+
+void updateGpioScan() {
+  if (!gpioScan.active) return;
+  if (meter.telegrams > gpioScan.baselineTelegrams &&
+      meter.lastCrcValid &&
+      meter.lastTelegramMs >= gpioScan.candidateStartedMs) {
+    gpioScan.foundPin = gpioScan.currentPin;
+    gpioScan.foundBaud = gpioScan.currentBaud;
+    ++gpioScan.tested;
+    finishGpioScan(true);
+    return;
+  }
+  if (millis() - gpioScan.candidateStartedMs < kGpioScanWindowMs) return;
+  ++gpioScan.tested;
+  if (++gpioScan.baudIndex >= gpioScan.baudCount) {
+    gpioScan.baudIndex = 0;
+    ++gpioScan.pinIndex;
+  }
+  beginGpioScanCandidate();
+}
+
+String gpioScanJson() {
+  String json = "{\"supported\":true,\"active\":";
+  json += gpioScan.active ? "true" : "false";
+  json += ",\"complete\":";
+  json += gpioScan.complete ? "true" : "false";
+  json += ",\"found\":";
+  json += gpioScan.found ? "true" : "false";
+  json += ",\"tested\":" + String(gpioScan.tested) +
+          ",\"total\":" + String(gpioScan.total) +
+          ",\"current_pin\":" + String(gpioScan.currentPin) +
+          ",\"current_baud\":" + String(gpioScan.currentBaud) +
+          ",\"found_pin\":" + String(gpioScan.foundPin) +
+          ",\"found_baud\":" + String(gpioScan.foundBaud) +
+          ",\"error\":\"" + jsonEscape(gpioScan.error) + "\"}";
+  return json;
+}
+
 String statusJson() {
   const bool fresh = meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
   const bool browserSessionValid = validBrowserSession();
@@ -1262,6 +1421,14 @@ String statusJson() {
   json += "\"restart_reason\":\"" + bootResetReason + "\",";
   json += "\"led_gpio\":" + String(config.ledPin) + ",";
   json += "\"baud\":" + String(config.baud) + ",";
+  json += "\"github_update_check\":" +
+          String(config.githubUpdateCheck ? "true" : "false") + ",";
+  json += "\"github_auto_install\":" +
+          String(config.githubAutoInstall ? "true" : "false") + ",";
+  json += "\"github_update_available\":" +
+          String(githubUpdate.available ? "true" : "false") + ",";
+  json += "\"github_update_version\":\"" +
+          jsonEscape(githubUpdate.version) + "\",";
   json += "\"uptime_s\":" + String(millis() / 1000);
   json += "}";
   return json;
@@ -2648,6 +2815,8 @@ String settingsBackupJson() {
   device["eco_mode"] = config.ecoMode;
   device["eco_led_off"] = config.ecoLedOff;
   device["adaptive_wifi_power"] = config.adaptiveWifiPower;
+  device["github_update_check"] = config.githubUpdateCheck;
+  device["github_auto_install"] = config.githubAutoInstall;
   JsonObject mqttConfig = document.createNestedObject("mqtt");
   mqttConfig["host"] = config.mqttHost;
   mqttConfig["port"] = config.mqttPort;
@@ -2770,6 +2939,8 @@ void handleSettingsRestore() {
   config.ecoMode = device["eco_mode"] | true;
   config.ecoLedOff = device["eco_led_off"] | true;
   config.adaptiveWifiPower = device["adaptive_wifi_power"] | true;
+  config.githubUpdateCheck = device["github_update_check"] | true;
+  config.githubAutoInstall = device["github_auto_install"] | false;
   config.timezone = String(
       device["timezone"] | "CET-1CEST,M3.5.0,M10.5.0/3");
   JsonObject mqttConfig = document["mqtt"];
@@ -3105,6 +3276,230 @@ bool finishSignedOta() {
   return true;
 }
 
+uint64_t firmwareVersionNumber(const String &value) {
+  String normalized = value;
+  if (normalized.startsWith("v")) normalized.remove(0, 1);
+  unsigned int major = 0, minor = 0, patch = 0, beta = 255;
+  if (sscanf(normalized.c_str(), "%u.%u.%u-beta.%u", &major, &minor,
+             &patch, &beta) < 3) {
+    beta = 255;
+    if (sscanf(normalized.c_str(), "%u.%u.%u", &major, &minor, &patch) != 3)
+      return 0;
+  }
+  if (major > 65535 || minor > 65535 || patch > 65535 || beta > 255)
+    return 0;
+  return (static_cast<uint64_t>(major) << 40) |
+         (static_cast<uint64_t>(minor) << 24) |
+         (static_cast<uint64_t>(patch) << 8) | beta;
+}
+
+String githubUpdateJson() {
+  String json = "{\"current_version\":\"" + String(kFirmwareVersion) +
+                "\",\"automatic_checks\":" +
+                String(config.githubUpdateCheck ? "true" : "false") +
+                ",\"automatic_install\":" +
+                String(config.githubAutoInstall ? "true" : "false") +
+                ",\"checked\":" + String(githubUpdate.checked ? "true" : "false") +
+                ",\"checking\":" + String(githubUpdate.checking ? "true" : "false") +
+                ",\"installing\":" + String(githubUpdate.installing ? "true" : "false") +
+                ",\"available\":" + String(githubUpdate.available ? "true" : "false") +
+                ",\"latest_version\":\"" + jsonEscape(githubUpdate.version) +
+                "\",\"asset_name\":\"" + jsonEscape(githubUpdate.assetName) +
+                "\",\"asset_size\":" + String(githubUpdate.assetSize) +
+                ",\"last_success\":" + String(static_cast<uint32_t>(githubUpdate.lastSuccess)) +
+                ",\"error\":\"" + jsonEscape(githubUpdate.error) + "\"}";
+  return json;
+}
+
+bool checkGithubFirmwareUpdate() {
+  if (githubUpdate.checking || githubUpdate.installing) return false;
+  githubUpdate.checking = true;
+  githubUpdate.error = "";
+  githubUpdate.lastAttemptMs = millis();
+  githubUpdate.available = false;
+  githubUpdate.version = "";
+  githubUpdate.assetName = "";
+  githubUpdate.assetUrl = "";
+  githubUpdate.assetSize = 0;
+  if (WiFi.status() != WL_CONNECTED) {
+    githubUpdate.error = "wifi_not_connected";
+    githubUpdate.checking = false;
+    return false;
+  }
+  if (time(nullptr) < 1700000000) {
+    githubUpdate.error = "system_time_not_synchronized";
+    githubUpdate.checking = false;
+    return false;
+  }
+  requestCpuBoost("github_update_check");
+  WiFiClientSecure client;
+  client.setCACert(kGithubRootCertificates);
+  HTTPClient http;
+  http.setConnectTimeout(7000);
+  http.setTimeout(9000);
+  if (!http.begin(client, kGithubReleasesApi)) {
+    githubUpdate.error = "github_connection_initialization_failed";
+    githubUpdate.checking = false;
+    return false;
+  }
+  http.addHeader("Accept", "application/vnd.github+json");
+  http.addHeader("X-GitHub-Api-Version", "2022-11-28");
+  http.addHeader("User-Agent", "IR-Tracker-Offline/" + String(kFirmwareVersion));
+  const int response = http.GET();
+  if (response != HTTP_CODE_OK) {
+    githubUpdate.error = "github_http_" + String(response);
+    http.end();
+    githubUpdate.checking = false;
+    return false;
+  }
+  StaticJsonDocument<512> filter;
+  filter[0]["draft"] = true;
+  filter[0]["tag_name"] = true;
+  filter[0]["assets"][0]["name"] = true;
+  filter[0]["assets"][0]["browser_download_url"] = true;
+  filter[0]["assets"][0]["size"] = true;
+  DynamicJsonDocument releases(12288);
+  const DeserializationError parseError = deserializeJson(
+      releases, http.getStream(), DeserializationOption::Filter(filter));
+  if (parseError) {
+    githubUpdate.error = "github_json_invalid";
+    http.end();
+    githubUpdate.checking = false;
+    return false;
+  }
+  const uint64_t current = firmwareVersionNumber(kFirmwareVersion);
+  uint64_t best = current;
+  for (JsonObject release : releases.as<JsonArray>()) {
+    if (release["draft"] | true) continue;
+    const String tag = release["tag_name"] | "";
+    const uint64_t candidate = firmwareVersionNumber(tag);
+    if (!candidate || candidate <= best) continue;
+    for (JsonObject asset : release["assets"].as<JsonArray>()) {
+      const String name = asset["name"] | "";
+      const String url = asset["browser_download_url"] | "";
+      const size_t size = asset["size"] | 0;
+      if (!name.startsWith("ir-tracker-custom-") || !name.endsWith(".irfw") ||
+          !url.startsWith(kGithubAssetPrefix) || size < 1024 ||
+          size > kGithubMaximumPackageBytes)
+        continue;
+      best = candidate;
+      githubUpdate.version = tag.startsWith("v") ? tag.substring(1) : tag;
+      githubUpdate.assetName = name;
+      githubUpdate.assetUrl = url;
+      githubUpdate.assetSize = size;
+      githubUpdate.available = true;
+      break;
+    }
+  }
+  http.end();
+  githubUpdate.checked = true;
+  githubUpdate.lastSuccess = time(nullptr);
+  githubUpdate.checking = false;
+  eventLog.add("INFO", "GITHUB_UPDATE_CHECK",
+               githubUpdate.available
+                   ? "Signiertes Firmwareupdate " + githubUpdate.version + " gefunden"
+                   : "Keine neuere signierte Firmware verfuegbar");
+  return true;
+}
+
+bool installGithubFirmwareUpdate() {
+  if (!githubUpdate.available || githubUpdate.installing ||
+      !githubUpdate.assetUrl.startsWith(kGithubAssetPrefix) ||
+      githubUpdate.assetSize < 1024 ||
+      githubUpdate.assetSize > kGithubMaximumPackageBytes) {
+    githubUpdate.error = "no_valid_update_selected";
+    return false;
+  }
+  githubUpdate.installing = true;
+  githubUpdate.error = "";
+  requestCpuBoost("github_update_install");
+  WiFiClientSecure client;
+  client.setCACert(kGithubRootCertificates);
+  HTTPClient http;
+  http.setConnectTimeout(8000);
+  http.setTimeout(12000);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  if (!http.begin(client, githubUpdate.assetUrl)) {
+    githubUpdate.error = "update_connection_initialization_failed";
+    githubUpdate.installing = false;
+    return false;
+  }
+  http.addHeader("Accept", "application/octet-stream");
+  http.addHeader("User-Agent", "IR-Tracker-Offline/" + String(kFirmwareVersion));
+  const int response = http.GET();
+  if (response != HTTP_CODE_OK) {
+    githubUpdate.error = "update_http_" + String(response);
+    http.end();
+    githubUpdate.installing = false;
+    return false;
+  }
+  const int declaredLength = http.getSize();
+  if (declaredLength > 0 &&
+      static_cast<size_t>(declaredLength) != githubUpdate.assetSize) {
+    githubUpdate.error = "update_size_mismatch";
+    http.end();
+    githubUpdate.installing = false;
+    return false;
+  }
+  resetSignedOta();
+  otaUploadError = "";
+  WiFiClient *stream = http.getStreamPtr();
+  uint8_t buffer[1024];
+  size_t received = 0;
+  uint32_t lastProgress = millis();
+  bool ok = true;
+  while (received < githubUpdate.assetSize) {
+    esp_task_wdt_reset();
+    const int available = stream->available();
+    if (available > 0) {
+      const size_t wanted = std::min<size_t>(
+          sizeof(buffer), std::min<size_t>(available,
+                                           githubUpdate.assetSize - received));
+      const int count = stream->readBytes(buffer, wanted);
+      if (count <= 0 || !consumeSignedOta(buffer, count)) {
+        ok = false;
+        break;
+      }
+      received += count;
+      lastProgress = millis();
+    } else if (!http.connected() || millis() - lastProgress > 12000) {
+      otaUploadError = "update_download_incomplete";
+      ok = false;
+      break;
+    } else {
+      delay(2);
+    }
+  }
+  if (ok && received == githubUpdate.assetSize) ok = finishSignedOta();
+  if (!ok) Update.abort();
+  http.end();
+  memset(buffer, 0, sizeof(buffer));
+  githubUpdate.installing = false;
+  if (!ok) {
+    githubUpdate.error = otaUploadError.length() ? otaUploadError : "update_failed";
+    eventLog.add("ERROR", "GITHUB_UPDATE_FAILED", githubUpdate.error);
+    return false;
+  }
+  eventLog.add("WARN", "GITHUB_UPDATE_INSTALLED",
+               "Signiertes GitHub-Update " + githubUpdate.version + " installiert");
+  return true;
+}
+
+void manageGithubFirmwareUpdate() {
+  if (!config.githubUpdateCheck || githubUpdate.checking ||
+      githubUpdate.installing || gpioScan.active || irPulse.active ||
+      WiFi.status() != WL_CONNECTED)
+    return;
+  const uint32_t interval = githubUpdate.checked ? kGithubCheckIntervalMs
+                                                 : kGithubInitialCheckMs;
+  if (millis() - githubUpdate.lastAttemptMs < interval) return;
+  if (checkGithubFirmwareUpdate() && config.githubAutoInstall &&
+      githubUpdate.available && installGithubFirmwareUpdate()) {
+    delay(500);
+    ESP.restart();
+  }
+}
+
 void handleOtaUpload() {
   HTTPUpload &upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
@@ -3215,6 +3610,12 @@ void handleMaintenancePage() {
       "<label>Signiertes Firmwarepaket (.irfw)</label><input type='file' name='firmware' "
       "accept='.irfw,application/octet-stream' required>"
       "<button type='submit'>WLAN-Update installieren</button></form></div>"
+      "<div class='card'><h2>GitHub-Firmwareupdate</h2>"
+      "<p>Prüft das offizielle Projekt auf eine neuere Version. Installiert werden "
+      "ausschließlich passend signierte IRFW-Pakete; ein Downgrade ist gesperrt.</p>"
+      "<form method='post' action='/api/v1/update/check'><button type='submit'>Jetzt prüfen</button></form>"
+      "<form method='post' action='/api/v1/update/install' onsubmit=\"return confirm('Signiertes GitHub-Update installieren und neu starten?')\">"
+      "<button class='secondary' type='submit'>Gefundenes Update installieren</button></form></div>"
       "<div class='card'><h2>Tracker sicher ausschalten</h2>"
       "<p>Speichert den offenen Minutenblock und versetzt den ESP32 danach in Tiefschlaf. "
       "Zum Wiedereinschalten Strom kurz aus- und einschalten oder Reset betätigen.</p>"
@@ -3355,6 +3756,16 @@ void handleSetup() {
             "19,5 dBm. Nach drei stabilen Minuten wird bei gutem Signal vorsichtig auf "
             "15 oder 11 dBm reduziert. Bei schwachem Signal oder Abbruch wird automatisch "
             "volle Leistung verwendet.</p></fieldset>"
+            "<fieldset><legend>Firmwareupdates</legend>"
+            "<label><input style='width:auto' type='checkbox' name='gh_check' value='1'");
+  if (config.githubUpdateCheck) body += " checked";
+  body += F("> Täglich auf signierte GitHub-Firmware prüfen</label>"
+            "<label><input style='width:auto' type='checkbox' name='gh_auto' value='1'");
+  if (config.githubAutoInstall) body += " checked";
+  body += F("> Neue signierte Firmware automatisch installieren</label>"
+            "<p class='muted'>Die automatische Installation ist standardmäßig aus. "
+            "Akzeptiert werden nur neuere, von Michael Roßmann kryptografisch signierte "
+            "IRFW-Pakete aus dem offiziellen GitHub-Release.</p></fieldset>"
             "<button type='submit'>Alle Einstellungen speichern</button></form>"
             "<form method='post' action='/auth/logout'><button class='secondary' type='submit'>"
             "Diesen Browser abmelden</button></form>");
@@ -3427,6 +3838,9 @@ void handleSetupSave() {
   config.ecoMode = server.hasArg("eco_mode");
   config.ecoLedOff = server.hasArg("eco_led_off");
   config.adaptiveWifiPower = server.hasArg("wifi_power_auto");
+  config.githubUpdateCheck = server.hasArg("gh_check");
+  config.githubAutoInstall = server.hasArg("gh_auto");
+  if (config.githubAutoInstall) config.githubUpdateCheck = true;
   config.ledPin = constrain(server.arg("led_pin").toInt(), -1, 10);
   config.ledInverted = server.hasArg("led_inv");
   config.baud = server.arg("baud").toInt();
@@ -3867,10 +4281,6 @@ void manageWifi() {
                      "pool.ntp.org", "time.cloudflare.com");
         ntpConfigured = true;
       }
-      if (!mdnsRunning && MDNS.begin(config.hostname.c_str())) {
-        MDNS.addService("http", "tcp", 80);
-        mdnsRunning = true;
-      }
       Serial.printf("Wi-Fi connected: %s, %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
       eventLog.add("INFO", "WIFI_CONNECTED",
                    WiFi.SSID() + " " + WiFi.localIP().toString());
@@ -3883,10 +4293,6 @@ void manageWifi() {
       lastWifiPowerEvaluateMs = 0;
       wifiMinModemSleepActive = false;
       eventLog.add("WARN", "WIFI_LOST", "WLAN-Verbindung verloren");
-      if (mdnsRunning) {
-        MDNS.end();
-        mdnsRunning = false;
-      }
       wifiTried = 0;
       wifiCandidate = 0;
       wifiCandidateStartedMs = 0;
@@ -4072,6 +4478,61 @@ void setupRoutes() {
     if (requireApiAccess())
       server.send(200, "application/json", statusJson());
   });
+  server.on("/api/v1/admin-session", HTTP_GET, [] {
+    if (!requireAdmin()) return;
+    server.send(200, "application/json",
+                "{\"csrf_token\":\"" + csrfToken + "\"}");
+  });
+  server.on("/api/v1/update/status", HTTP_GET, [] {
+    if (!requireAdmin()) return;
+    server.send(200, "application/json", githubUpdateJson());
+  });
+  server.on("/api/v1/update/check", HTTP_POST, [] {
+    if (!requireAdmin()) return;
+    const bool ok = checkGithubFirmwareUpdate();
+    String body = "<div class='card'><h2>GitHub-Updatepruefung</h2><pre>" +
+                  htmlEscape(githubUpdateJson()) +
+                  "</pre><a href='/maintenance'>Zurueck zur Wartung</a></div>";
+    server.send(ok ? 200 : 502, "text/html; charset=utf-8",
+                page(ok ? "Updatepruefung" : "Updatefehler", body));
+  });
+  server.on("/api/v1/update/install", HTTP_POST, [] {
+    if (!requireAdmin()) return;
+    if (!githubUpdate.available && !checkGithubFirmwareUpdate()) {
+      server.send(502, "application/json",
+                  "{\"error\":\"" + jsonEscape(githubUpdate.error) + "\"}");
+      return;
+    }
+    if (!installGithubFirmwareUpdate()) {
+      server.send(400, "application/json",
+                  "{\"error\":\"" + jsonEscape(githubUpdate.error) + "\"}");
+      return;
+    }
+    server.send(200, "text/html; charset=utf-8",
+                page("Update erfolgreich",
+                     "<div class='card'><h2>Signiertes GitHub-Update installiert</h2>"
+                     "<p>Der Tracker startet jetzt neu.</p></div>"));
+    delay(700);
+    ESP.restart();
+  });
+  server.on("/api/v1/gpio-scan", HTTP_GET, [] {
+    if (!requireAdmin()) return;
+    server.send(200, "application/json", gpioScanJson());
+  });
+  server.on("/api/v1/gpio-scan/start", HTTP_POST, [] {
+    if (!requireAdmin()) return;
+    if (gpioScan.active) {
+      server.send(409, "application/json", gpioScanJson());
+      return;
+    }
+    startGpioScan();
+    server.send(202, "application/json", gpioScanJson());
+  });
+  server.on("/api/v1/gpio-scan/cancel", HTTP_POST, [] {
+    if (!requireAdmin()) return;
+    if (gpioScan.active) finishGpioScan(false, "cancelled");
+    server.send(200, "application/json", gpioScanJson());
+  });
   server.on("/api/v1/selftest", HTTP_GET, [] {
     if (requireAdmin())
       server.send(200, "application/json", selfTestJson());
@@ -4190,6 +4651,7 @@ void setupWebSockets() {
 void updateLed() {
   static uint32_t lastToggle = 0;
   static bool state = false;
+  if (gpioScan.active) return;
   if (config.ledPin < 0) return;
   if (ecoLedSuppressed()) {
     if (state) {
@@ -4274,6 +4736,7 @@ void loop() {
   manageWifi();
   manageAdaptiveWifiPower();
   manageMqtt();
+  manageGithubFirmwareUpdate();
   if (accessPointMode) dns.processNextRequest();
   server.handleClient();
   if (config.snifferEnabled) snifferSocket.loop();
@@ -4281,6 +4744,7 @@ void loop() {
   updateIrPulseJob();
   updateApatorUnlock();
   manageAutoPin();
+  updateGpioScan();
   uint8_t incoming[128];
   size_t count = 0;
   while (!irPulse.active && meterSerial.available() && count < sizeof(incoming)) {
@@ -4290,17 +4754,18 @@ void loop() {
     if (config.snifferEnabled) snifferSocket.broadcastBIN(incoming, count);
     for (size_t i = 0; i < count; ++i) consumeMeterByte(incoming[i]);
   }
+  updateGpioScan();
   const bool meterFresh =
       meter.lastTelegramMs &&
       millis() - meter.lastTelegramMs < kReadingStaleMs;
   if (millis() - lastHistorySampleMs >= 1000) {
     lastHistorySampleMs = millis();
-    if (meterFresh)
+    if (meterFresh && !gpioScan.active)
       history.update(time(nullptr), meter.powerW, meter.importKwh,
                      meter.exportKwh);
   }
   if (millis() - lastLiveSampleMs >= 5000 && time(nullptr) >= 1700000000 &&
-      meterFresh && std::isfinite(meter.powerW)) {
+      meterFresh && !gpioScan.active && std::isfinite(meter.powerW)) {
     lastLiveSampleMs = millis();
     liveSamples[liveWriteIndex].timestamp =
         static_cast<uint32_t>(time(nullptr));

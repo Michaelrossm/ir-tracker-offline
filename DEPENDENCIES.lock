@@ -1,5 +1,5 @@
-# DE: Reproduzierbare direkte Build-Abhängigkeiten für 1.0.0-beta.1
-# EN: Reproducible direct build dependencies for 1.0.0-beta.1
+# DE: Reproduzierbare direkte Build-Abhängigkeiten für 1.0.1-beta.1
+# EN: Reproducible direct build dependencies for 1.0.1-beta.1
 platformio-platform = espressif32@7.0.1
 framework = arduino
 framework-arduinoespressif32 = 3.20017.241212+sha.dcc1105b

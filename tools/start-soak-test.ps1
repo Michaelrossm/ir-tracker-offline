@@ -10,9 +10,9 @@ $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = (Get-Command python -ErrorAction Stop).Source
 $releaseDirectory = Join-Path $projectRoot "release"
-$csv = Join-Path $releaseDirectory "soak-test-1.0.0-beta.1-72h.csv"
-$stdout = Join-Path $releaseDirectory "soak-test-1.0.0-beta.1-72h.stdout.log"
-$stderr = Join-Path $releaseDirectory "soak-test-1.0.0-beta.1-72h.stderr.log"
+$csv = Join-Path $releaseDirectory "soak-test-1.0.1-beta.1-72h.csv"
+$stdout = Join-Path $releaseDirectory "soak-test-1.0.1-beta.1-72h.stdout.log"
+$stderr = Join-Path $releaseDirectory "soak-test-1.0.1-beta.1-72h.stderr.log"
 
 if (-not (Test-Path -LiteralPath $releaseDirectory -PathType Container)) {
   throw "Release-Ordner fehlt / Release directory missing: $releaseDirectory"
