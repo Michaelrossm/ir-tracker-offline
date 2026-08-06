@@ -1,5 +1,24 @@
 # Änderungsprotokoll / Changelog
 
+## 1.0.1-beta.2 — 2026-08-06
+
+- DE: Hauptnavigation auf fünf Bereiche reduziert; Diagnose ist nun als eigene
+  Unteransicht in Wartung integriert und technische Zählerfunktionen sind
+  übersichtlich einklappbar.
+- EN: Reduced the main navigation to five sections; diagnostics is now a
+  maintenance subview and technical meter functions are organized in
+  collapsible sections.
+- DE: JSON-/REST-Zugang aus der Hauptnavigation entfernt und als
+  Expertenfunktion unter Einstellungen eingeordnet. Sichtbare Zählertexte und
+  allgemeine Metadaten sind markenneutral.
+- EN: Removed JSON/REST access from the main navigation and placed it under
+  Settings as an expert feature. Visible meter text and generic metadata are
+  vendor-neutral.
+- DE: Gemeinsames Sprachpaket gzip-komprimiert, versionsabhängig im Browser
+  zwischengespeichert und reproduzierbar für Windows/Linux eingebettet.
+- EN: Gzip-compressed the shared language bundle, added versioned browser
+  caching, and made embedding reproducible on Windows and Linux.
+
 ## 1.0.1-beta.1 — 2026-08-06
 
 - DE: Sichere GitHub-Updateprüfung mit optionaler automatischer Installation

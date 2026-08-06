@@ -45,7 +45,8 @@ def main() -> None:
     history = json.loads(body)
     assert isinstance(history.get("values"), list)
 
-    for path in ("/", "/history", "/setup", "/interfaces", "/diagnostics"):
+    for path in ("/", "/history", "/setup", "/interfaces", "/maintenance",
+                 "/maintenance/diagnostics"):
         code, body, content_type = get(args.base, path, auth)
         assert code == 200 and content_type == "text/html" and b"<main>" in body
 
