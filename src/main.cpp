@@ -30,10 +30,11 @@
 #include "EventLog.h"
 #include "FirmwareSigningPublicKey.h"
 #include "GithubRootCertificates.h"
+#include "WebAssets.h"
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.0.1-beta.1";
+constexpr char kFirmwareVersion[] = "1.0.1-beta.2";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -857,8 +858,8 @@ void saveConfig() {
 String nav() {
   return F("<nav><a href='/'>Dashboard</a><a href='/setup'>Einstellungen</a>"
            "<a href='/history'>Historie</a><a href='/interfaces'>Schnittstellen</a>"
-           "<a href='/maintenance'>Wartung</a><a href='/diagnostics'>Diagnose</a>"
-           "<a href='/api/v1/status'>JSON API</a><button id='langToggle' class='theme-toggle' "
+           "<a href='/maintenance'>Wartung</a>"
+           "<button id='langToggle' class='theme-toggle' "
            "type='button' aria-label='Sprache wechseln'>English</button>"
            "<button id='themeToggle' class='theme-toggle' "
            "type='button' aria-expanded='false' aria-controls='themePanel'>Farben</button></nav>"
@@ -870,6 +871,15 @@ String nav() {
            "<label>Karten<input type='color' data-theme-var='--card'></label>"
            "</div><button id='themeReset' class='secondary' type='button'>Standardfarben wiederherstellen</button>"
            "</aside>");
+}
+
+String maintenanceTabs(const bool diagnostics) {
+  return String(F("<div class='subnav' aria-label='Wartungsbereiche'>"
+                  "<a href='/maintenance'")) +
+         (diagnostics ? "" : " class='active'") +
+         F(">Backup &amp; System</a><a href='/maintenance/diagnostics'") +
+         (diagnostics ? " class='active'" : "") +
+         F(">Diagnose &amp; Zähler</a></div>");
 }
 
 String page(const String &title, const String &body, const String &script = "") {
@@ -922,6 +932,7 @@ String page(const String &title, const String &body, const String &script = "") 
     ".theme-toggle{width:auto;margin:0 0 0 auto;padding:9px 12px;background:transparent;border-color:#355540;color:var(--muted)}"
     ".theme-panel{position:fixed;right:clamp(12px,2vw,34px);top:82px;z-index:20;width:min(430px,calc(100vw - 24px));max-height:calc(100vh - 100px);overflow:auto;padding:18px;background:var(--card);border:1px solid #456553;border-radius:16px;box-shadow:0 18px 60px #000b}"
     ".theme-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.theme-head button{width:42px;margin:0;padding:7px;font-size:1.2rem}.theme-panel p{margin:8px 0 4px}.theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}.theme-grid label{margin:8px 0 0}.theme-grid input[type=color]{height:42px;padding:4px;cursor:pointer}.theme-panel>button{margin-top:16px}"
+    ".subnav{display:flex;gap:8px;flex-wrap:wrap;margin:-8px 0 22px}.subnav a{padding:10px 14px;border:1px solid #355540;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:700}.subnav a:hover,.subnav a.active{background:var(--accent);border-color:var(--accent);color:var(--text)}.compact-details{margin-top:12px}.compact-details>summary{cursor:pointer;font-weight:750;color:var(--green);padding:8px 0}.compact-details[open]>summary{margin-bottom:12px}"
     ".empty-state{text-align:center;padding:52px 15px;color:var(--muted)}"
     "@media(max-width:600px){main{padding:12px;width:100vw;max-width:100vw;overflow:hidden}nav{gap:2px;font-size:.86rem;position:static;min-width:0}nav a{padding:8px}.theme-toggle{margin-left:0}.theme-panel{top:12px}.theme-grid{grid-template-columns:1fr 1fr}"
     ".grid{grid-template-columns:minmax(0,1fr)}.card{padding:14px;min-width:0}.inline{grid-template-columns:1fr}"
@@ -945,31 +956,9 @@ inputs.forEach(input=>input.addEventListener('input',()=>{const values=stored();
 reset.addEventListener('click',()=>{try{localStorage.removeItem(key)}catch(e){}apply(defaults,false);sync()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!panel.hidden)show(false)});sync();
 })();</script>)JS");
-  html += F(R"JS(<script>(function(){
-const storageKey='irtracker-language-v1';
-const originalTitle=document.title;
-const requestedLanguage=new URLSearchParams(location.search).get('lang');
-if(requestedLanguage==='de'||requestedLanguage==='en'){try{localStorage.setItem(storageKey,requestedLanguage)}catch(e){}}
-const translations={
-"Sprache wechseln":"Change language","Farben":"Colors","Farbschema anpassen":"Customize color scheme","Farbschema":"Color scheme","Schließen":"Close","Farben werden sofort und ausschließlich in diesem Browser gespeichert.":"Colors are applied immediately and stored only in this browser.","Hintergrund":"Background","Karten":"Cards","Standardfarben wiederherstellen":"Restore default colors",
-"Dashboard":"Dashboard","Einstellungen":"Settings","Historie":"History","Schnittstellen":"Interfaces","Wartung":"Maintenance","Diagnose":"Diagnostics",
-"Aktuelle Leistung":"Current power","Netzbezug":"Grid import","Einspeisung":"Grid export","Zählerstatus":"Meter status","Phasenwerte live":"Live phase values","Es werden ausschließlich tatsächlich vom Zähler übertragene Werte angezeigt.":"Only values actually transmitted by the meter are shown.","Vom Zähler nicht geliefert":"Not supplied by the meter","Energieübersicht":"Energy overview","Tag, Vergleich und laufendes Kalenderjahr":"Day, comparison and current calendar year","Netzbezug heute":"Grid import today","Einspeisung heute":"Grid export today","Bezug zu gestern, gleiche Uhrzeit":"Import versus yesterday at the same time","Netzbezug im Jahr":"Grid import this year","Einspeisung im Jahr":"Grid export this year","Ø Netzbezug pro Tag im Jahr":"Average daily grid import this year","Ø Einspeisung pro Tag im Jahr":"Average daily grid export this year","Jahreswerte werden aus der verfügbaren lokalen Historie berechnet.":"Annual values are calculated from the available local history.","Verlauf":"Charts","Verbrauch und Einspeisung direkt auf dem Tracker":"Consumption and export directly on the tracker","Erweiterte Auswertung öffnen":"Open advanced analysis","Zeitraum":"Period","1 Stunde":"1 hour","Kalendertag (00:00–24:00)":"Calendar day (00:00–24:00)","Kalenderwoche (Mo–So)":"Calendar week (Mon–Sun)","Kalendermonat":"Calendar month","Kalenderjahr":"Calendar year","Zeitpunkt":"Point in time","Vorheriger Zeitraum":"Previous period","Aktueller Zeitraum":"Current period","Nächster Zeitraum":"Next period","Schnell zurückspulen":"Quick rewind","Aktuell":"Current","Ø Leistung im Zeitraum":"Average power in period","Netzbezug im Zeitraum":"Grid import in period","Einspeisung im Zeitraum":"Grid export in period","Diagramm wird geladen …":"Loading chart…","Noch keine historischen Werte vorhanden.":"No historical readings available yet.","Leistung":"Power","Gesamtleistung":"Total power","Datenlücke / Ausfall":"Data gap / outage","Netzbezug und Einspeisung":"Grid import and export","Lokal · ohne Cloud":"Local · no cloud",
-"Lokale Historie":"Local history","Messwert":"Metric","Leistungsanzeige":"Power display","Durchschnitt":"Average","Durchschnitt mit Min/Max":"Average with min/max","Minimum":"Minimum","Maximum":"Maximum","Zoom +":"Zoom +","Zoom –":"Zoom –","Gesamt":"All","Kalendertag":"Calendar day","Stunde":"Hour","Tage zurückspulen":"Rewind days","Stunden zurückspulen":"Rewind hours","Langzeit":"Long term","Bezug und Einspeisung":"Import and export","CSV exportieren":"Export CSV","Vollständige Historie als CSV exportieren":"Export complete history as CSV",
-"Nur lesende Messwertausgabe":"Read-only meter output","Der Tracker sendet keine Sollwerte":"The tracker does not send setpoints","Null-Einspeisung, Ladegrenzen und Zeitpläne werden ausschließlich im Speicher oder Wechselrichter eingestellt. Der IR-Tracker stellt dafür nur die gemessene Netzleistung bereit.":"Zero export, charge limits and schedules are configured exclusively in the battery or inverter. The IR tracker only provides the measured grid power.","Shelly-kompatibel":"Shelly compatible","Für Speicher, die einen Shelly EM oder Shelly Pro EM als externen Zähler unterstützen.":"For batteries that support a Shelly EM or Shelly Pro EM as an external meter.","Home Assistant / MQTT":"Home Assistant / MQTT","MQTT und automatische Home-Assistant-Erkennung werden unter Einstellungen konfiguriert.":"MQTT and automatic Home Assistant discovery are configured under Settings.","MQTT konfigurieren":"Configure MQTT","Universelle aktuelle Messwerte für ioBroker, Node-RED, openHAB und eigene Systeme.":"Universal current readings for ioBroker, Node-RED, openHAB and custom systems.","Monitoring und Export":"Monitoring and export","Sicherheitsprinzip":"Security principle","Alle hier aufgeführten Schnittstellen geben Messwerte aus. Es werden keine Register am Speicher beschrieben und keine Lade- oder Entladebefehle verschickt.":"All interfaces listed here provide readings only. No battery registers are written and no charge or discharge commands are sent.",
-"Backup und Wartung":"Backup and maintenance","Enthält WLAN-, MQTT-, PIN- und Geräteprofil-Daten. Die Datei enthält Geheimnisse und muss sicher aufbewahrt werden.":"Contains Wi-Fi, MQTT, PIN and device profile data. The file contains secrets and must be stored securely.","Vollständiges Backup erstellen":"Create complete backup","Nur Einstellungen herunterladen":"Download settings only","Backup wiederherstellen":"Restore backup","Einstellungen prüfen und wiederherstellen":"Validate and restore settings","Alle vier Ringpuffer werden als eine JSON-Datei im Browser zusammengeführt.":"All four ring buffers are combined into one JSON file in the browser.","Historie herunterladen":"Download history","Historienbackup":"History backup","Historie gestaffelt wiederherstellen":"Restore tiered history","Gesamte Historie löschen":"Delete all history","Custom-Firmware aktualisieren":"Update custom firmware","Es werden ausschließlich kryptografisch signierte IRFW-Pakete von Michael Roßmann akzeptiert. Signatur und ESP32-Image werden vor der Aktivierung geprüft.":"Only cryptographically signed IRFW packages from Michael Roßmann are accepted. The signature and ESP32 image are verified before activation.","Signiertes Firmwarepaket (.irfw)":"Signed firmware package (.irfw)","WLAN-Update installieren":"Install Wi-Fi update","Tracker sicher ausschalten":"Safely shut down tracker","Speichert den offenen Minutenblock und versetzt den ESP32 danach in Tiefschlaf. Zum Wiedereinschalten Strom kurz aus- und einschalten oder Reset betätigen.":"Saves the open minute block and then puts the ESP32 into deep sleep. To switch it back on, briefly cycle power or press reset.","Sicher herunterfahren":"Shut down safely","Ereignis- und Fehlerprotokoll":"Event and error log","Protokoll laden":"Load log","Protokoll löschen":"Clear log",
-"WLAN-Verbindungen":"Wi-Fi connections","Bis zu drei Netze. Der Tracker probiert sie der Reihe nach. Ist keines erreichbar, startet automatisch der Setup-Hotspot.":"Up to three networks. The tracker tries them in order. If none is reachable, the setup hotspot starts automatically.","Netzwerkname":"Network name","Passwort":"Password","gespeichert":"stored","offenes WLAN":"open Wi-Fi","Hostname":"Host name","Zeitzone (POSIX-TZ)":"Time zone (POSIX TZ)","Setup-Hotspot Laufzeit (Minuten)":"Setup hotspot duration (minutes)","Neues Admin-Passwort":"New admin password","unverändert lassen":"leave unchanged","Neues Admin-Passwort wiederholen":"Repeat new admin password","Stromzähler":"Electricity meter","IR-Eingang (GPIO)":"IR input (GPIO)","IR-Sendeausgang (GPIO, -1 = aus)":"IR transmit output (GPIO, -1 = off)","Aus":"Off","IR-Sniffer auf Port 81 aktivieren":"Enable IR sniffer on port 81","Schreibende IR-Bridge aktivieren":"Enable writable IR bridge","Aus Sicherheitsgründen standardmäßig deaktiviert.":"Disabled by default for security.","Status-LED (GPIO, -1 = aus)":"Status LED (GPIO, -1 = off)","LED invertieren":"Invert LED","Baudrate":"Baud rate","Zugriffsmodus":"Access mode","Lokal offen (Integrationen ohne Anmeldung)":"Open locally (integrations without login)","Admin-Anmeldung erforderlich":"Admin login required","API und Shelly-Kompatibilität deaktiviert":"API and Shelly compatibility disabled","Ereignis- und Fehlerprotokoll dauerhaft im Flash speichern":"Persist event and error log in flash","MQTT-Server":"MQTT server","Benutzer":"User","optional":"optional","Home-Assistant-Discovery aktivieren":"Enable Home Assistant discovery","Energiesparen":"Energy saving","Eco-Modus aktivieren":"Enable Eco mode","Status-LED bei fehlerfreiem Eco-Betrieb ausschalten":"Turn status LED off during error-free Eco operation","WLAN-Sendeleistung im Eco-Modus automatisch anpassen":"Automatically adjust Wi-Fi transmit power in Eco mode","Alle Einstellungen speichern":"Save all settings","Diesen Browser abmelden":"Log out this browser",
-"Geführter Selbsttest":"Guided self-test","Selbsttest ausführen":"Run self-test","Zählerbericht":"Meter report","Detailliert anzeigen: empfangene und fehlende OBIS-Werte":"Show details: received and missing OBIS values","Speicherinformationen":"Memory information","Alle erkannten OBIS-Werte":"All detected OBIS values","Letztes SML-Telegramm (Hex)":"Latest SML telegram (hex)","Die Bridge ist nur aktiv, wenn ein TX-GPIO eingestellt wurde.":"The bridge is active only when a TX GPIO is configured.","Apator vollständig freischalten":"Fully unlock Apator","Apator mit gespeicherter PIN freischalten":"Unlock Apator with stored PIN","Stromzähler-PIN über IR":"Electricity meter PIN via IR","Vierstellige PIN":"Four-digit PIN","PIN lokal speichern":"Store PIN locally","PIN-Impulsfolge starten":"Start PIN pulse sequence","Gespeicherte PIN und Automatik löschen":"Delete stored PIN and automation","Einzelnen Testimpuls senden":"Send single test pulse","IR-Sendung stoppen":"Stop IR transmission",
-"Firmware von Michael Roßmann · © 2026 Michael Roßmann · PolyForm Noncommercial 1.0.0 · nur nichtkommerzielle Nutzung":"Firmware by Michael Roßmann · © 2026 Michael Roßmann · PolyForm Noncommercial 1.0.0 · noncommercial use only","Unabhängiges Community-Projekt; nicht mit Solakon verbunden und nicht von Solakon unterstützt.":"Independent community project; not affiliated with or endorsed by Solakon."
-};
-const originals=new WeakMap();
-const attrOriginals=new WeakMap();
-function language(){try{return localStorage.getItem(storageKey)==='en'?'en':'de'}catch(e){return 'de'}}
-function translated(value,lang){const clean=value.trim();return lang==='en'&&translations[clean]?value.replace(clean,translations[clean]):value}
-function applyLanguage(){const lang=language();document.documentElement.lang=lang;document.title=lang==='en'&&translations[originalTitle]?translations[originalTitle]:originalTitle;const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){if(!node.parentElement||['SCRIPT','STYLE'].includes(node.parentElement.tagName))continue;if(!originals.has(node))originals.set(node,node.nodeValue);const original=originals.get(node);node.nodeValue=translated(original,lang)}document.querySelectorAll('[placeholder],[aria-label],[title]').forEach(el=>{if(!attrOriginals.has(el)){const saved={};['placeholder','aria-label','title'].forEach(a=>{if(el.hasAttribute(a))saved[a]=el.getAttribute(a)});attrOriginals.set(el,saved)}Object.entries(attrOriginals.get(el)).forEach(([a,v])=>el.setAttribute(a,translated(v,lang)))});const button=document.getElementById('langToggle');if(button)button.textContent=lang==='de'?'English':'Deutsch';window.dispatchEvent(new CustomEvent('irtracker-language-change',{detail:{language:lang}}))}
-const observer=new MutationObserver(()=>{observer.disconnect();applyLanguage();observer.observe(document.body,{childList:true,subtree:true})});
-document.getElementById('langToggle').addEventListener('click',()=>{try{localStorage.setItem(storageKey,language()==='de'?'en':'de')}catch(e){}applyLanguage()});
-applyLanguage();observer.observe(document.body,{childList:true,subtree:true});window.irTrackerLanguage=language;window.irTrackerTranslate=(de,en)=>language()==='en'?en:de;
-})();</script>)JS");
+  html += F("<script src='/assets/i18n.js?v=");
+  html += kFirmwareVersion;
+  html += F("'></script>");
   html += "<script>(function(){const token='" + csrfToken +
           "';document.querySelectorAll(\"form[method='post'],form[method='POST']\")"
           ".forEach(f=>{if(!f.querySelector(\"input[name='csrf_token']\")){const i=document.createElement('input');"
@@ -1709,7 +1698,7 @@ String selfTestJson() {
 String meterReportJson() {
   const bool fresh =
       meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
-  String json = "{\"manufacturer\":\"Apator\",\"model\":\"LEPUS 3.060\",";
+  String json = "{\"manufacturer\":\"unknown\",\"model\":\"SML electricity meter\",";
   json += "\"telegram_fresh\":" + String(fresh ? "true" : "false") + ",";
   json += "\"telegram_count\":" + String(meter.telegrams) + ",";
   json += "\"last_crc_valid\":" +
@@ -2583,9 +2572,6 @@ void handleInterfacesPage() {
             "<div class='card'><h2>Home Assistant / MQTT</h2>"
             "<p>MQTT und automatische Home-Assistant-Erkennung werden unter Einstellungen konfiguriert.</p>"
             "<a href='/setup'>MQTT konfigurieren</a></div>"
-            "<div class='card'><h2>REST / JSON</h2>"
-            "<p>Universelle aktuelle Messwerte für ioBroker, Node-RED, openHAB und eigene Systeme.</p>"
-            "<code>/api/v1/status</code><br><code>/api/v1/obis</code><br><code>/api/v1/history</code></div>"
             "<div class='card'><h2>Monitoring und Export</h2>"
             "<code>/metrics</code><br><code>/openmetrics</code><br>"
             "<code>/api/v1/influx</code><br><code>/api/v1/values.csv</code></div></div>"
@@ -3590,7 +3576,8 @@ void handleSafeShutdown() {
 
 void handleMaintenancePage() {
   if (!requireAdmin()) return;
-  const String body = F(
+  String body = maintenanceTabs(false);
+  body += F(
       "<div class='grid'><div class='card'><h2>Einstellungen</h2>"
       "<p>Enthält WLAN-, MQTT-, PIN- und Geräteprofil-Daten. Die Datei enthält Geheimnisse und muss sicher aufbewahrt werden.</p>"
       "<button id='fullBackup'>Vollständiges Backup erstellen</button>"
@@ -3671,7 +3658,7 @@ void handleSetup() {
   body += F("'><p class='muted'>Deutschland: CET-1CEST,M3.5.0,M10.5.0/3</p>"
             "<label>Setup-Hotspot Laufzeit (Minuten)</label><input type='number' name='ap_minutes' min='5' max='60' value='");
   body += String(config.setupApMinutes);
-  body += F("'><p class='muted'>Nach Ablauf wird der Hotspot abgeschaltet. Ein Neustart Ã¶ffnet ihn erneut.</p>"
+  body += F("'><p class='muted'>Nach Ablauf wird der Hotspot abgeschaltet. Ein Neustart öffnet ihn erneut.</p>"
             "<label>Neues Admin-Passwort</label><input type='password' name='admin_pass' "
             "minlength='4' maxlength='64' autocomplete='new-password' placeholder='unverändert lassen'>"
             "<label>Neues Admin-Passwort wiederholen</label><input type='password' name='admin_pass_confirm' "
@@ -3707,21 +3694,27 @@ void handleSetup() {
   for (uint32_t rate : rates) {
     body += "<option value='" + String(rate) + "'" + (rate == config.baud ? " selected" : "") + ">" + String(rate) + "</option>";
   }
-  body += F("</select></fieldset><fieldset><legend>Lokale API und KompatibilitÃ¤t</legend>"
+  body += F("</select></fieldset><fieldset><legend>Lokale API und Kompatibilität</legend>"
             "<label>Zugriffsmodus</label><select name='api_access'><option value='0'");
   if (config.apiAccess == 0) body += " selected";
   body += F(">Lokal offen (Integrationen ohne Anmeldung)</option><option value='1'");
   if (config.apiAccess == 1) body += " selected";
   body += F(">Admin-Anmeldung erforderlich</option><option value='2'");
   if (config.apiAccess == 2) body += " selected";
-  body += F(">API und Shelly-KompatibilitÃ¤t deaktiviert</option></select>"
-            "<p class='muted'>Betrifft Messwert-API, Prometheus, Influx, CSV und Shelly-Endpunkte. Einstellungen und Wartung bleiben immer geschÃ¼tzt.</p>"
+  body += F(">API und Shelly-Kompatibilität deaktiviert</option></select>"
+            "<p class='muted'>Betrifft Messwert-API, Prometheus, Influx, CSV und Shelly-Endpunkte. Einstellungen und Wartung bleiben immer geschützt.</p>"
+            "<details class='compact-details'><summary>JSON-API für Experten</summary>"
+            "<p class='muted'>Für Home Assistant, ioBroker, Node-RED, openHAB und eigene lokale Auswertungen. "
+            "Die API ist keine eigene Bedienseite und bleibt deshalb aus der Hauptnavigation ausgeblendet.</p>"
+            "<code>/api/v1/status</code><br><code>/api/v1/obis</code><br>"
+            "<code>/api/v1/history</code><br><code>/api/v1/values.csv</code>"
+            "</details>"
             "<label><input style='width:auto' type='checkbox' name='event_flash' value='1'");
   if (config.persistEventLog) body += " checked";
   body += F("> Ereignis- und Fehlerprotokoll dauerhaft im Flash speichern</label>"
-            "<p class='muted'>StandardmÃ¤ÃŸig aus: Bis zu 256 EintrÃ¤ge bleiben nur im RAM. "
-            "Die Ã¤ltesten werden automatisch Ã¼berschrieben; ein Neustart leert das Protokoll. "
-            "Aktivieren schreibt neue EintrÃ¤ge zusÃ¤tzlich dauerhaft in den Flash.</p>"
+            "<p class='muted'>Standardmäßig aus: Bis zu 256 Einträge bleiben nur im RAM. "
+            "Die ältesten werden automatisch überschrieben; ein Neustart leert das Protokoll. "
+            "Aktivieren schreibt neue Einträge zusätzlich dauerhaft in den Flash.</p>"
             "</fieldset><fieldset><legend>Home Assistant / MQTT</legend>"
             "<p class='muted'>Optional. Mit MQTT Discovery erscheinen die Sensoren automatisch in Home Assistant.</p>"
             "<div class='inline'><div><label>MQTT-Server</label><input name='mqtt_host' value='");
@@ -3739,15 +3732,15 @@ void handleSetup() {
             "<label><input style='width:auto' type='checkbox' name='eco_mode' value='1'");
   if (config.ecoMode) body += " checked";
   body += F("> Eco-Modus aktivieren</label>"
-            "<p class='muted'>StandardmÃƒÂ¤ÃƒÅ¸ig aktiv: 80 MHz im Messbetrieb. "
-            "VollstÃƒÂ¤ndiger Export, Import und Firmwareupdate schalten automatisch "
+            "<p class='muted'>Standardmäßig aktiv: 80 MHz im Messbetrieb. "
+            "Vollständiger Export, Import und Firmwareupdate schalten automatisch "
             "auf 160 MHz. Zwei Minuten nach der letzten rechenintensiven Aufgabe wird "
             "wieder auf 80 MHz reduziert.</p>"
             "<label><input style='width:auto' type='checkbox' name='eco_led_off' value='1'");
   if (config.ecoLedOff) body += " checked";
   body += F("> Status-LED bei fehlerfreiem Eco-Betrieb ausschalten</label>"
             "<p class='muted'>Wirkt nur bei aktivem Eco-Modus. Bei fehlendem oder "
-            "veraltertem ZÃƒÂ¤hlerwert, WLAN-Ausfall, Speicherwarnung oder internem "
+            "veraltertem Zählerwert, WLAN-Ausfall, Speicherwarnung oder internem "
             "Eco-Fehler bleibt die LED-Warnanzeige automatisch aktiv.</p>"
             "<label><input style='width:auto' type='checkbox' name='wifi_power_auto' value='1'");
   if (config.adaptiveWifiPower) body += " checked";
@@ -3885,26 +3878,30 @@ void handleLogout() {
 
 void handleDiagnostics() {
   if (!requireAdmin()) return;
-  String body = F("<div class='card'><h2>Geführter Selbsttest</h2>"
+  String body = maintenanceTabs(true);
+  body += F("<div class='grid'><div class='card'><h2>Geführter Selbsttest</h2>"
                   "<button id='runSelftest' type='button'>Selbsttest ausführen</button>"
                   "<div id='selftest' class='stats'></div></div>"
                   "<div class='card'><h2>Zählerbericht</h2>"
                   "<p><a href='/api/v1/meter-report'>Detailliert anzeigen: empfangene und fehlende OBIS-Werte</a></p>"
-                  "<p class='muted'>LEPUS-Spannung und Strom werden nur live im RAM gehalten, niemals in der Flash-Historie.</p>"
+                  "<p class='muted'>Spannung und Strom werden nur live im RAM gehalten, niemals in der Flash-Historie.</p>"
+                  "<details class='compact-details'><summary>Technische Details</summary>"
                   "<p><a href='/api/v1/memory-info'>Speicherinformationen</a></p>"
                   "<p><a href='/api/v1/obis'>Alle erkannten OBIS-Werte</a></p>"
                   "<p><a href='/api/v1/raw'>Letztes SML-Telegramm (Hex)</a></p>"
                   "<p>IR-Sniffer WebSocket: <code>ws://GERAET:81/</code></p>"
                   "<p>IR-Bridge WebSocket: <code>ws://GERAET:82/</code></p>"
-                  "<p class='muted'>Die Bridge ist nur aktiv, wenn ein TX-GPIO eingestellt wurde.</p></div>"
-                  "<fieldset><legend>Apator vollständig freischalten</legend>"
-                  "<p>Sendet automatisch Initialisierung, gespeicherte PIN, Navigation zu Inf und den langen Impuls für Inf ON. "
+                  "<p class='muted'>Die Bridge ist nur aktiv, wenn ein TX-GPIO eingestellt wurde.</p>"
+                  "</details></div></div>"
+                  "<details class='card compact-details'><summary>Optionale IR-Freischaltung (experimentell)</summary>"
+                  "<p>Nur für Zähler, die diese optische Impulsfolge unterstützen. Sendet automatisch Initialisierung, "
+                  "gespeicherte PIN, Navigation zu Inf und den langen Impuls für Inf ON. "
                   "Danach prüft der Tracker bis zu 90 Sekunden auf Momentanleistung.</p>"
-                  "<form method='post' action='/ir/apator' "
-                  "onsubmit=\"return confirm('Apator-Freischaltung jetzt starten? Der Tracker darf dabei nicht bewegt werden.')\">"
-                  "<button type='submit'>Apator mit gespeicherter PIN freischalten</button></form>"
-                  "<p class='muted'>Vorher unten die PIN einmal lokal speichern. Dauer ungefähr eine Minute.</p></fieldset>"
-                  "<fieldset><legend>Stromzähler-PIN über IR</legend>"
+                  "<form method='post' action='/ir/meter-unlock' "
+                  "onsubmit=\"return confirm('Optionale IR-Freischaltung jetzt starten? Der Tracker darf dabei nicht bewegt werden.')\">"
+                  "<button type='submit'>Zähler mit gespeicherter PIN freischalten</button></form>"
+                  "<p class='muted'>Vorher unten die PIN einmal lokal speichern. Dauer ungefähr eine Minute.</p></details>"
+                  "<details class='card compact-details'><summary>Stromzähler-PIN über IR</summary>"
                   "<p>Die vierstellige PIN wird nur im Arbeitsspeicher verarbeitet und nicht gespeichert. "
                   "Am Zähler zuerst die PIN-Anzeige aktivieren. Eine Ziffer 0 wird als zehn Lichtimpulse gesendet.</p>"
                   "<form method='post' action='/ir/pin'>"
@@ -3923,7 +3920,7 @@ void handleDiagnostics() {
   if (config.pinInverted) body += " checked";
   body += F("> IR-Ausgang invertieren</label>"
                   "<label><input style='width:auto' type='checkbox' name='save_pin' value='1'> PIN lokal speichern</label>"
-                  "<p class='muted'>Auto-PIN ist beim LEPUS deaktiviert. Freischaltung mit ZÃ¤hlertaste oder Taschenlampe.</p>"
+                  "<p class='muted'>Unterstützt der Zähler keine optische PIN-Steuerung, erfolgt die Freischaltung mit Zählertaste oder Taschenlampe.</p>"
                   "<p class='muted'>Die automatische PIN-Eingabe wird nicht von jedem Zähler oder optischen Lesekopf unterstützt. "
                   "Bei fehlender Displayreaktion PIN und Inf-Freigabe mit Zählertaste oder Taschenlampe durchführen.<br><br>"
                   "Das Speichern ist optional. Die PIN liegt lokal im Gerätespeicher; "
@@ -3937,7 +3934,7 @@ void handleDiagnostics() {
                   "<button type='submit'>Einzelnen Testimpuls senden</button></form>"
                   "<form method='post' action='/ir/stop'><button class='danger' type='submit'>IR-Sendung stoppen</button></form>"
                   "<p class='muted'>Die genaue Bedienfolge ist vom Zählermodell abhängig. Während der Impulsfolge "
-                  "pausiert der SML-Empfang kurzzeitig.</p></fieldset>");
+                  "pausiert der SML-Empfang kurzzeitig.</p></details>");
   const String script = F(
       "const out=document.getElementById('selftest');"
       "async function test(){out.innerHTML='<div class=\"loading\"><span class=\"spinner\"></span>Prüfung läuft …</div>';"
@@ -3947,7 +3944,7 @@ void handleDiagnostics() {
       "catch(e){out.innerHTML='<div class=\"error\">Selbsttest konnte nicht geladen werden. Verbindung zum Tracker prüfen.</div>'}}"
       "document.getElementById('runSelftest').onclick=test;test();");
   server.send(200, "text/html; charset=utf-8",
-              page("Diagnose", body, script));
+              page("Wartung – Diagnose", body, script));
 }
 
 void setIrPulseOutput(bool active) {
@@ -4018,14 +4015,14 @@ void handleApatorUnlock() {
   apatorUnlock.active = true;
   apatorUnlock.phase = 1;
   apatorUnlock.nextMs = millis();
-  eventLog.add("INFO", "APATOR_UNLOCK",
-               "Apator-Freischaltung gestartet");
+  eventLog.add("INFO", "METER_UNLOCK",
+               "Optionale Zählerfreischaltung gestartet");
   server.send(202, "text/html; charset=utf-8",
-              page("Apator wird freigeschaltet",
+              page("Zähler wird freigeschaltet",
                    "<div class='card'><h2>Automatische IR-Sequenz läuft</h2>"
                    "<p>Dauer ungefähr eine Minute. Tracker und Zähler währenddessen nicht bewegen.</p>"
                    "<p>Anschließend unter Messwerte prüfen, ob die aktuelle Leistung erscheint.</p>"
-                   "<a href='/diagnostics'>Status anzeigen</a></div>"));
+                   "<a href='/maintenance/diagnostics'>Status anzeigen</a></div>"));
 }
 
 void updateApatorUnlock() {
@@ -4145,7 +4142,7 @@ void handleIrPin() {
   server.send(202, "text/html; charset=utf-8",
               page("IR-PIN wird gesendet",
                    "<p>Die vier Ziffern werden jetzt nicht blockierend gesendet.</p>"
-                   "<p><a href='/diagnostics'>Zur Diagnose</a></p>"));
+                   "<p><a href='/maintenance/diagnostics'>Zur Diagnose</a></p>"));
 }
 
 void handleForgetPin() {
@@ -4154,7 +4151,7 @@ void handleForgetPin() {
   config.autoPin = false;
   saveConfig();
   eventLog.add("INFO", "PIN_FORGET", "Gespeicherte PIN gelöscht");
-  server.sendHeader("Location", "/diagnostics", true);
+  server.sendHeader("Location", "/maintenance/diagnostics", true);
   server.send(303, "text/plain", "");
 }
 
@@ -4173,7 +4170,7 @@ void handleIrPulse() {
 void handleIrStop() {
   if (!requireAdmin()) return;
   if (irPulse.active) finishIrPulseJob();
-  server.sendHeader("Location", "/diagnostics", true);
+  server.sendHeader("Location", "/maintenance/diagnostics", true);
   server.send(303, "text/plain", "");
 }
 
@@ -4327,7 +4324,7 @@ void publishDiscoverySensor(const char *key, const char *name, const char *unit,
                    "\",\"state_topic\":\"" + mqttBaseTopic() + "/state\",\"value_template\":\"{{ value_json." +
                    key + " }}\",\"availability_topic\":\"" + mqttBaseTopic() +
                    "/availability\",\"device\":{\"identifiers\":[\"" + deviceId +
-                   "\"],\"name\":\"IR-Tracker Offline\",\"manufacturer\":\"Solakon Hardware / Offline Firmware\","
+                   "\"],\"name\":\"IR-Tracker Offline\",\"manufacturer\":\"Michael Roßmann / Community Firmware\","
                    "\"model\":\"PowerTracker IR\",\"sw_version\":\"" + kFirmwareVersion + "\"}";
   if (strlen(unit)) payload += ",\"unit_of_measurement\":\"" + String(unit) + "\"";
   if (strlen(deviceClass)) payload += ",\"device_class\":\"" + String(deviceClass) + "\"";
@@ -4466,14 +4463,25 @@ void setupRoutes() {
   const char *securityHeaders[] = {"Origin", "Referer", "Authorization",
                                    "X-CSRF-Token", "Cookie"};
   server.collectHeaders(securityHeaders, 5);
+  server.on("/assets/i18n.js", HTTP_GET, [] {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+    server.sendHeader("X-Content-Type-Options", "nosniff");
+    server.send_P(200, PSTR("application/javascript; charset=utf-8"),
+                  reinterpret_cast<PGM_P>(kI18nJsGzip), kI18nJsGzipSize);
+  });
   server.on("/", HTTP_GET, handleRoot);
   server.on("/history", HTTP_GET, handleHistoryPage);
   server.on("/interfaces", HTTP_GET, handleInterfacesPage);
   server.on("/maintenance", HTTP_GET, handleMaintenancePage);
+  server.on("/maintenance/diagnostics", HTTP_GET, handleDiagnostics);
   server.on("/setup", HTTP_GET, handleSetup);
   server.on("/setup/save", HTTP_POST, handleSetupSave);
   server.on("/auth/logout", HTTP_POST, handleLogout);
-  server.on("/diagnostics", HTTP_GET, handleDiagnostics);
+  server.on("/diagnostics", HTTP_GET, [] {
+    server.sendHeader("Location", "/maintenance/diagnostics", true);
+    server.send(301, "text/plain", "");
+  });
   server.on("/api/v1/status", HTTP_GET, [] {
     if (requireApiAccess())
       server.send(200, "application/json", statusJson());
@@ -4613,6 +4621,7 @@ void setupRoutes() {
   server.on("/api/v1/events/clear", HTTP_POST, handleEventsClear);
   server.on("/api/v1/time", HTTP_POST, handleSetTime);
   server.on("/ir/pin", HTTP_POST, handleIrPin);
+  server.on("/ir/meter-unlock", HTTP_POST, handleApatorUnlock);
   server.on("/ir/apator", HTTP_POST, handleApatorUnlock);
   server.on("/ir/pin/forget", HTTP_POST, handleForgetPin);
   server.on("/ir/pulse", HTTP_POST, handleIrPulse);

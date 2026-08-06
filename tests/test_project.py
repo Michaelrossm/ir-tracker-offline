@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import gzip
 import re
 import struct
 import unittest
@@ -14,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
+I18N_SOURCE = (ROOT / "web" / "i18n.js").read_text(encoding="utf-8")
 HISTORY_SOURCE = (ROOT / "src" / "HistoryStore.cpp").read_text(encoding="utf-8")
 HISTORY_HEADER = (ROOT / "src" / "HistoryStore.h").read_text(encoding="utf-8")
 EVENT_SOURCE = (ROOT / "src" / "EventLog.cpp").read_text(encoding="utf-8")
@@ -23,11 +25,12 @@ EVENT_HEADER = (ROOT / "src" / "EventLog.h").read_text(encoding="utf-8")
 class ProjectSecurityTests(unittest.TestCase):
     def test_beta_version_and_bilingual_ui_are_embedded(self):
         source = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
-        self.assertIn('kFirmwareVersion[] = "1.0.1-beta.1"', source)
+        self.assertIn('kFirmwareVersion[] = "1.0.1-beta.2"', source)
         self.assertIn("id='langToggle'", source)
-        self.assertIn("irtracker-language-v1", source)
-        self.assertIn("URLSearchParams(location.search).get('lang')", source)
-        self.assertIn('"Einstellungen":"Settings"', source)
+        self.assertIn("/assets/i18n.js", source)
+        self.assertIn("irtracker-language-v1", I18N_SOURCE)
+        self.assertIn("URLSearchParams(location.search).get('lang')", I18N_SOURCE)
+        self.assertIn('"Einstellungen":"Settings"', I18N_SOURCE)
         self.assertIn("Michael Roßmann", source)
 
     def test_original_backups_are_ignored(self) -> None:
@@ -209,6 +212,26 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("localStorage.removeItem", theme_script)
         self.assertNotIn("fetch(", theme_script)
         self.assertNotIn("XMLHttpRequest", theme_script)
+
+    def test_navigation_and_maintenance_are_reduced(self) -> None:
+        nav_start = SOURCE.index("String nav()")
+        nav_end = SOURCE.index("String maintenanceTabs", nav_start)
+        navigation = SOURCE[nav_start:nav_end]
+        self.assertNotIn("/diagnostics", navigation)
+        self.assertNotIn("JSON API", navigation)
+        self.assertIn("/maintenance/diagnostics", SOURCE)
+        self.assertIn("JSON-API f", SOURCE)
+        self.assertIn("Content-Encoding", SOURCE)
+        self.assertIn("kI18nJsGzip", SOURCE)
+        self.assertNotIn("Apator vollständig freischalten", SOURCE)
+        self.assertNotIn("LEPUS-Spannung", SOURCE)
+
+    def test_embedded_translation_asset_is_valid_gzip(self) -> None:
+        header = (ROOT / "src" / "WebAssets.h").read_text(encoding="utf-8")
+        payload = bytes(int(value, 16) for value in re.findall(r"0x([0-9a-f]{2})", header))
+        expected = I18N_SOURCE.replace("\r\n", "\n").encode("utf-8")
+        self.assertEqual(gzip.decompress(payload), expected)
+        self.assertLess(len(payload), len(I18N_SOURCE.encode("utf-8")) // 2)
 
     def test_no_secret_is_printed_or_logged(self) -> None:
         forbidden = (
