@@ -23,7 +23,7 @@ EVENT_HEADER = (ROOT / "src" / "EventLog.h").read_text(encoding="utf-8")
 class ProjectSecurityTests(unittest.TestCase):
     def test_beta_version_and_bilingual_ui_are_embedded(self):
         source = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
-        self.assertIn('kFirmwareVersion[] = "1.0.0-beta.1"', source)
+        self.assertIn('kFirmwareVersion[] = "1.0.1-beta.1"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("irtracker-language-v1", source)
         self.assertIn("URLSearchParams(location.search).get('lang')", source)
@@ -49,7 +49,6 @@ class ProjectSecurityTests(unittest.TestCase):
             "history_flush_before_update_failed",
             "Damaged frames must never alter live values/history",
             "Commit atomically only after CRC, parsing and plausibility",
-            "if (meterFresh)",
             "settings_backup_too_large",
             "batch_too_large",
             "mbedtls_md_hmac",
@@ -176,6 +175,12 @@ class ProjectSecurityTests(unittest.TestCase):
             "void handleDiagnostics() {\n  if (!requireAdmin()) return;",
             'server.on("/system/shutdown"',
             "esp_deep_sleep_start",
+            'server.on("/api/v1/gpio-scan/start"',
+            'server.on("/api/v1/gpio-scan/cancel"',
+            "meter.lastTelegramMs >= gpioScan.candidateStartedMs",
+            "meter.lastCrcValid",
+            "restoreMeterSerialAfterScan()",
+            "if (meterFresh && !gpioScan.active)",
         ):
             self.assertIn(marker, SOURCE)
         self.assertIn("lastWrittenBucket == bucket", HISTORY_SOURCE)
