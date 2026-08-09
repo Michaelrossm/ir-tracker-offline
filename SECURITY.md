@@ -10,7 +10,7 @@
 - Schreibende IR-Bridge und Sniffer deaktiviert lassen, wenn sie nicht benötigt werden.
 - API auf **Admin-Anmeldung erforderlich** stellen, sofern Integrationen keinen offenen lokalen Zugriff benötigen.
 - Ereignisprotokoll enthält keine Passwörter; Flash-Speicherung ist standardmäßig aus.
-- OTA akzeptiert nur Pakete mit gültiger Ed25519-Signatur von Michael Roßmann.
+- OTA akzeptiert nur Pakete mit gültiger ECDSA-P-256-Signatur von Michael Roßmann.
 
 HTTP verschlüsselt Zugangsdaten und Messwerte nicht. HTTPS ist wegen lokaler Shelly-Kompatibilität, Zertifikatsverwaltung und ESP32-Ressourcen nicht erzwungen. VPN ist die bevorzugte Lösung.
 
@@ -26,7 +26,7 @@ Sicherheitsprobleme bitte nicht mit Gerätedumps, WLAN-Passwörtern, Zähler-PIN
 - Keep the writable IR bridge and sniffer disabled unless required.
 - Set the API to **Admin login required** unless integrations need open local access.
 - Event logs never contain passwords; flash persistence is disabled by default.
-- OTA accepts only packages with a valid Ed25519 signature from Michael Roßmann.
+- OTA accepts only packages with a valid ECDSA P-256 signature from Michael Roßmann.
 
 HTTP does not encrypt credentials or readings. HTTPS is not mandatory because of local Shelly compatibility, certificate management and ESP32 resource limits. A VPN is preferred.
 
