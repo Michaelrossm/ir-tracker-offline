@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.0.1 Beta
+# IR Tracker Offline — 1.0.2 Beta
 
 **Deutsch** | [English](#english)
 

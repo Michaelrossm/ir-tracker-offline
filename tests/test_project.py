@@ -16,6 +16,13 @@ from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
 I18N_SOURCE = (ROOT / "web" / "i18n.js").read_text(encoding="utf-8")
+COMMON_JS_SOURCE = (ROOT / "web" / "common.js").read_text(encoding="utf-8")
+COMMON_CSS_SOURCE = (ROOT / "web" / "common.css").read_text(encoding="utf-8")
+DASHBOARD_JS_SOURCE = (ROOT / "web" / "dashboard.js").read_text(encoding="utf-8")
+HISTORY_JS_SOURCE = (ROOT / "web" / "history.js").read_text(encoding="utf-8")
+WEB_RUNTIME_SOURCE = "\n".join(
+    (SOURCE, COMMON_JS_SOURCE, COMMON_CSS_SOURCE, DASHBOARD_JS_SOURCE, HISTORY_JS_SOURCE)
+)
 HISTORY_SOURCE = (ROOT / "src" / "HistoryStore.cpp").read_text(encoding="utf-8")
 HISTORY_HEADER = (ROOT / "src" / "HistoryStore.h").read_text(encoding="utf-8")
 EVENT_SOURCE = (ROOT / "src" / "EventLog.cpp").read_text(encoding="utf-8")
@@ -25,7 +32,7 @@ EVENT_HEADER = (ROOT / "src" / "EventLog.h").read_text(encoding="utf-8")
 class ProjectSecurityTests(unittest.TestCase):
     def test_beta_version_and_bilingual_ui_are_embedded(self):
         source = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
-        self.assertIn('kFirmwareVersion[] = "1.0.1-beta.2"', source)
+        self.assertIn('kFirmwareVersion[] = "1.0.2-beta.1"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -79,9 +86,6 @@ class ProjectSecurityTests(unittest.TestCase):
             "new AbortController()",
             "request!==historyRequest",
             "generation!==dLoadGeneration",
-            "script.reserve(26000)",
-            "DASHBOARD_SCRIPT_MEMORY",
-            "HISTORY_SCRIPT_MEMORY",
             "function dStopLoads()",
             "function stopHistoryLoads()",
             "addEventListener('pagehide',dStopLoads)",
@@ -153,6 +157,11 @@ class ProjectSecurityTests(unittest.TestCase):
             "WiFi.softAPdisconnect(true)",
             "WiFi.mode(WIFI_STA)",
             "esp_wifi_set_ps(WIFI_PS_MIN_MODEM)",
+            "#include <ESPmDNS.h>",
+            "MDNS.begin(config.hostname.c_str())",
+            'MDNS.addService("http", "tcp", 80)',
+            "MDNS.end()",
+            "mdns_running",
             "kWifiPowerStableMs = 3UL * 60UL * 1000UL",
             "kWifiPowerEvaluateMs = 60UL * 1000UL",
             "WIFI_POWER_19_5dBm",
@@ -168,7 +177,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "Umschalt+Ziehen",
             "Minimum: ${fmtPower(v.min)}",
             "history.replaceState(null,'',location.pathname",
-            "credentialSafeFetch",
+            "const nativeFetch=window.fetch.bind(window)",
             ".chart-card,.dashboard-chart,.chart-wrap{min-width:0;max-width:100%}",
             ".legend-row{gap:10px 14px}",
             'server.on("/auth/logout"',
@@ -185,7 +194,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "restoreMeterSerialAfterScan()",
             "if (meterFresh && !gpioScan.active)",
         ):
-            self.assertIn(marker, SOURCE)
+            self.assertIn(marker, WEB_RUNTIME_SOURCE)
         self.assertIn("lastWrittenBucket == bucket", HISTORY_SOURCE)
         self.assertIn("validRecord(record)", HISTORY_SOURCE)
         self.assertIn("kMaximumPlausiblePowerW", HISTORY_HEADER)
@@ -201,11 +210,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("return !persistent_ || writePersistent(record)", EVENT_SOURCE)
 
     def test_theme_stays_browser_local(self) -> None:
-        start = SOURCE.index("const key='irtracker-theme-v1'")
-        end = SOURCE.index("})();</script>)JS", start)
-        theme_script = SOURCE[start:end]
+        theme_script = COMMON_JS_SOURCE
         self.assertEqual(SOURCE.count("data-theme-var="), 2)
-        self.assertIn("['--bg','--card'].forEach", SOURCE)
+        self.assertIn("['--bg','--card'].forEach", theme_script)
         self.assertIn("const defaults={'--bg':'#07100c','--card':'#10231a'}", theme_script)
         self.assertIn("localStorage.getItem", theme_script)
         self.assertIn("localStorage.setItem", theme_script)
@@ -223,15 +230,86 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("JSON-API f", SOURCE)
         self.assertIn("Content-Encoding", SOURCE)
         self.assertIn("kI18nJsGzip", SOURCE)
+        self.assertIn("kCommonCssGzip", SOURCE)
+        self.assertIn("kCommonJsGzip", SOURCE)
+        self.assertIn("kDashboardJsGzip", SOURCE)
+        self.assertIn("kHistoryJsGzip", SOURCE)
+        self.assertIn("window.IR_TRACKER_CONFIG={csrfToken:", SOURCE)
+        self.assertNotIn("script.reserve(26000)", SOURCE)
+        self.assertNotIn("DASHBOARD_SCRIPT_MEMORY", SOURCE)
+        self.assertNotIn("HISTORY_SCRIPT_MEMORY", SOURCE)
         self.assertNotIn("Apator vollständig freischalten", SOURCE)
         self.assertNotIn("LEPUS-Spannung", SOURCE)
 
+    def test_update_check_uses_maintenance_status_instead_of_raw_json(self) -> None:
+        route_start = SOURCE.index('server.on("/api/v1/update/check"')
+        route_end = SOURCE.index('server.on("/api/v1/update/install"', route_start)
+        check_route = SOURCE[route_start:route_end]
+        self.assertIn('server.sendHeader("Location", "/maintenance#firmware-update"', check_route)
+        self.assertIn('server.send(303, "text/plain", "")', check_route)
+        self.assertNotIn("githubUpdateJson()", check_route)
+        self.assertNotIn("<pre>", check_route)
+        self.assertIn("async function loadUpdate()", SOURCE)
+        self.assertIn("Die installierte Firmware ist aktuell.", SOURCE)
+        self.assertIn("Technischer Fehlercode", SOURCE)
+
+    def test_first_access_password_is_prominent_in_readme(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("## Erster Zugang – Standardpasswort", readme)
+        self.assertIn("### First access – default password", readme)
+        self.assertIn("IR-Tracker-Setup-XXXX", readme)
+        self.assertIn("IRTracker-XXXX", readme)
+        self.assertIn("| Weboberfläche | `admin` |", readme)
+
+    def test_browser_forms_show_friendly_errors_instead_of_raw_json(self) -> None:
+        self.assertIn("document.addEventListener('submit',async event=>", COMMON_JS_SOURCE)
+        self.assertIn("invalid_wifi_credentials", COMMON_JS_SOURCE)
+        self.assertIn("csrf_token_invalid", COMMON_JS_SOURCE)
+        self.assertIn("actionMessage", COMMON_JS_SOURCE)
+        self.assertIn("new URLSearchParams(new FormData(form))", COMMON_JS_SOURCE)
+        self.assertIn("validWifiPassword", SOURCE)
+        self.assertIn("maxlength='32'", SOURCE)
+        self.assertIn("maxlength='64' autocomplete='off'", SOURCE)
+        ota_start = SOURCE.index("void handleOtaFinished()")
+        ota_end = SOURCE.index("void handleSafeShutdown()", ota_start)
+        ota_handler = SOURCE[ota_start:ota_end]
+        self.assertIn("Firmwareupdate abgelehnt", ota_handler)
+        self.assertNotIn('"application/json"', ota_handler)
+
     def test_embedded_translation_asset_is_valid_gzip(self) -> None:
         header = (ROOT / "src" / "WebAssets.h").read_text(encoding="utf-8")
-        payload = bytes(int(value, 16) for value in re.findall(r"0x([0-9a-f]{2})", header))
-        expected = I18N_SOURCE.replace("\r\n", "\n").encode("utf-8")
-        self.assertEqual(gzip.decompress(payload), expected)
-        self.assertLess(len(payload), len(I18N_SOURCE.encode("utf-8")) // 2)
+        assets = {
+            "kCommonCssGzip": COMMON_CSS_SOURCE,
+            "kCommonJsGzip": COMMON_JS_SOURCE,
+            "kI18nJsGzip": I18N_SOURCE,
+            "kDashboardJsGzip": DASHBOARD_JS_SOURCE,
+            "kHistoryJsGzip": HISTORY_JS_SOURCE,
+        }
+        for symbol, source in assets.items():
+            match = re.search(
+                rf"{symbol}\[\] PROGMEM = \{{(.*?)\n\}};", header, re.DOTALL
+            )
+            self.assertIsNotNone(match, symbol)
+            payload = bytes(
+                int(value, 16) for value in re.findall(r"0x([0-9a-f]{2})", match.group(1))
+            )
+            expected = source.replace("\r\n", "\n").encode("utf-8")
+            self.assertEqual(gzip.decompress(payload), expected, symbol)
+            self.assertLess(len(payload), len(expected), symbol)
+
+    def test_large_pages_use_cached_external_assets(self) -> None:
+        dashboard = SOURCE[SOURCE.index("void handleRoot()") : SOURCE.index("void handleHistoryPage()")]
+        history = SOURCE[SOURCE.index("void handleHistoryPage()") : SOURCE.index("struct HistoryQuery")]
+        self.assertIn("/assets/dashboard.js?v=", dashboard)
+        self.assertIn("/assets/history.js?v=", history)
+        self.assertNotIn("String script", dashboard)
+        self.assertNotIn("String script", history)
+        self.assertIn("/assets/common.css?v=", SOURCE)
+        self.assertIn("/assets/common.js?v=", SOURCE)
+        self.assertIn("window.IR_TRACKER_CONFIG={csrfToken:", SOURCE)
+        self.assertIn("style-src 'self' 'unsafe-inline'", SOURCE)
+        self.assertIn("script-src \"\n      \"'self' 'unsafe-inline'", SOURCE)
+        self.assertEqual(COMMON_CSS_SOURCE.count("{"), COMMON_CSS_SOURCE.count("}"))
 
     def test_no_secret_is_printed_or_logged(self) -> None:
         forbidden = (
