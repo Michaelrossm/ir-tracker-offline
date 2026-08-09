@@ -6,6 +6,21 @@ Lokale, cloudfreie Firmware für einen ESP32-C3-basierten IR-Stromzähler-Tracke
 
 > Unabhängiges Community-Projekt. Nicht mit Solakon verbunden und nicht von Solakon unterstützt. Solakon ist eine Marke ihrer jeweiligen Inhaber.
 
+## Erster Zugang – Standardpasswort
+
+Nach einer frischen Installation startet der Tracker das WLAN `IR-Tracker-Setup-XXXX`.
+Die vier Zeichen `XXXX` werden direkt aus diesem WLAN-Namen übernommen:
+
+| Zugang | Benutzername | Passwort |
+| --- | --- | --- |
+| Setup-WLAN `IR-Tracker-Setup-XXXX` | – | `IRTracker-XXXX` |
+| Weboberfläche | `admin` | `IRTracker-XXXX` |
+
+Beispiel: Heißt das WLAN `IR-Tracker-Setup-F2A0`, lautet das Passwort
+`IRTracker-F2A0`. Groß-/Kleinschreibung und Bindestrich müssen exakt stimmen.
+Nach einer eigenen Passwortänderung gilt stattdessen das selbst gewählte
+Admin-Passwort.
+
 ## Funktionen
 
 - SML-/OBIS-Auswertung vollständig lokal
@@ -51,6 +66,21 @@ Copyright © 2026 Michael Roßmann. Lizenz: PolyForm Noncommercial 1.0.0. Privat
 Local, cloud-free firmware for an ESP32-C3-based IR electricity meter tracker. Created and maintained by **Michael Roßmann**.
 
 > Independent community project. Not affiliated with or endorsed by Solakon. Solakon is a trademark of its respective owners.
+
+### First access – default password
+
+After a fresh installation, the tracker starts the Wi-Fi network
+`IR-Tracker-Setup-XXXX`. Copy the four `XXXX` characters directly from that
+network name:
+
+| Access | User name | Password |
+| --- | --- | --- |
+| Setup Wi-Fi `IR-Tracker-Setup-XXXX` | – | `IRTracker-XXXX` |
+| Web interface | `admin` | `IRTracker-XXXX` |
+
+Example: If the Wi-Fi network is named `IR-Tracker-Setup-F2A0`, the password is
+`IRTracker-F2A0`. Capitalization and the hyphen must match exactly. After setting
+a custom password, use that chosen administrator password instead.
 
 ### Features
 
