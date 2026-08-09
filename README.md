@@ -57,7 +57,7 @@ Siehe [INSTALLATION.md](INSTALLATION.md). Vor jedem Flashvorgang vollständige G
 
 ## Lizenz
 
-Copyright © 2026 Michael Roßmann. Lizenz: PolyForm Noncommercial 1.0.0. Private und sonstige nichtkommerzielle Nutzung ist gemäß Lizenz erlaubt; gewerbliche Nutzung ist nicht gestattet. Der verbindliche Text steht in [LICENSE.md](LICENSE.md).
+Copyright © 2026 Michael Roßmann. Lizenz: PolyForm Noncommercial 1.0.0. Private und sonstige nichtkommerzielle Nutzung ist gemäß Lizenz erlaubt; gewerbliche Nutzung ist nicht gestattet. Verbindlich sind [LICENSE.md](LICENSE.md), der [Urheberhinweis](AUTHORS.md), die [Rechteprüfung](RIGHTS_REVIEW.md) und der [Markenhinweis](TRADEMARKS.md).
 
 ---
 
@@ -107,4 +107,4 @@ See [INSTALLATION.md](INSTALLATION.md). Before flashing, back up the complete de
 
 ### License
 
-Copyright © 2026 Michael Roßmann. Licensed under PolyForm Noncommercial 1.0.0. Private and other noncommercial use is permitted under the license; commercial use is not permitted. The authoritative terms are in [LICENSE.md](LICENSE.md).
+Copyright © 2026 Michael Roßmann. Licensed under PolyForm Noncommercial 1.0.0. Private and other noncommercial use is permitted under the license; commercial use is not permitted. See the authoritative [license](LICENSE.md), [authorship notice](AUTHORS.md), [rights review](RIGHTS_REVIEW.md), and [trademark notice](TRADEMARKS.md).
