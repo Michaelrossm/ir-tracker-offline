@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <DNSServer.h>
+#include <ESPmDNS.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <WebServer.h>
@@ -34,7 +35,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.0.1-beta.2";
+constexpr char kFirmwareVersion[] = "1.0.2-beta.1";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -134,6 +135,7 @@ uint8_t smlTrailerRemaining = 0;
 bool accessPointMode = false;
 uint32_t accessPointStartedMs = 0;
 bool accessPointAllowed = true;
+bool mdnsRunning = false;
 uint32_t lastWifiAttemptMs = 0;
 uint32_t lastMqttAttemptMs = 0;
 uint32_t mqttRetryMs = 10000;
@@ -391,6 +393,7 @@ struct IrPulseJob {
   bool active = false;
   bool outputActive = false;
   bool inverted = false;
+  int8_t pin = -1;
   uint8_t digits[4] = {};
   uint8_t digitIndex = 0;
   uint8_t pulsesRemaining = 0;
@@ -432,6 +435,16 @@ String htmlEscape(String value) {
 bool safeSingleLine(const String &value, size_t maximumLength) {
   return value.length() <= maximumLength && value.indexOf('\r') < 0 &&
          value.indexOf('\n') < 0 && value.indexOf('\0') < 0;
+}
+
+bool validWifiPassword(const String &value) {
+  if (!safeSingleLine(value, 64)) return false;
+  if (value.length() <= 63) return true;
+  // DE: WPA2 erlaubt alternativ zu einer Passphrase exakt 64 Hex-Zeichen.
+  // EN: WPA2 permits exactly 64 hexadecimal characters instead of a passphrase.
+  for (const char character : value)
+    if (!isxdigit(static_cast<unsigned char>(character))) return false;
+  return true;
 }
 
 bool validHostname(const String &value) {
@@ -588,8 +601,8 @@ bool requireAdmin() {
   server.sendHeader("Cross-Origin-Resource-Policy", "same-origin");
   server.sendHeader(
       "Content-Security-Policy",
-      "default-src 'self'; style-src 'unsafe-inline'; script-src "
-      "'unsafe-inline'; connect-src 'self' ws:; img-src 'self' data:; "
+      "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src "
+      "'self' 'unsafe-inline'; connect-src 'self' ws:; img-src 'self' data:; "
       "object-src 'none'; base-uri 'none'; form-action 'self'; "
       "frame-ancestors 'none'");
   server.sendHeader("Permissions-Policy",
@@ -882,92 +895,28 @@ String maintenanceTabs(const bool diagnostics) {
          F(">Diagnose &amp; Zähler</a></div>");
 }
 
-String page(const String &title, const String &body, const String &script = "") {
+String page(const String &title, const String &body,
+            const String &script = "", const String &assetPath = "") {
   String html;
-  html.reserve(body.length() + script.length() + 16000);
+  html.reserve(body.length() + script.length() + 3600);
   html += F("<!doctype html><html lang='de'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>");
-  html += "<title>" + title +
-          F("</title><script>if(location.href.includes('@'))history.replaceState(null,'',location.pathname+location.search+location.hash);const credentialSafeFetch=window.fetch.bind(window);window.fetch=(input,init)=>credentialSafeFetch(typeof input==='string'&&input.startsWith('/')?location.protocol+'//'+location.host+input:input,init);(function(){try{const t=JSON.parse(localStorage.getItem('irtracker-theme-v1')||'{}');['--bg','--card'].forEach(k=>{const v=t[k];if(/^#[0-9a-f]{6}$/i.test(v||''))document.documentElement.style.setProperty(k,v)})}catch(e){}})()</script><style>"
-    ":root{color-scheme:dark;--bg:#07100c;--panel:#0b1812;--card:#10231a;--text:#eefbf2;--green:#63e68b;--accent:#22c55e;--muted:#9bb3a4;--chart-power:#63e68b;--chart-import:#58a6ff;--chart-export:#ffb454;--chart-gap:#ff4d4d;--chart-grid:#355a43;--chart-label:#b8cdbf}"
-    "*{box-sizing:border-box}[hidden]{display:none!important}html,body{max-width:100%;overflow-x:hidden}body{margin:0;font:15px Inter,ui-sans-serif,system-ui;background:"
-    "var(--bg);color:var(--text);min-height:100vh}"
-    "main{width:min(100%,1800px);margin:auto;padding:clamp(18px,2vw,34px)}nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:28px;padding:8px;"
-    "background:var(--card);border:1px solid #213d2d;border-radius:14px;position:sticky;top:8px;z-index:8;backdrop-filter:blur(10px)}"
-    "nav a{padding:9px 12px;border-radius:9px;text-decoration:none;color:var(--muted)}nav a:hover{background:var(--accent);color:var(--text)}"
-    "a{color:var(--accent)}h1{font-size:clamp(1.65rem,4vw,2.25rem);letter-spacing:-.035em;margin:12px 0 22px}"
-    "h2{font-size:1.15rem;margin:22px 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}"
-    ".card{background:var(--card);border:1px solid #294735;border-radius:16px;padding:18px;"
-    "box-shadow:0 12px 35px #00000026}.value{font-size:2rem;font-weight:750;letter-spacing:-.035em;margin-top:8px}"
-    ".muted{color:var(--muted);font-size:.9rem}label{display:block;margin:15px 0 5px}"
-    "input,select,button{width:100%;padding:11px;border-radius:8px;border:1px solid #456553;background:var(--card);color:var(--text)}"
-    "button{background:var(--accent);font-weight:700;cursor:pointer;margin-top:18px;"
-    "border-color:var(--accent);transition:.15s transform,.15s filter}button:hover{filter:brightness(1.12)}button:active{transform:scale(.98)}"
-    ".danger{background:#8b2929;border-color:#bb4545}.secondary{background:#183526;border-color:#365e45}"
-    "code{word-break:break-all}details{margin-top:24px}fieldset{border:1px solid #355540;border-radius:12px;margin:18px 0;padding:16px}"
-    "legend{color:var(--green);font-weight:700}.inline{display:grid;grid-template-columns:2fr 1fr;gap:12px}"
-    ".toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.toolbar>*{flex:1 1 145px}"
-    ".toolbar button{width:auto;margin-top:0;flex:0 0 auto}.legend-row{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0;min-width:0}"
-    ".legend-item{display:flex;align-items:center;gap:8px;min-width:0;padding:6px 10px;border:1px solid #294735;border-radius:999px;background:var(--card);font-weight:650}.swatch{width:24px;height:5px;border-radius:3px;flex:0 0 auto}"
-    ".chart-wrap{position:relative;height:clamp(390px,55vh,680px);margin-top:10px;touch-action:none}.chart-wrap canvas{width:100%;height:100%}"
-    ".tooltip{position:absolute;display:none;pointer-events:none;background:var(--card);border:1px solid #456553;"
-    "border-radius:9px;padding:9px 11px;font-size:.88rem;white-space:normal;line-height:1.4;max-width:calc(100% - 8px);z-index:3;box-shadow:0 5px 18px #0008}"
-    ".loading{display:flex;align-items:center;gap:10px;padding:18px 0}.spinner{width:20px;height:20px;border:3px solid #355540;"
-    "border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}"
-    ".error{color:#ffb1a8;background:#351817;border:1px solid #77342f;border-radius:9px;padding:12px}"
-    ".stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:14px 0}"
-    ".stat{background:var(--card);border:1px solid #294735;border-radius:10px;padding:12px}.stat strong{display:block;font-size:1.25rem;margin-top:4px}"
-    ".metric-comparison{font-weight:750;margin-top:7px}.metric-baseline{display:block;margin-top:2px;color:var(--muted);font-size:.78rem}"
-    ".status-pill{display:inline-flex;align-items:center;gap:7px;border-radius:99px;padding:6px 10px;background:#173624;color:#a9efbd;font-weight:650}"
-    "footer{margin-top:42px;padding:20px 0 8px;border-top:1px solid #213d2d;color:var(--muted);font-size:.82rem}"
-    ".dot{width:8px;height:8px;border-radius:50%;background:var(--chart-power);box-shadow:0 0 12px var(--chart-power)}"
-    ".section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:34px}"
-    ".section-head h2{font-size:1.45rem;margin:0}.chart-card{margin-top:14px}.chart-controls{display:flex;gap:10px;flex-wrap:wrap}"
-    ".chart-controls label{margin:0;font-weight:700}.chart-controls select{min-width:190px;font-weight:650}.dashboard-chart{height:clamp(350px,42vh,560px);position:relative;margin-top:8px;touch-action:none}"
-    ".date-nav{display:grid;grid-template-columns:minmax(170px,1fr) auto auto auto minmax(220px,2fr);gap:8px;align-items:end;margin:14px 0;padding:12px;border:1px solid #294735;border-radius:12px;background:var(--card)}"
-    ".date-nav label{margin:0}.date-nav button{width:auto;margin:0;white-space:nowrap}.date-nav input[type=range]{padding:0;border:0;background:transparent}.date-nav output{display:block;color:var(--muted);font-size:.82rem;margin-top:4px}"
-    ".chart-card,.dashboard-chart,.chart-wrap{min-width:0;max-width:100%}.dashboard-chart canvas,.chart-wrap canvas{display:block;max-width:100%}"
-    ".dashboard-chart canvas{width:100%;height:100%}.chart-section{margin-top:18px;padding:16px;border:1px solid #294735;border-radius:14px;background:var(--card)}"
-    ".chart-section h2{margin:0 0 8px;font-size:1.25rem}.chart-note{padding:10px 12px;border-left:3px solid var(--chart-power);background:var(--card);border-radius:6px;line-height:1.45}"
-    ".theme-toggle{width:auto;margin:0 0 0 auto;padding:9px 12px;background:transparent;border-color:#355540;color:var(--muted)}"
-    ".theme-panel{position:fixed;right:clamp(12px,2vw,34px);top:82px;z-index:20;width:min(430px,calc(100vw - 24px));max-height:calc(100vh - 100px);overflow:auto;padding:18px;background:var(--card);border:1px solid #456553;border-radius:16px;box-shadow:0 18px 60px #000b}"
-    ".theme-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.theme-head button{width:42px;margin:0;padding:7px;font-size:1.2rem}.theme-panel p{margin:8px 0 4px}.theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}.theme-grid label{margin:8px 0 0}.theme-grid input[type=color]{height:42px;padding:4px;cursor:pointer}.theme-panel>button{margin-top:16px}"
-    ".subnav{display:flex;gap:8px;flex-wrap:wrap;margin:-8px 0 22px}.subnav a{padding:10px 14px;border:1px solid #355540;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:700}.subnav a:hover,.subnav a.active{background:var(--accent);border-color:var(--accent);color:var(--text)}.compact-details{margin-top:12px}.compact-details>summary{cursor:pointer;font-weight:750;color:var(--green);padding:8px 0}.compact-details[open]>summary{margin-bottom:12px}"
-    ".empty-state{text-align:center;padding:52px 15px;color:var(--muted)}"
-    "@media(max-width:600px){main{padding:12px;width:100vw;max-width:100vw;overflow:hidden}nav{gap:2px;font-size:.86rem;position:static;min-width:0}nav a{padding:8px}.theme-toggle{margin-left:0}.theme-panel{top:12px}.theme-grid{grid-template-columns:1fr 1fr}"
-    ".grid{grid-template-columns:minmax(0,1fr)}.card{padding:14px;min-width:0}.inline{grid-template-columns:1fr}"
-    ".chart-wrap{height:330px}.dashboard-chart{height:300px}.chart-section{padding:10px;margin-top:14px}.chart-controls{display:grid;grid-template-columns:minmax(0,1fr)}"
-    ".chart-controls>*{min-width:0}.chart-controls select{min-width:0}.section-head{align-items:flex-start}.toolbar>*{flex-basis:120px}"
-    ".toolbar button{padding:9px}.date-nav{grid-template-columns:1fr 1fr}.date-nav .date-slider{grid-column:1/-1}.legend-row{gap:10px 14px}.legend-item{font-size:.9rem}.tooltip{font-size:.76rem}}</style></head><body><main>");
+  html += "<title>" + title + "</title>";
+  html += "<script>window.IR_TRACKER_CONFIG={csrfToken:'" + csrfToken +
+          "',firmwareVersion:'" + String(kFirmwareVersion) + "'};</script>";
+  html += F("<script src='/assets/common.js?v=");
+  html += kFirmwareVersion;
+  html += F("'></script><link rel='stylesheet' href='/assets/common.css?v=");
+  html += kFirmwareVersion;
+  html += F("'></head><body><main>");
   html += nav();
-  html += "<h1>" + title + "</h1>" + body;
+  html += "<h1>" + title + "</h1><!--IR_BODY-->" + body;
   if (script.length()) html += "<script>" + script + "</script>";
-  html += F(R"JS(<script>(function(){
-const key='irtracker-theme-v1';
-const defaults={'--bg':'#07100c','--card':'#10231a'};
-const panel=document.getElementById('themePanel'),toggle=document.getElementById('themeToggle'),close=document.getElementById('themeClose'),reset=document.getElementById('themeReset'),inputs=[...document.querySelectorAll('[data-theme-var]')];
-function stored(){try{const v=JSON.parse(localStorage.getItem(key)||'{}');return v&&typeof v==='object'?v:{}}catch(e){return {}}}
-function color(name){const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();return /^#[0-9a-f]{6}$/i.test(v)?v:defaults[name]}
-function sync(){inputs.forEach(i=>i.value=color(i.dataset.themeVar))}
-function apply(values,save){const clean={};Object.entries(defaults).forEach(([name,fallback])=>{const value=values[name];clean[name]=/^#[0-9a-f]{6}$/i.test(value||'')?value:fallback;document.documentElement.style.setProperty(name,clean[name])});if(save){try{localStorage.setItem(key,JSON.stringify(clean))}catch(e){}}window.dispatchEvent(new CustomEvent('irtracker-theme-change'))}
-function show(on){panel.hidden=!on;toggle.setAttribute('aria-expanded',String(on));if(on)sync()}
-toggle.addEventListener('click',()=>show(panel.hidden));close.addEventListener('click',()=>show(false));
-inputs.forEach(input=>input.addEventListener('input',()=>{const values=stored();values[input.dataset.themeVar]=input.value;apply(values,true)}));
-reset.addEventListener('click',()=>{try{localStorage.removeItem(key)}catch(e){}apply(defaults,false);sync()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!panel.hidden)show(false)});sync();
-})();</script>)JS");
   html += F("<script src='/assets/i18n.js?v=");
   html += kFirmwareVersion;
   html += F("'></script>");
-  html += "<script>(function(){const token='" + csrfToken +
-          "';document.querySelectorAll(\"form[method='post'],form[method='POST']\")"
-          ".forEach(f=>{if(!f.querySelector(\"input[name='csrf_token']\")){const i=document.createElement('input');"
-          "i.type='hidden';i.name='csrf_token';i.value=token;f.insertBefore(i,f.firstChild)}});"
-          "const originalFetch=window.fetch;window.fetch=function(input,init){init=init||{};"
-          "const method=(init.method||'GET').toUpperCase();"
-          "if(method==='POST'){init.headers=new Headers(init.headers||{});"
-          "init.headers.set('X-CSRF-Token',token)}return originalFetch(input,init)};"
-          "})();</script>";
+  if (assetPath.length())
+    html += "<script src='" + htmlEscape(assetPath) + "'></script>";
   html += "<footer>Firmware von " + String(kFirmwareAuthor) +
           " · © 2026 Michael Roßmann · " + String(kFirmwareLicense) +
           " · nur nichtkommerzielle Nutzung<br>Unabhängiges Community-Projekt; "
@@ -977,25 +926,20 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!panel.hidden)show(
 }
 
 bool sendPageStreamed(const String &title, const String &body,
-                      const String &script) {
-  // DE: Nur der Seitenrahmen wird als String gebaut; Body und JavaScript werden
-  // getrennt gestreamt und vermeiden >40 KiB am Stück. | EN: Only the reusable
-  // shell is built as one String; body and JavaScript are streamed separately
-  // to avoid a contiguous 40+ KiB allocation on the ESP32-C3.
-  String shell = page(title, "", "");
-  const int insertion = shell.indexOf("<footer>");
+                      const String &assetPath) {
+  // DE: Der gemeinsame Rahmen bleibt klein. Seitentext und komprimiertes
+  // JavaScript werden getrennt übertragen. | EN: The common shell remains
+  // small. Page markup and compressed JavaScript are transferred separately.
+  String shell = page(title, "", "", assetPath);
+  const String marker = "<!--IR_BODY-->";
+  const int insertion = shell.indexOf(marker);
   if (insertion < 0 || shell.indexOf("</html>") < 0) return false;
 
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/html; charset=utf-8", "");
   server.sendContent(shell.substring(0, insertion));
   server.sendContent(body);
-  if (script.length()) {
-    server.sendContent("<script>");
-    server.sendContent(script);
-    server.sendContent("</script>");
-  }
-  shell.remove(0, insertion);
+  shell.remove(0, insertion + marker.length());
   server.sendContent(shell);
   server.sendContent("");
   return true;
@@ -1327,6 +1271,8 @@ String statusJson() {
   const bool browserSessionValid = validBrowserSession();
   String json = "{";
   json += "\"firmware\":\"offline-" + String(kFirmwareVersion) + "\",";
+  json += "\"installer_wifi_ota\":true,";
+  json += "\"installer_gpio_tx_scan\":true,";
   json += "\"author\":\"" + String(kFirmwareAuthor) + "\",";
   json += "\"license\":\"" + String(kFirmwareLicense) + "\",";
   json += "\"transport_security\":\"http_local_trusted_network_only\",";
@@ -1341,6 +1287,8 @@ String statusJson() {
   json += "\"wifi_ssid\":\"" + jsonEscape(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "") + "\",";
   json += "\"setup_ap_active\":" +
           String(accessPointMode ? "true" : "false") + ",";
+  json += "\"mdns_running\":" + String(mdnsRunning ? "true" : "false") + ",";
+  json += "\"mdns_name\":\"" + jsonEscape(config.hostname) + ".local\",";
   json += "\"wifi_sta_only\":" +
           String(WiFi.getMode() == WIFI_STA ? "true" : "false") + ",";
   json += "\"wifi_min_modem_sleep\":" +
@@ -1741,14 +1689,6 @@ String meterReportJson() {
 
 void handleRoot() {
   if (!requireAdmin()) return;
-  String script;
-  if (!script.reserve(26000)) {
-    eventLog.add("ERROR", "DASHBOARD_SCRIPT_MEMORY",
-                 "Dashboard-Skriptspeicher konnte nicht reserviert werden");
-    server.send(503, "text/plain; charset=utf-8",
-                "Dashboard vorübergehend nicht verfügbar. Bitte neu laden.");
-    return;
-  }
   String body = F("<div class='grid'>"
     "<div class='card'><div class='muted'>Aktuelle Leistung</div><div class='value' id='powerValue'>–</div></div>"
     "<div class='card'><div class='muted'>Netzbezug</div><div class='value' id='importValue'>–</div></div>"
@@ -1823,123 +1763,8 @@ void handleRoot() {
       löst ihn wieder.</p>
     </div>
     <p style='margin-top:28px'><span class='status-pill'><i class='dot'></i> Lokal · ohne Cloud</span></p>)HTML");
-  script += F(
-    "const byId=id=>document.getElementById(id);"
-    "let dashboardYearSummary=null;"
-    "const fmt=(v,d,u)=>v==null?'–':Number(v).toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d})+' '+u;"
-    "const fmtPower=v=>v==null?'–':Math.abs(Number(v))>=1000?fmt(Number(v)/1000,2,'kW'):fmt(Number(v),1,'W');"
-    "async function updateValues(){try{const response=await fetch('/api/v1/status',{cache:'no-store'});"
-    "if(!response.ok)throw new Error('HTTP '+response.status);const s=await response.json();"
-    "byId('powerValue').textContent=fmtPower(s.power_w);"
-    "byId('importValue').textContent=fmt(s.import_kwh,3,'kWh');"
-    "byId('exportValue').textContent=fmt(s.export_kwh,3,'kWh');"
-    "byId('meterState').textContent=s.meter_fresh?'OK':'Warte';"
-    "const has=s.phases&&s.phases.some(p=>p.power_w!=null||p.voltage_v!=null||p.current_a!=null);"
-    "s.phases.forEach((p,i)=>{byId('phase'+i).innerHTML="
-    "[p.power_w==null?'':`<b>${fmtPower(p.power_w)}</b>`,p.voltage_v==null?'':fmt(p.voltage_v,1,'V'),p.current_a==null?'':fmt(p.current_a,2,'A')].filter(Boolean).join('<br>')||'<span class=\"muted\">Vom Zähler nicht geliefert</span>'});"
-    "}catch(error){byId('meterState').textContent='Offline';console.error(error)}}"
-    "async function updateDashboardSummary(){try{const r=await fetch('/api/v1/dashboard-summary',{cache:'no-store'});"
-    "if(!r.ok)throw Error(r.status);const s=await r.json();dashboardYearSummary=s;"
-    "byId('todayImportSummary').textContent=fmt(s.today_import_kwh,3,'kWh');"
-    "byId('todayExportSummary').textContent=fmt(s.today_export_kwh,3,'kWh');"
-    "byId('yearImport').textContent=fmt(s.year_import_kwh,2,'kWh');"
-    "byId('yearExport').textContent=fmt(s.year_export_kwh,2,'kWh');"
-    "byId('yearDailyImport').textContent=fmt(s.year_daily_average_import_kwh,3,'kWh');"
-    "byId('yearDailyExport').textContent=fmt(s.year_daily_average_export_kwh,3,'kWh');"
-    "byId('yearCoverage').textContent=s.year_coverage_days==null?'Noch keine Jahresbasis verfügbar':"
-    "'Jahreswerte seit Aufzeichnungsbeginn · Grundlage: '+Number(s.year_coverage_days).toLocaleString('de-DE',{maximumFractionDigits:1})+' Tage';"
-    "const c=byId('dayComparison'),v=s.import_change_percent;"
-    "c.textContent=v==null?'Keine Vergleichsdaten':(v>0?'+':'')+Number(v).toLocaleString('de-DE',{maximumFractionDigits:1})+' %';"
-    "c.style.color=v==null?'':v>0?'#ff9b8f':v<0?'#63e68b':'';"
-    "if(typeof periodStats==='function')periodStats();"
-    "}catch(error){console.error(error)}}"
-    "const refreshLive=()=>{if(!document.hidden)updateValues()};"
-    "const refreshSummary=()=>{if(!document.hidden)updateDashboardSummary()};"
-    "refreshLive();refreshSummary();setInterval(refreshLive,4000);setInterval(refreshSummary,60000);"
-    "document.addEventListener('visibilitychange',()=>{if(!document.hidden){refreshLive();refreshSummary();if(typeof dScheduleLoad==='function')dScheduleLoad(true,0)}});");
-  script += F(R"JS(
-const dc=byId('dashChart'),dx=dc.getContext('2d'),dw=byId('dashChartWrap');
-const pc=byId('powerChart'),px=pc.getContext('2d'),pw=byId('powerChartWrap');
-let dd=[],dCursor=-1,dCursorPinned=false,dFrom=0,dTo=0,dExpectedStep=60,dAnchorState=new Date();
-const dCss=(name,fallback)=>getComputedStyle(document.documentElement).getPropertyValue(name).trim()||fallback;
-const dColor={get power(){return dCss('--chart-power','#63e68b')},get import(){return dCss('--chart-import','#58a6ff')},get export(){return dCss('--chart-export','#ffb454')},get gap(){return dCss('--chart-gap','#ff4d4d')},get grid(){return dCss('--chart-grid','#355a43')},get label(){return dCss('--chart-label','#b8cdbf')}};
-const dDelta=(key,i)=>i&&Number.isFinite(dd[i][key])&&Number.isFinite(dd[i-1][key])?Math.max(0,(dd[i][key]-dd[i-1][key])*1000):null;
-const dStep=()=>dExpectedStep;
-const dPad=v=>String(v).padStart(2,'0');
-function dIsoWeekValue(date){const x=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));x.setUTCDate(x.getUTCDate()+4-(x.getUTCDay()||7));const year=x.getUTCFullYear(),first=new Date(Date.UTC(year,0,1)),week=Math.ceil((((x-first)/86400000)+1)/7);return `${year}-W${dPad(week)}`}
-function dFromIsoWeek(value){const m=/^(\d{4})-W(\d{2})$/.exec(value);if(!m)return new Date(NaN);const jan4=new Date(Number(m[1]),0,4,12),monday=new Date(jan4);monday.setDate(jan4.getDate()-((jan4.getDay()+6)%7)+(Number(m[2])-1)*7);return monday}
-const dConfig=()=>({hour:{max:168,type:'datetime-local',label:'Stunde',back:'Stunden'},day:{max:730,type:'date',label:'Kalendertag',back:'Tage'},week:{max:104,type:'week',label:'Kalenderwoche',back:'Wochen'},month:{max:60,type:'month',label:'Kalendermonat',back:'Monate'},year:{max:20,type:'number',label:'Kalenderjahr',back:'Jahre'}}[byId('dashRange').value]);
-function dInputValue(date){const range=byId('dashRange').value,datePart=`${date.getFullYear()}-${dPad(date.getMonth()+1)}-${dPad(date.getDate())}`;if(range==='hour')return `${datePart}T${dPad(date.getHours())}:00`;if(range==='day')return datePart;if(range==='week')return dIsoWeekValue(date);if(range==='month')return datePart.slice(0,7);return String(date.getFullYear())}
-function dReadInput(){const value=byId('dashDate').value,range=byId('dashRange').value;if(!value)return new Date(NaN);if(range==='hour')return new Date(value);if(range==='day')return new Date(value+'T12:00:00');if(range==='week')return dFromIsoWeek(value);if(range==='month')return new Date(value+'-15T12:00:00');return new Date(Number(value),6,1,12)}
-const dAnchor=()=>new Date(dAnchorState);
-function dRenderInput(){const input=byId('dashDate'),cfg=dConfig(),now=new Date();input.type=cfg.type;input.removeAttribute('min');input.removeAttribute('max');input.removeAttribute('step');if(cfg.type==='datetime-local'){input.step=3600;input.max=dInputValue(now)}else if(cfg.type==='date'||cfg.type==='week'||cfg.type==='month')input.max=dInputValue(now);else{input.min=String(now.getFullYear()-cfg.max);input.max=String(now.getFullYear());input.step=1}input.value=dInputValue(dAnchorState)}
-function dShiftValue(date,amount){const range=byId('dashRange').value;if(range==='hour')date.setHours(date.getHours()+amount);else if(range==='day')date.setDate(date.getDate()+amount);else if(range==='week')date.setDate(date.getDate()+amount*7);else if(range==='month'){date.setDate(15);date.setMonth(date.getMonth()+amount)}else date.setFullYear(date.getFullYear()+amount);return date}
-function dBackCount(value){const now=new Date(),range=byId('dashRange').value,ms=now-value,dayDiff=Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate())-Date.UTC(value.getFullYear(),value.getMonth(),value.getDate()))/86400000);if(range==='hour')return Math.max(0,Math.floor(ms/3600000));if(range==='day')return Math.max(0,dayDiff);if(range==='week')return Math.max(0,Math.floor(dayDiff/7));if(range==='month')return Math.max(0,(now.getFullYear()-value.getFullYear())*12+now.getMonth()-value.getMonth());return Math.max(0,now.getFullYear()-value.getFullYear())}
-function dToggleDateNav(){const cfg=dConfig();byId('dashDateNav').hidden=!cfg;byId('dashAnchorLabel').textContent=cfg.label;byId('dashSliderLabel').textContent=`${cfg.back} zurückspulen`;byId('dashDaysBack').max=cfg.max;dRenderInput()}
-function dSyncDate(load=true){let value=dReadInput(),now=new Date();if(!Number.isFinite(value.getTime())||value>now)value=now;dAnchorState=value;dRenderInput();const cfg=dConfig(),actual=dBackCount(value),back=Math.min(cfg.max,actual);byId('dashDaysBack').value=back;byId('dashDaysLabel').textContent=actual===0?'Aktueller Zeitraum':`${actual} ${cfg.back} zurück`;byId('dashNext').disabled=actual===0;if(load)dScheduleLoad()}
-function dShiftDay(delta){dAnchorState=dShiftValue(dAnchor(),delta);dRenderInput();dSyncDate()}
-function dFromSlider(back){dAnchorState=dShiftValue(new Date(),-back);dRenderInput();byId('dashDaysLabel').textContent=back===0?'Aktueller Zeitraum':`${back} ${dConfig().back} zurück`}
-const dGapAfter=i=>i>0&&dd[i].ts-dd[i-1].ts>dStep()*1.5;
-const dGapCount=()=>dd.reduce((n,_,i)=>n+(dGapAfter(i)?1:0),0);
-const dPowerLabel=v=>Math.abs(v)>=1000?(v/1000).toLocaleString('de-DE',{maximumFractionDigits:1})+' kW':v.toLocaleString('de-DE',{maximumFractionDigits:1})+' W';
-function dTimeAxis(ctx,left,right,width,y,from,to){const plot=width-left-right,visibleHours=Math.max(1,(to-from)/3600),vertical=plot/visibleHours<42,fullDay=byId('dashRange').value==='day',first=Math.ceil(from/900)*900;ctx.save();ctx.strokeStyle=dColor.label;ctx.fillStyle=dColor.label;for(let ts=first;ts<=to;ts+=900){const date=new Date(ts*1000),minute=date.getMinutes(),hour=minute===0,len=hour?12:minute===30?8:4,x=left+(ts-from)*plot/Math.max(1,to-from);ctx.globalAlpha=hour?1:minute===30?.7:.45;ctx.lineWidth=hour?1.6:1;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+len);ctx.stroke();if(!hour)continue;const label=fullDay&&ts===to?'24:00':String(date.getHours()).padStart(2,'0')+':00';ctx.globalAlpha=1;ctx.font=(vertical?'10':'11')+'px system-ui';if(vertical){ctx.save();ctx.translate(x,y+16);ctx.rotate(-Math.PI/2);ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(label,0,0);ctx.restore()}else{ctx.textBaseline='top';ctx.textAlign=ts===from?'left':ts===to?'right':'center';ctx.fillText(label,x,y+15)}}ctx.restore()}
-function dDrawGaps(ctx,X,top,bottom){ctx.save();ctx.strokeStyle=dColor.gap;ctx.lineWidth=3;ctx.setLineDash([5,3]);dd.forEach((_,i)=>{if(!dGapAfter(i))return;const x=(X(i-1)+X(i))/2;ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,bottom);ctx.stroke()});ctx.restore()}
-function dCursorLine(ctx,x,top,bottom){ctx.save();ctx.strokeStyle='#f7fff9';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,bottom);ctx.stroke();ctx.restore()}
-function dPoint(ctx,x,y,color){if(!Number.isFinite(y))return;ctx.save();ctx.fillStyle=color;ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore()}
-function dPlaceTip(tip,wrap,x){tip.style.display='block';const width=190;tip.style.left=Math.max(4,x>wrap.clientWidth/2?x-width-12:Math.min(wrap.clientWidth-width-4,x+12))+'px';tip.style.top='8px'}
-function dHideTips(){byId('powerTip').style.display='none';byId('dashTip').style.display='none'}
-function dYearComparison(value,baseline,compareId,baselineId,unit,reverse=false){const compare=byId(compareId),base=byId(baselineId),valid=Number.isFinite(value)&&Number.isFinite(baseline)&&baseline>0;base.textContent='Jahres-Ø'+(unit==='kWh'?' pro Tag':'')+': '+(Number.isFinite(baseline)?(unit==='W'?fmtPower(baseline):fmt(baseline,3,unit)):'–');if(!valid){compare.textContent='Kein Jahresvergleich';compare.style.color='';return}const percent=(value-baseline)/baseline*100;compare.textContent=(percent>0?'+':'')+percent.toLocaleString('de-DE',{maximumFractionDigits:1})+' % zum Jahres-Ø';const favorable=reverse?percent>0:percent<0;compare.style.color=Math.abs(percent)<.05?'':favorable?'#63e68b':'#ff9b8f'}
-function dLegend(){byId('dashLegend').innerHTML=byId('dashSeries').value==='power'
- ?`<span class='legend-item'><i class='swatch' style='background:${dColor.power}'></i>Leistung</span>`
- :`<span class='legend-item'><i class='swatch' style='background:${dColor.import}'></i>Netzbezug</span><span class='legend-item'><i class='swatch' style='background:${dColor.export}'></i>Einspeisung</span>`;byId('dashLegend').innerHTML+=`<span class='legend-item'><i class='swatch' style='background:${dColor.gap}'></i>Datenlücke / Ausfall</span>`}
-function pDraw(){
- if(!dd.length)return;const ratio=devicePixelRatio||1,w=pw.clientWidth,h=pw.clientHeight,L=w<480?62:64,R=12,T=14,timed=['hour','day'].includes(byId('dashRange').value),visibleHours=Math.max(1,(dTo-dFrom)/3600),B=timed&&((w-L-R)/visibleHours<42)?66:38;
- pc.width=Math.round(w*ratio);pc.height=Math.round(h*ratio);px.setTransform(ratio,0,0,ratio,0,0);px.clearRect(0,0,w,h);
- const values=dd.map(v=>v.avg).filter(Number.isFinite);if(!values.length)return;let lo=Math.min(0,...values),hi=Math.max(1,...values),pad=(hi-lo)*.08;hi+=pad;if(lo<0)lo-=pad;
- const X=i=>L+(dd[i].ts-dFrom)*(w-L-R)/Math.max(1,dTo-dFrom),Y=v=>T+(hi-v)*(h-T-B)/(hi-lo);px.font=(w<480?'11':'13')+'px system-ui';
- for(let i=0;i<5;i++){const v=hi-i*(hi-lo)/4,y=Y(v);px.strokeStyle=dColor.grid;px.lineWidth=1;px.beginPath();px.moveTo(L,y);px.lineTo(w-R,y);px.stroke();px.fillStyle=dColor.label;px.textAlign='right';px.textBaseline='middle';px.fillText(dPowerLabel(v),L-7,y)}
- if(lo<=0){px.strokeStyle='#d7e9dcaa';px.setLineDash([5,4]);px.beginPath();px.moveTo(L,Y(0));px.lineTo(w-R,Y(0));px.stroke();px.setLineDash([])}
- const ticks=w<480?3:5,span=dTo-dFrom;if(timed)dTimeAxis(px,L,R,w,h-B,dFrom,dTo);else{px.textAlign='center';px.textBaseline='top';for(let i=0;i<ticks;i++){const ts=dFrom+i*span/(ticks-1),d=new Date(ts*1000),x=L+i*(w-L-R)/(ticks-1),label=span>172800?d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}):d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});px.fillStyle=dColor.label;px.fillText(label,x,h-B+9)}}
- dDrawGaps(px,X,T,h-B);px.strokeStyle=dColor.power;px.lineWidth=2;px.lineJoin='round';px.lineCap='round';px.beginPath();let on=false;dd.forEach((v,i)=>{if(!Number.isFinite(v.avg)||dGapAfter(i)){on=false;if(!Number.isFinite(v.avg))return}on?px.lineTo(X(i),Y(v.avg)):px.moveTo(X(i),Y(v.avg));on=true});px.stroke();
- if(dCursor>=0&&dCursor<dd.length){const v=dd[dCursor],x=X(dCursor);dCursorLine(px,x,T,h-B);if(Number.isFinite(v.avg))dPoint(px,x,Y(v.avg),dColor.power);const tip=byId('powerTip');tip.innerHTML=`<strong>${new Date(v.ts*1000).toLocaleString('de-DE')}</strong><br>Ø Leistung: ${fmtPower(v.avg)}<br>Minimum: ${fmtPower(v.min)}<br>Maximum: ${fmtPower(v.max)}`;dPlaceTip(tip,pw,x)}
-}
-function periodStats(){const valid=dd.filter(v=>Number.isFinite(v.avg)),energy=key=>{const values=dd.map(v=>v[key]).filter(Number.isFinite);return values.length>1?Math.max(0,values.at(-1)-values[0]):null},from=new Date(dFrom*1000),to=new Date((dTo-1)*1000),title=`${from.toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})} – ${to.toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})}`,average=valid.length?valid.reduce((s,x)=>s+x.avg,0)/valid.length:null,imported=energy('import'),exported=energy('export'),periodDays=Math.max(1/24,(dTo-dFrom)/86400),dailyImport=Number.isFinite(imported)?imported/periodDays:null,dailyExport=Number.isFinite(exported)?exported/periodDays:null;byId('averageLabel').textContent=`Ø Leistung · ${title}`;byId('periodImportLabel').textContent=`Netzbezug · ${title}`;byId('periodExportLabel').textContent=`Einspeisung · ${title}`;byId('morningAverage').textContent=Number.isFinite(average)?fmtPower(average):'Keine Daten';byId('periodImport').textContent=fmt(imported,3,'kWh');byId('periodExport').textContent=fmt(exported,3,'kWh');const y=dashboardYearSummary||{};dYearComparison(average,Number(y.year_average_power_w),'averageYearCompare','averageYearBaseline','W');dYearComparison(dailyImport,Number(y.year_daily_average_import_kwh),'importYearCompare','importYearBaseline','kWh');dYearComparison(dailyExport,Number(y.year_daily_average_export_kwh),'exportYearCompare','exportYearBaseline','kWh',true)}
-function dDraw(){
- if(!dd.length)return;dLegend();const ratio=devicePixelRatio||1,w=dw.clientWidth,h=dw.clientHeight,L=w<480?62:64,R=12,T=14,timed=['hour','day'].includes(byId('dashRange').value),visibleHours=Math.max(1,(dTo-dFrom)/3600),B=timed&&((w-L-R)/visibleHours<42)?66:38;
- dc.width=Math.round(w*ratio);dc.height=Math.round(h*ratio);dx.setTransform(ratio,0,0,ratio,0,0);dx.clearRect(0,0,w,h);
- const energy=byId('dashSeries').value==='energy',iv=dd.map((_,i)=>dDelta('import',i)),ev=dd.map((_,i)=>dDelta('export',i));
- let values=energy?[...iv,...ev]:dd.map(v=>v.avg);values=values.filter(Number.isFinite);if(!values.length){byId('dashEmpty').hidden=false;dw.hidden=true;return}
- let lo=energy?0:Math.min(0,...values),hi=Math.max(1,...values),pad=(hi-lo)*.08;hi+=pad;if(lo<0)lo-=pad;
- const X=i=>L+(dd[i].ts-dFrom)*(w-L-R)/Math.max(1,dTo-dFrom),Y=v=>T+(hi-v)*(h-T-B)/(hi-lo);
- dx.font=(w<480?'11':'13')+'px system-ui';for(let i=0;i<5;i++){const v=hi-i*(hi-lo)/4,y=Y(v);dx.strokeStyle=dColor.grid;dx.lineWidth=1;dx.beginPath();dx.moveTo(L,y);dx.lineTo(w-R,y);dx.stroke();dx.fillStyle=dColor.label;dx.textAlign='right';dx.textBaseline='middle';dx.fillText(v.toFixed(Math.abs(v)<10?1:0)+(energy?' Wh':' W'),L-7,y)}
- if(lo<=0){dx.strokeStyle='#d7e9dcaa';dx.setLineDash([5,4]);dx.beginPath();dx.moveTo(L,Y(0));dx.lineTo(w-R,Y(0));dx.stroke();dx.setLineDash([])}
- const ticks=w<480?3:5,span=dTo-dFrom;if(timed)dTimeAxis(dx,L,R,w,h-B,dFrom,dTo);else{dx.textAlign='center';dx.textBaseline='top';for(let i=0;i<ticks;i++){const ts=dFrom+i*span/(ticks-1),d=new Date(ts*1000),x=L+i*(w-L-R)/(ticks-1),label=span>172800?d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}):d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});dx.fillStyle=dColor.label;dx.fillText(label,x,h-B+9)}}
- dDrawGaps(dx,X,T,h-B);
- function line(vals,color){dx.strokeStyle=color;dx.lineWidth=2;dx.lineJoin='round';dx.lineCap='round';dx.beginPath();let on=false;vals.forEach((v,i)=>{if(!Number.isFinite(v)||dGapAfter(i)){on=false;if(!Number.isFinite(v))return}on?dx.lineTo(X(i),Y(v)):dx.moveTo(X(i),Y(v));on=true});dx.stroke()}
- energy?(line(iv,dColor.import),line(ev,dColor.export)):line(dd.map(v=>v.avg),dColor.power);
- if(dCursor>=0&&dCursor<dd.length){const v=dd[dCursor],x=X(dCursor);dCursorLine(dx,x,T,h-B);if(energy){if(Number.isFinite(iv[dCursor]))dPoint(dx,x,Y(iv[dCursor]),dColor.import);if(Number.isFinite(ev[dCursor]))dPoint(dx,x,Y(ev[dCursor]),dColor.export)}else if(Number.isFinite(v.avg))dPoint(dx,x,Y(v.avg),dColor.power);const tip=byId('dashTip');tip.innerHTML=`<strong>${new Date(v.ts*1000).toLocaleString('de-DE')}</strong><br>`+(energy?`Netzbezug: ${fmt(iv[dCursor],3,'Wh')}<br>Einspeisung: ${fmt(ev[dCursor],3,'Wh')}`:`Leistung: ${fmtPower(v.avg)}`);dPlaceTip(tip,dw,x)}
- byId('dashSummary').textContent=`${dd.length} Datenpunkte · ${dGapCount()} Datenlücken · ${new Date(dd[0].ts*1000).toLocaleString('de-DE')} bis ${new Date(dd.at(-1).ts*1000).toLocaleString('de-DE')}`;
-}
-let dLoadGeneration=0,dLoadController=null,dLoadTimer=0;
-function dStopLoads(){++dLoadGeneration;clearTimeout(dLoadTimer);if(dLoadController)dLoadController.abort();dLoadController=null}
-function dScheduleLoad(silent=false,delay=140){const generation=++dLoadGeneration;clearTimeout(dLoadTimer);if(dLoadController)dLoadController.abort();dLoadTimer=setTimeout(()=>dLoad(generation,silent),delay)}
-async function dLoad(generation,silent=false){if(generation!==dLoadGeneration)return;dLoadController=new AbortController();const signal=dLoadController.signal;if(!silent){byId('dashLoading').hidden=false;byId('dashEmpty').hidden=true;dw.hidden=true;pw.hidden=true}try{const range=byId('dashRange').value,anchor=Math.floor(dAnchor().getTime()/1000),url='/api/v1/history?range='+range+'&anchor='+anchor,r=await fetch(url,{cache:'no-store',signal});if(!r.ok)throw Error(r.status);const j=await r.json();if(generation!==dLoadGeneration)return;dd=j.values||[];dExpectedStep=Number(j.step)||60;dFrom=Number(j.from)||(dd.length?dd[0].ts:0);dTo=Number(j.to)||(dd.length?dd.at(-1).ts:dFrom+1);byId('dashLoading').hidden=true;periodStats();if(!dd.length){byId('dashEmpty').hidden=false;byId('dashSummary').textContent='Für diesen Zeitraum sind keine Messwerte gespeichert.';return}byId('dashEmpty').hidden=true;dw.hidden=false;pw.hidden=false;pDraw();dDraw()}catch(e){if(e.name==='AbortError'||generation!==dLoadGeneration)return;if(!silent){byId('dashLoading').hidden=true;byId('dashEmpty').hidden=false;byId('dashEmpty').textContent='Diagramm konnte nicht geladen werden. Verbindung prüfen.'}}finally{if(generation===dLoadGeneration)dLoadController=null}}
-function dMoveCursor(e,canvas){if(!dd.length)return;const r=canvas.getBoundingClientRect(),L=r.width<480?62:64,R=12,f=Math.max(0,Math.min(1,(e.clientX-r.left-L)/Math.max(1,r.width-L-R))),target=dFrom+f*(dTo-dFrom);dCursor=dd.reduce((best,v,i)=>Math.abs(v.ts-target)<Math.abs(dd[best].ts-target)?i:best,0);pDraw();dDraw()}
-function dBindCursor(canvas){let lastTap=0,lastTapX=0,tapTimer=0,touchActive=false;canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);touchActive=e.pointerType==='touch';if(touchActive||!dCursorPinned)dMoveCursor(e,canvas)});canvas.addEventListener('pointermove',e=>{if(e.pointerType==='touch'||!dCursorPinned)dMoveCursor(e,canvas)});canvas.addEventListener('pointerup',e=>{dMoveCursor(e,canvas);if(e.pointerType==='touch'){const now=Date.now(),doubleTap=now-lastTap<420&&Math.abs(e.clientX-lastTapX)<36;clearTimeout(tapTimer);if(doubleTap){dCursorPinned=true;lastTap=0}else{dCursorPinned=true;lastTap=now;lastTapX=e.clientX;tapTimer=setTimeout(()=>{dCursorPinned=false},430)}touchActive=false}});canvas.addEventListener('click',e=>{if(e.pointerType==='touch'||touchActive)return;if(e.detail===1){dCursorPinned=false;dMoveCursor(e,canvas)}});canvas.addEventListener('pointerleave',e=>{if(e.pointerType!=='touch'&&!dCursorPinned){dCursor=-1;dHideTips();pDraw();dDraw()}});canvas.addEventListener('dblclick',e=>{if(e.pointerType==='touch')return;e.preventDefault();dMoveCursor(e,canvas);dCursorPinned=true})}
-byId('dashDate').onchange=()=>dSyncDate();byId('dashPrev').onclick=()=>dShiftDay(-1);byId('dashToday').onclick=()=>{dAnchorState=new Date();dRenderInput();dSyncDate()};byId('dashNext').onclick=()=>dShiftDay(1);byId('dashDaysBack').oninput=e=>dFromSlider(Number(e.target.value));byId('dashDaysBack').onchange=()=>dSyncDate();dToggleDateNav();dSyncDate(false);
-byId('dashRange').onchange=()=>{dCursor=-1;dCursorPinned=false;dHideTips();dToggleDateNav();dSyncDate(false);dScheduleLoad()};addEventListener('resize',()=>{pDraw();dDraw()});addEventListener('irtracker-theme-change',()=>{pDraw();dDraw()});dBindCursor(pc);dBindCursor(dc);addEventListener('keydown',e=>{if(e.key==='Escape'){dCursor=-1;dCursorPinned=false;dHideTips();pDraw();dDraw()}});dScheduleLoad(false,0);
-document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',dStopLoads,{capture:true}));addEventListener('pagehide',dStopLoads);
-setInterval(()=>{if(!document.hidden)dScheduleLoad(true,0)},10000);
-)JS");
-  if (script.indexOf("function dStopLoads()") < 0 ||
-      script.indexOf("dScheduleLoad(false,0)") < 0) {
-    eventLog.add("ERROR", "DASHBOARD_SCRIPT_INCOMPLETE",
-                 "Dashboard-Skript konnte nicht vollstaendig erzeugt werden");
-    server.send(503, "text/plain; charset=utf-8",
-                "Dashboard voruebergehend nicht verfuegbar. Bitte neu laden.");
-    return;
-  }
-  if (!sendPageStreamed("Dashboard", body, script)) {
+
+  if (!sendPageStreamed("Dashboard", body, "/assets/dashboard.js?v=" + String(kFirmwareVersion))) {
     eventLog.add("ERROR", "DASHBOARD_PAGE_INCOMPLETE",
                  "Dashboard-Seite konnte nicht vollstaendig erzeugt werden");
     server.send(503, "text/plain; charset=utf-8",
@@ -1949,14 +1774,6 @@ setInterval(()=>{if(!document.hidden)dScheduleLoad(true,0)},10000);
 
 void handleHistoryPage() {
   if (!requireAdmin()) return;
-  String script;
-  if (!script.reserve(26000)) {
-    eventLog.add("ERROR", "HISTORY_SCRIPT_MEMORY",
-                 "Historienskriptspeicher konnte nicht reserviert werden");
-    server.send(503, "text/plain; charset=utf-8",
-                "Historie vorübergehend nicht verfügbar. Bitte neu laden.");
-    return;
-  }
   const String body = F(R"HTML(
     <div class='card'>
       <div class='toolbar'>
@@ -2001,86 +1818,9 @@ void handleHistoryPage() {
       <p class='muted'>Maus oder Finger: Messbalken verschieben. Doppelklick oder Doppeltippen fixiert ihn. Einfaches Klicken oder Tippen löst ihn wieder. Mausrad: zoomen. Umschalt+Ziehen: Zeitraum verschieben.</p>
       <p><a id='csv' href='/api/v1/history.csv?range=complete'>Vollständige Historie als CSV exportieren</a></p>
     </div>)HTML");
-  script += F(R"JS(
-const q=id=>document.getElementById(id),cv=q('chart'),cx=cv.getContext('2d'),wrap=q('chartWrap');
-let raw=[],viewStart=0,viewEnd=1,hover=-1,drag=null,cursorPinned=false,compareData=[],rangeFrom=0,rangeTo=0,rangeStep=60,lastTouchTap=0,lastTouchX=0,touchTapTimer=0,touchActive=false,hAnchorState=new Date(),historyRequest=0,historyAbort=null,historyLoadTimer=0;
-const hCss=(name,fallback)=>getComputedStyle(document.documentElement).getPropertyValue(name).trim()||fallback;
-const colors={get avg(){return hCss('--chart-power','#63e68b')},min:'#69a7ff',max:'#ff8d69',get import(){return hCss('--chart-import','#58a6ff')},get export(){return hCss('--chart-export','#ffb454')},get gap(){return hCss('--chart-gap','#ff4d4d')},get grid(){return hCss('--chart-grid','#355a43')},get label(){return hCss('--chart-label','#b8cdbf')}};
-const fmt=(v,d=2)=>v==null||!Number.isFinite(Number(v))?'–':Number(v).toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
-const fmtPower=v=>Math.abs(v)>=1000?fmt(v/1000,2)+' kW':fmt(v,1)+' W';
-const expectedStep=()=>q('series').value==='power'&&q('metric').value==='minmax'&&rangeStep<60?60:rangeStep;
-const hPad=v=>String(v).padStart(2,'0');
-function hIsoWeekValue(date){const x=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));x.setUTCDate(x.getUTCDate()+4-(x.getUTCDay()||7));const year=x.getUTCFullYear(),first=new Date(Date.UTC(year,0,1)),week=Math.ceil((((x-first)/86400000)+1)/7);return `${year}-W${hPad(week)}`}
-function hFromIsoWeek(value){const m=/^(\d{4})-W(\d{2})$/.exec(value);if(!m)return new Date(NaN);const jan4=new Date(Number(m[1]),0,4,12),monday=new Date(jan4);monday.setDate(jan4.getDate()-((jan4.getDay()+6)%7)+(Number(m[2])-1)*7);return monday}
-const hConfig=()=>({hour:{max:168,type:'datetime-local',label:'Stunde',back:'Stunden'},day:{max:730,type:'date',label:'Kalendertag',back:'Tage'},week:{max:104,type:'week',label:'Kalenderwoche',back:'Wochen'},month:{max:60,type:'month',label:'Kalendermonat',back:'Monate'},year:{max:20,type:'number',label:'Kalenderjahr',back:'Jahre'}}[q('range').value]);
-function hInputValue(date){const range=q('range').value,datePart=`${date.getFullYear()}-${hPad(date.getMonth()+1)}-${hPad(date.getDate())}`;if(range==='hour')return `${datePart}T${hPad(date.getHours())}:00`;if(range==='day')return datePart;if(range==='week')return hIsoWeekValue(date);if(range==='month')return datePart.slice(0,7);return String(date.getFullYear())}
-function hReadInput(){const value=q('historyDate').value,range=q('range').value;if(!value)return new Date(NaN);if(range==='hour')return new Date(value);if(range==='day')return new Date(value+'T12:00:00');if(range==='week')return hFromIsoWeek(value);if(range==='month')return new Date(value+'-15T12:00:00');return new Date(Number(value),6,1,12)}
-const hAnchor=()=>new Date(hAnchorState);
-function hRenderInput(){const input=q('historyDate'),cfg=hConfig(),now=new Date();input.type=cfg.type;input.removeAttribute('min');input.removeAttribute('max');input.removeAttribute('step');if(cfg.type==='datetime-local'){input.step=3600;input.max=hInputValue(now)}else if(cfg.type==='date'||cfg.type==='week'||cfg.type==='month')input.max=hInputValue(now);else{input.min=String(now.getFullYear()-cfg.max);input.max=String(now.getFullYear());input.step=1}input.value=hInputValue(hAnchorState)}
-function hShiftValue(date,amount){const range=q('range').value;if(range==='hour')date.setHours(date.getHours()+amount);else if(range==='day')date.setDate(date.getDate()+amount);else if(range==='week')date.setDate(date.getDate()+amount*7);else if(range==='month'){date.setDate(15);date.setMonth(date.getMonth()+amount)}else date.setFullYear(date.getFullYear()+amount);return date}
-function hBackCount(value){const now=new Date(),range=q('range').value,ms=now-value,dayDiff=Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate())-Date.UTC(value.getFullYear(),value.getMonth(),value.getDate()))/86400000);if(range==='hour')return Math.max(0,Math.floor(ms/3600000));if(range==='day')return Math.max(0,dayDiff);if(range==='week')return Math.max(0,Math.floor(dayDiff/7));if(range==='month')return Math.max(0,(now.getFullYear()-value.getFullYear())*12+now.getMonth()-value.getMonth());return Math.max(0,now.getFullYear()-value.getFullYear())}
-function hToggleDateNav(){const cfg=hConfig();q('historyDateNav').hidden=!cfg;if(!cfg)return;q('historyAnchorLabel').textContent=cfg.label;q('historySliderLabel').textContent=`${cfg.back} zurückspulen`;q('historyDaysBack').max=cfg.max;hRenderInput()}
-function hSyncDate(loadNow=true){let value=hReadInput(),now=new Date();if(!Number.isFinite(value.getTime())||value>now)value=now;hAnchorState=value;hRenderInput();const cfg=hConfig();if(cfg){const actual=hBackCount(value),back=Math.min(cfg.max,actual);q('historyDaysBack').value=back;q('historyDaysLabel').textContent=actual===0?'Aktueller Zeitraum':`${actual} ${cfg.back} zurück`;q('historyNext').disabled=actual===0}if(loadNow)scheduleLoad()}
-function hShiftDay(delta){hAnchorState=hShiftValue(hAnchor(),delta);hRenderInput();hSyncDate()}
-function hFromSlider(back){hAnchorState=hShiftValue(new Date(),-back);hRenderInput();q('historyDaysLabel').textContent=back===0?'Aktueller Zeitraum':`${back} ${hConfig().back} zurück`}
-const gapAfter=(a,i)=>i>0&&a[i].ts-a[i-1].ts>expectedStep()*1.5;
-const gapCount=a=>a.reduce((n,_,i)=>n+(gapAfter(a,i)?1:0),0);
-function setBusy(on){q('loading').hidden=!on;if(on){q('error').hidden=true;wrap.hidden=true}}
-function fail(message,hint=''){setBusy(false);wrap.hidden=true;q('error').hidden=false;q('error').innerHTML='<strong>'+message+'</strong>'+(hint?'<br>'+hint:'')}
-function energyDeltas(a,key){return a.map((v,i)=>({...v,value:i&&Number.isFinite(v[key])&&Number.isFinite(a[i-1][key])?Math.max(0,(v[key]-a[i-1][key])*1000):null}))}
-function minutePower(a){if(rangeStep>=60)return a;const bins=[];for(const v of a){if(!Number.isFinite(v.avg))continue;const ts=Math.floor(v.ts/60)*60,last=bins.at(-1),minimum=Number.isFinite(v.min)?v.min:v.avg,maximum=Number.isFinite(v.max)?v.max:v.avg;if(!last||last.ts!==ts)bins.push({ts,avg:v.avg,min:minimum,max:maximum,sum:v.avg,count:1});else{last.sum+=v.avg;last.count++;last.avg=last.sum/last.count;last.min=Math.min(last.min,minimum);last.max=Math.max(last.max,maximum)}}return bins}
-function active(){const s=q('series').value;if(s==='power')return q('metric').value==='minmax'?minutePower(raw):raw;if(s==='combined'){const i=energyDeltas(raw,'import'),e=energyDeltas(raw,'export');return i.map((v,n)=>({...v,importValue:v.value,exportValue:e[n].value}))}return energyDeltas(raw,s)}
-function legend(){
- let h='';if(q('series').value==='power'){h+=item(colors.avg,'Durchschnitt');if(q('metric').value==='minmax')h+=item(colors.min,'Minimum')+item(colors.max,'Maximum')}
- else if(q('series').value==='combined')h=item(colors.import,'Netzbezug je Intervall')+item(colors.export,'Einspeisung je Intervall');
- else h=item(colors[q('series').value],q('series').value==='import'?'Netzbezug je Intervall':'Einspeisung je Intervall');
- h+=item(colors.gap,'Datenlücke / Ausfall');q('legend').innerHTML=h;q('modeBox').hidden=q('series').value!=='power'
-}
-function item(c,t){return `<span class='legend-item'><i class='swatch' style='background:${c}'></i>${t}</span>`}
-function tickTime(ts,span){const d=new Date(ts*1000);return span>172800?d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:span>32000000?'2-digit':undefined}):d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}
-function hTimeAxis(ctx,left,right,width,y,from,to){const plot=width-left-right,visibleHours=Math.max(1,(to-from)/3600),vertical=plot/visibleHours<42,fullDay=q('range').value==='day',first=Math.ceil(from/900)*900;ctx.save();ctx.strokeStyle=colors.label;ctx.fillStyle=colors.label;for(let ts=first;ts<=to;ts+=900){const date=new Date(ts*1000),minute=date.getMinutes(),hour=minute===0,len=hour?12:minute===30?8:4,x=left+(ts-from)*plot/Math.max(1,to-from);ctx.globalAlpha=hour?1:minute===30?.7:.45;ctx.lineWidth=hour?1.6:1;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+len);ctx.stroke();if(!hour)continue;const label=fullDay&&ts===rangeTo&&viewEnd===1?'24:00':String(date.getHours()).padStart(2,'0')+':00';ctx.globalAlpha=1;ctx.font=(vertical?'10':'11')+'px system-ui';if(vertical){ctx.save();ctx.translate(x,y+16);ctx.rotate(-Math.PI/2);ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(label,0,0);ctx.restore()}else{ctx.textBaseline='top';ctx.textAlign=ts===from?'left':ts===to?'right':'center';ctx.fillText(label,x,y+15)}}ctx.restore()}
-function visible(){const a=active(),n=a.length,s=Math.max(0,Math.min(n-1,Math.floor(viewStart*n))),e=Math.max(s+1,Math.min(n,Math.ceil(viewEnd*n)));return {a:a.slice(s,e),offset:s}}
-function draw(){
- legend();const {a,offset}=visible();if(!a.length)return;
- const r=devicePixelRatio||1,w=wrap.clientWidth,h=wrap.clientHeight,L=w<480?62:64,R=12,T=16,timed=['hour','day'].includes(q('range').value),visibleHours=(rangeTo-rangeFrom)*(viewEnd-viewStart)/3600,B=timed&&((w-L-R)/Math.max(1,visibleHours)<42)?70:42;
- cv.width=Math.round(w*r);cv.height=Math.round(h*r);cx.setTransform(r,0,0,r,0,0);cx.clearRect(0,0,w,h);
- let vals=q('series').value==='power'?a.flatMap(x=>q('metric').value==='minmax'?[x.min,x.max]:[x.avg]):q('series').value==='combined'?a.flatMap(x=>[x.importValue,x.exportValue]):a.map(x=>x.value);
- vals=vals.filter(Number.isFinite);if(!vals.length)return fail('Für diesen Messwert sind noch keine Daten vorhanden.','Der Zähler muss Bezug bzw. Einspeisung als OBIS-Wert liefern.');
- let lo=q('series').value==='power'?Math.min(0,...vals):0,hi=Math.max(1,...vals);if(hi===lo)hi=lo+1;const pad=(hi-lo)*.08;hi+=pad;if(lo<0)lo-=pad;
- const domainStart=rangeFrom+(rangeTo-rangeFrom)*viewStart,domainEnd=rangeFrom+(rangeTo-rangeFrom)*viewEnd;
- const X=i=>L+(a[i].ts-domainStart)*(w-L-R)/Math.max(1,domainEnd-domainStart),Y=v=>T+(hi-v)*(h-T-B)/(hi-lo);
- cx.font=(w<480?'11':'13')+'px system-ui';cx.textBaseline='middle';
- for(let i=0;i<5;i++){const v=hi-i*(hi-lo)/4,y=Y(v);cx.strokeStyle=colors.grid;cx.lineWidth=1;cx.beginPath();cx.moveTo(L,y);cx.lineTo(w-R,y);cx.stroke();cx.fillStyle=colors.label;cx.textAlign='right';cx.fillText(fmt(v,Math.abs(v)<10?1:0)+(q('series').value==='power'?' W':' Wh'),L-7,y)}
- if(lo<=0&&hi>=0){const y=Y(0);cx.strokeStyle='#d7e9dc';cx.lineWidth=1.5;cx.setLineDash([5,4]);cx.beginPath();cx.moveTo(L,y);cx.lineTo(w-R,y);cx.stroke();cx.setLineDash([])}
- const ticks=w<480?3:5,span=domainEnd-domainStart;if(timed)hTimeAxis(cx,L,R,w,h-B,domainStart,domainEnd);else{cx.textAlign='center';cx.textBaseline='top';for(let i=0;i<ticks;i++){const ts=domainStart+i*span/(ticks-1),x=L+i*(w-L-R)/(ticks-1);cx.fillStyle=colors.label;cx.fillText(tickTime(ts,span),x,h-B+9)}}
- cx.save();cx.strokeStyle=colors.gap;cx.lineWidth=3;cx.setLineDash([5,3]);a.forEach((_,i)=>{if(!gapAfter(a,i))return;const x=(X(i-1)+X(i))/2;cx.beginPath();cx.moveTo(x,T);cx.lineTo(x,h-B);cx.stroke()});cx.restore();
- function line(key,color,fill=false){cx.beginPath();let started=false;a.forEach((v,i)=>{const val=v[key];if(!Number.isFinite(val)||gapAfter(a,i)){started=false;if(!Number.isFinite(val))return}const x=X(i),y=Y(val);started?cx.lineTo(x,y):cx.moveTo(x,y);started=true});if(fill&&!gapCount(a)){cx.lineTo(X(a.length-1),Y(0));cx.lineTo(X(0),Y(0));cx.closePath();cx.fillStyle=color+'25';cx.fill()}cx.strokeStyle=color;cx.lineWidth=2;cx.lineJoin='round';cx.lineCap='round';cx.stroke()}
- if(q('series').value==='power'){if(q('metric').value==='minmax'){line('min',colors.min);line('max',colors.max)}line('avg',colors.avg)}
- else if(q('series').value==='combined'){line('importValue',colors.import,true);line('exportValue',colors.export,true)}
- else line('value',colors[q('series').value],true);
- if(hover>=offset&&hover<offset+a.length){const i=hover-offset,x=X(i),point=(v,color)=>{if(!Number.isFinite(v))return;cx.fillStyle=color;cx.strokeStyle='#fff';cx.lineWidth=2;cx.beginPath();cx.arc(x,Y(v),5,0,Math.PI*2);cx.fill();cx.stroke()};cx.save();cx.strokeStyle='#f7fff9';cx.lineWidth=1.5;cx.setLineDash([4,3]);cx.beginPath();cx.moveTo(x,T);cx.lineTo(x,h-B);cx.stroke();cx.restore();if(q('series').value==='power'){point(a[i].avg,colors.avg);if(q('metric').value==='minmax'){point(a[i].min,colors.min);point(a[i].max,colors.max)}}else if(q('series').value==='combined'){point(a[i].importValue,colors.import);point(a[i].exportValue,colors.export)}else point(a[i].value,colors[q('series').value])}
- q('summary').textContent=`${a.length} von ${raw.length} Datenpunkten · ${gapCount(a)} Datenlücken · ${new Date(a[0].ts*1000).toLocaleString('de-DE')} bis ${new Date(a.at(-1).ts*1000).toLocaleString('de-DE')}`;
-}
-function zoom(f,center=.5){const width=viewEnd-viewStart,nw=Math.max(.02,Math.min(1,width*f)),c=viewStart+width*center;viewStart=Math.max(0,Math.min(1-nw,c-nw*center));viewEnd=viewStart+nw;draw()}
-function point(ev){const r=cv.getBoundingClientRect();return {x:ev.clientX-r.left,y:ev.clientY-r.top,w:r.width}}
-function showTip(ev){if(!raw.length)return;const p=point(ev),{a,offset}=visible();if(!a.length)return;const L=p.w<480?62:64,R=12,f=Math.max(0,Math.min(1,(p.x-L)/Math.max(1,p.w-L-R))),from=rangeFrom+(rangeTo-rangeFrom)*viewStart,to=rangeFrom+(rangeTo-rangeFrom)*viewEnd,target=from+f*(to-from),i=a.reduce((best,v,n)=>Math.abs(v.ts-target)<Math.abs(a[best].ts-target)?n:best,0);hover=offset+i;const v=a[i],s=q('series').value;let text=`<strong>${new Date(v.ts*1000).toLocaleString('de-DE')}</strong><br>`;if(s==='power')text+=`Durchschnitt: ${fmtPower(v.avg)}<br>Minimum: ${fmtPower(v.min)}<br>Maximum: ${fmtPower(v.max)}`;else if(s==='combined')text+=`Netzbezug: ${fmt(v.importValue,3)} Wh<br>Einspeisung: ${fmt(v.exportValue,3)} Wh`;else text+=`${s==='import'?'Netzbezug':'Einspeisung'}: ${fmt(v.value,3)} Wh`;q('tooltip').innerHTML=text;q('tooltip').style.display='block';q('tooltip').style.left=Math.max(4,p.x>p.w/2?p.x-190:Math.min(p.w-190,p.x+12))+'px';q('tooltip').style.top='8px';draw()}
-function historyPeriodStats(){const valid=raw.filter(v=>Number.isFinite(v.avg)),energy=key=>{const values=raw.map(v=>v[key]).filter(Number.isFinite);return values.length>1?Math.max(0,values.at(-1)-values[0]):null},from=new Date(rangeFrom*1000),to=new Date((rangeTo-1)*1000),title=`${from.toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})} – ${to.toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})}`;q('historyAverageLabel').textContent=`Ø Leistung · ${title}`;q('historyImportLabel').textContent=`Netzbezug · ${title}`;q('historyExportLabel').textContent=`Einspeisung · ${title}`;q('historyAverage').textContent=valid.length?fmtPower(valid.reduce((s,x)=>s+x.avg,0)/valid.length):'Keine Daten';q('todayImport').textContent=energy('import')==null?'Keine Daten':fmt(energy('import'),3)+' kWh';q('todayExport').textContent=energy('export')==null?'Keine Daten':fmt(energy('export'),3)+' kWh'}
-async function getJson(url,signal){const r=await fetch(url,{cache:'no-store',signal});if(r.status===401)throw new Error('AUTH');if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
-function stopHistoryLoads(){++historyRequest;clearTimeout(historyLoadTimer);if(historyAbort)historyAbort.abort();historyAbort=null}
-function scheduleLoad(delay=140){const request=++historyRequest;clearTimeout(historyLoadTimer);if(historyAbort)historyAbort.abort();setBusy(true);historyLoadTimer=setTimeout(()=>load(request),delay)}
-async function load(request){if(request!==historyRequest)return;historyAbort=new AbortController();const signal=historyAbort.signal,range=q('range').value,anchor=Math.floor(hAnchor().getTime()/1000),anchorPart=hConfig()?'&anchor='+anchor:'';viewStart=0;viewEnd=1;hover=-1;try{const d=await getJson('/api/v1/history?range='+range+anchorPart,signal);if(request!==historyRequest)return;raw=d.values||[];rangeStep=Number(d.step)||60;rangeFrom=Number(d.from)||(raw.length?raw[0].ts:0);rangeTo=Number(d.to)||(raw.length?raw.at(-1).ts:rangeFrom+1);historyPeriodStats();if(!raw.length)return fail('Für diesen Zeitraum sind keine Messwerte gespeichert.','Mit vorherigem Zeitraum, Zeitpunkt oder Schieberegler einen anderen Bereich auswählen.');setBusy(false);wrap.hidden=false;draw()}catch(e){if(e.name==='AbortError'||request!==historyRequest)return;fail(e.message==='AUTH'?'Anmeldung abgelaufen.':'Historie konnte nicht geladen werden.',e.message==='AUTH'?'Seite neu laden und erneut anmelden.':'WLAN-Verbindung prüfen und danach die Seite neu laden.')}finally{if(request===historyRequest)historyAbort=null}}
-q('historyDate').onchange=()=>hSyncDate();q('historyPrev').onclick=()=>hShiftDay(-1);q('historyToday').onclick=()=>{hAnchorState=new Date();hRenderInput();hSyncDate()};q('historyNext').onclick=()=>hShiftDay(1);q('historyDaysBack').oninput=e=>hFromSlider(Number(e.target.value));q('historyDaysBack').onchange=()=>hSyncDate();hToggleDateNav();hSyncDate(false);
-q('range').onchange=()=>{cursorPinned=false;hover=-1;q('tooltip').style.display='none';hToggleDateNav();hSyncDate(false);scheduleLoad()};q('series').onchange=draw;q('metric').onchange=draw;q('zoomIn').onclick=()=>zoom(.6);q('zoomOut').onclick=()=>zoom(1.7);q('reset').onclick=()=>{viewStart=0;viewEnd=1;draw()};
-document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',stopHistoryLoads,{capture:true}));addEventListener('pagehide',stopHistoryLoads);
-cv.addEventListener('wheel',e=>{e.preventDefault();const p=point(e);zoom(e.deltaY>0?1.25:.8,Math.max(0,Math.min(1,p.x/p.w)))},{passive:false});
-cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);touchActive=e.pointerType==='touch';drag={mode:e.shiftKey?'pan':'cursor',x:e.clientX,start:viewStart,end:viewEnd};if(touchActive||!cursorPinned||e.shiftKey)showTip(e)});
-cv.addEventListener('pointermove',e=>{if(drag&&drag.mode==='pan'){const width=drag.end-drag.start,dx=(e.clientX-drag.x)/cv.clientWidth*width;viewStart=Math.max(0,Math.min(1-width,drag.start-dx));viewEnd=viewStart+width;draw()}else if(e.pointerType==='touch'||!cursorPinned)showTip(e)});
-cv.addEventListener('pointerup',e=>{drag=null;showTip(e);if(e.pointerType==='touch'){const now=Date.now(),doubleTap=now-lastTouchTap<420&&Math.abs(e.clientX-lastTouchX)<36;clearTimeout(touchTapTimer);if(doubleTap){cursorPinned=true;lastTouchTap=0}else{cursorPinned=true;lastTouchTap=now;lastTouchX=e.clientX;touchTapTimer=setTimeout(()=>{cursorPinned=false},430)}touchActive=false}});cv.addEventListener('click',e=>{if(e.pointerType==='touch'||touchActive)return;if(e.detail===1){cursorPinned=false;showTip(e)}});cv.addEventListener('pointerleave',e=>{if(e.pointerType!=='touch'&&!drag&&!cursorPinned){q('tooltip').style.display='none';hover=-1;draw()}});cv.addEventListener('dblclick',e=>{if(e.pointerType==='touch')return;e.preventDefault();showTip(e);cursorPinned=true});addEventListener('keydown',e=>{if(e.key==='Escape'){cursorPinned=false;hover=-1;q('tooltip').style.display='none';draw()}});
-addEventListener('resize',draw);addEventListener('irtracker-theme-change',draw);
-fetch('/api/v1/time',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'epoch='+Math.floor(Date.now()/1000)}).finally(()=>scheduleLoad(0));
-)JS");
-  if (script.indexOf("function stopHistoryLoads()") < 0 ||
-      !sendPageStreamed("Lokale Historie", body, script)) {
+
+  if (!sendPageStreamed("Lokale Historie", body,
+                        "/assets/history.js?v=" + String(kFirmwareVersion))) {
     eventLog.add("ERROR", "HISTORY_PAGE_INCOMPLETE",
                  "Historienseite konnte nicht vollstaendig erzeugt werden");
     server.send(503, "text/plain; charset=utf-8",
@@ -2880,7 +2620,7 @@ void handleSettingsRestore() {
   for (uint8_t i = 0; i < kWifiSlots; ++i) {
     const String ssid = wifi[i]["ssid"] | "";
     const String password = wifi[i]["password"] | "";
-    if (!safeSingleLine(ssid, 32) || !safeSingleLine(password, 63)) {
+    if (!safeSingleLine(ssid, 32) || !validWifiPassword(password)) {
       server.send(400, "application/json",
                   "{\"error\":\"invalid_wifi_credentials\"}");
       return;
@@ -3516,15 +3256,28 @@ void handleOtaUpload() {
 
 void handleOtaFinished() {
   if (!otaUploadAuthorized) {
-    server.send(401, "application/json", "{\"error\":\"unauthorized\"}");
+    server.send(
+        401, "text/html; charset=utf-8",
+        page("Firmwareupdate nicht möglich",
+             "<div class='error'><strong>Anmeldung oder Sicherheitsprüfung "
+             "abgelaufen.</strong><p>Wartungsseite neu laden, erneut anmelden "
+             "und das signierte IRFW-Paket noch einmal auswählen.</p></div>"
+             "<p><a href='/maintenance#firmware-update'>Zurück zur Wartung</a></p>"));
     return;
   }
   if (!otaUploadOk) {
-    server.send(400, "application/json",
-                "{\"error\":\"" + jsonEscape(otaUploadError.length()
-                                                  ? otaUploadError
-                                                  : "invalid_signed_firmware") +
-                    "\"}");
+    const String technicalCode =
+        otaUploadError.length() ? otaUploadError : "invalid_signed_firmware";
+    server.send(
+        400, "text/html; charset=utf-8",
+        page("Firmwareupdate abgelehnt",
+             "<div class='error'><strong>Das Firmwarepaket konnte nicht sicher "
+             "installiert werden.</strong><p>Nur ein vollständiges, für diesen "
+             "Tracker signiertes IRFW-Paket verwenden.</p><details><summary>"
+             "Technischer Fehlercode</summary><code>" +
+                 htmlEscape(technicalCode) +
+                 "</code></details></div><p><a href='/maintenance#firmware-update'>"
+                 "Zurück zur Wartung</a></p>"));
     return;
   }
   eventLog.add("WARN", "OTA_UPDATE",
@@ -3597,12 +3350,18 @@ void handleMaintenancePage() {
       "<label>Signiertes Firmwarepaket (.irfw)</label><input type='file' name='firmware' "
       "accept='.irfw,application/octet-stream' required>"
       "<button type='submit'>WLAN-Update installieren</button></form></div>"
-      "<div class='card'><h2>GitHub-Firmwareupdate</h2>"
+      "<div class='card' id='firmware-update'><h2>GitHub-Firmwareupdate</h2>"
       "<p>Prüft das offizielle Projekt auf eine neuere Version. Installiert werden "
       "ausschließlich passend signierte IRFW-Pakete; ein Downgrade ist gesperrt.</p>"
-      "<form method='post' action='/api/v1/update/check'><button type='submit'>Jetzt prüfen</button></form>"
-      "<form method='post' action='/api/v1/update/install' onsubmit=\"return confirm('Signiertes GitHub-Update installieren und neu starten?')\">"
-      "<button class='secondary' type='submit'>Gefundenes Update installieren</button></form></div>"
+      "<div class='grid'><div><span class='muted'>Installierte Version</span><br><strong id='updateCurrent'>–</strong></div>"
+      "<div><span class='muted'>Verfügbare Version</span><br><strong id='updateAvailable'>–</strong></div>"
+      "<div><span class='muted'>Letzte erfolgreiche Prüfung</span><br><strong id='updateLast'>Noch nicht geprüft</strong></div></div>"
+      "<p id='updateState' class='muted'>Status wird geladen …</p>"
+      "<details id='updateError' hidden><summary>Technischer Fehlercode</summary><code id='updateErrorCode'></code></details>"
+      "<div class='actions'><form method='post' action='/api/v1/update/check'><button type='submit'>Jetzt prüfen</button></form>"
+      "<form id='updateInstall' method='post' action='/api/v1/update/install' hidden "
+      "onsubmit=\"return confirm('Signiertes GitHub-Update installieren und neu starten?')\">"
+      "<button class='secondary' type='submit'>Gefundenes Update installieren</button></form></div></div>"
       "<div class='card'><h2>Tracker sicher ausschalten</h2>"
       "<p>Speichert den offenen Minutenblock und versetzt den ESP32 danach in Tiefschlaf. "
       "Zum Wiedereinschalten Strom kurz aus- und einschalten oder Reset betätigen.</p>"
@@ -3613,6 +3372,8 @@ void handleMaintenancePage() {
       "<p id='maintenanceStatus' class='muted'></p>");
   String script = F(
       "const el=id=>document.getElementById(id),status=t=>el('maintenanceStatus').textContent=t;"
+      "const updateText=e=>{if(e==='wifi_not_connected')return'Keine WLAN-Verbindung. Netzwerkverbindung prüfen.';if(e==='system_time_not_synchronized')return'Die Gerätezeit ist noch nicht synchronisiert.';if(e==='github_json_invalid')return'Die Antwort der Updatequelle konnte nicht verarbeitet werden.';if(e.startsWith('github_http_'))return'Die Updatequelle ist momentan nicht erreichbar.';return'Die Updateprüfung konnte nicht abgeschlossen werden.'};"
+      "async function loadUpdate(){try{const r=await fetch('/api/v1/update/status'),u=await r.json();el('updateCurrent').textContent=u.current_version;el('updateAvailable').textContent=u.available?u.latest_version:'–';el('updateLast').textContent=u.last_success?new Date(u.last_success*1000).toLocaleString():'Noch nicht geprüft';el('updateInstall').hidden=!u.available;const s=el('updateState'),d=el('updateError');d.hidden=!u.error;el('updateErrorCode').textContent=u.error||'';s.className=u.error?'error':u.checked?'status-pill':'muted';s.textContent=u.error?'Updateprüfung fehlgeschlagen: '+updateText(u.error):u.available?'Eine neuere signierte Firmware ist verfügbar.':u.checked?'Die installierte Firmware ist aktuell.':'Es wurde in dieser Laufzeit noch keine manuelle Prüfung durchgeführt.'}catch(e){el('updateState').className='error';el('updateState').textContent='Update-Status konnte nicht geladen werden.'}}loadUpdate();"
       "const download=(name,data)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};"
       "el('fullBackup').onclick=()=>{status('Vollständiges Backup wird erstellt …');el('settingsExport').click();setTimeout(()=>el('historyExport').click(),800)};"
       "el('settingsExport').onclick=async()=>{status('Einstellungen werden geladen ...');const r=await fetch('/api/v1/backup/settings');download('irtracker-settings.json',await r.text());status('Einstellungsbackup erstellt')};"
@@ -3647,9 +3408,9 @@ void handleSetup() {
   for (uint8_t i = 0; i < kWifiSlots; ++i) {
     body += "<div class='inline'><div><label>WLAN " + String(i + 1) + "</label><input name='ssid" +
             String(i) + "' value=\"" + htmlEscape(config.ssid[i]) +
-            "\" placeholder='Netzwerkname'></div><div><label>Passwort</label><input type='password' name='pass" +
+            "\" maxlength='32' placeholder='Netzwerkname'></div><div><label>Passwort</label><input type='password' name='pass" +
             String(i) + "' placeholder='" + String(config.password[i].length() ? "gespeichert" : "offenes WLAN") +
-            "' autocomplete='new-password'></div></div>";
+            "' maxlength='64' autocomplete='off' data-lpignore='true'></div></div>";
   }
   body += F("<label>Hostname</label><input name='hostname' value='");
   body += htmlEscape(config.hostname);
@@ -3769,7 +3530,7 @@ void handleSetupSave() {
   if (!requireAdmin()) return;
   for (uint8_t i = 0; i < kWifiSlots; ++i) {
     if (!safeSingleLine(server.arg("ssid" + String(i)), 32) ||
-        !safeSingleLine(server.arg("pass" + String(i)), 63)) {
+        !validWifiPassword(server.arg("pass" + String(i)))) {
       server.send(400, "application/json",
                   "{\"error\":\"invalid_wifi_credentials\"}");
       return;
@@ -3948,28 +3709,39 @@ void handleDiagnostics() {
 }
 
 void setIrPulseOutput(bool active) {
-  if (config.txPin < 0) return;
-  digitalWrite(config.txPin, active ^ irPulse.inverted);
+  if (irPulse.pin < 0) return;
+  digitalWrite(irPulse.pin, active ^ irPulse.inverted);
   irPulse.outputActive = active;
 }
 
 void finishIrPulseJob() {
-  if (config.txPin >= 0) {
+  const int8_t pulsePin = irPulse.pin;
+  if (pulsePin >= 0) {
     setIrPulseOutput(false);
     delay(2);
-    meterSerial.begin(config.baud, SERIAL_8N1, config.rxPin, config.txPin);
+    if (pulsePin != config.txPin) pinMode(pulsePin, INPUT);
   }
   irPulse.active = false;
   irPulse.outputActive = false;
+  meterSerial.begin(config.baud, SERIAL_8N1, config.rxPin, config.txPin);
+  if (config.ledPin >= 0) {
+    pinMode(config.ledPin, OUTPUT);
+    digitalWrite(config.ledPin, config.ledInverted);
+  }
 }
 
 bool beginIrPulseJob(const uint8_t digits[4], uint16_t pulseMs,
-                     uint16_t digitGapMs, bool inverted) {
-  if (config.txPin < 0 || irPulse.active) return false;
+                     uint16_t digitGapMs, bool inverted,
+                     int8_t outputPin = -1) {
+  const int8_t selectedPin = outputPin >= 0 ? outputPin : config.txPin;
+  if (selectedPin < 0 || selectedPin > 10 || irPulse.active ||
+      gpioScan.active || selectedPin == config.rxPin)
+    return false;
   meterSerial.end();
-  pinMode(config.txPin, OUTPUT);
+  pinMode(selectedPin, OUTPUT);
   irPulse = {};
   irPulse.active = true;
+  irPulse.pin = selectedPin;
   irPulse.inverted = inverted;
   irPulse.pulseMs = pulseMs;
   irPulse.pulseGapMs = pulseMs;
@@ -3987,6 +3759,7 @@ bool beginIrPulseCount(uint8_t count, uint16_t pulseMs, bool inverted) {
   pinMode(config.txPin, OUTPUT);
   irPulse = {};
   irPulse.active = true;
+  irPulse.pin = config.txPin;
   irPulse.inverted = inverted;
   irPulse.pulseMs = pulseMs;
   irPulse.pulseGapMs = pulseMs >= 2000 ? 300 : pulseMs;
@@ -4167,6 +3940,158 @@ void handleIrPulse() {
   server.send(202, "application/json", "{\"accepted\":true,\"pulses\":1}");
 }
 
+void handleGpioOutputTest() {
+  if (!requireAdmin()) return;
+  const int pin = server.arg("pin").toInt();
+  if (!server.hasArg("pin") || pin < 0 || pin > 10 || pin == config.rxPin) {
+    server.send(400, "application/json",
+                "{\"error\":\"invalid_or_rx_gpio\"}");
+    return;
+  }
+  const uint8_t digits[4] = {1, 0xff, 0xff, 0xff};
+  if (!beginIrPulseJob(digits, 350, 700, server.arg("inverted") == "1",
+                       static_cast<int8_t>(pin))) {
+    server.send(409, "application/json",
+                "{\"error\":\"gpio_output_test_busy\"}");
+    return;
+  }
+  eventLog.add("INFO", "GPIO_TX_TEST",
+               "Kurzer Ausgangstest auf GPIO " + String(pin));
+  server.send(202, "application/json",
+              "{\"accepted\":true,\"pin\":" + String(pin) +
+                  ",\"duration_ms\":350}");
+}
+
+struct DigitalSample {
+  uint16_t highPermille = 0;
+  uint16_t transitions = 0;
+};
+
+DigitalSample sampleDigitalPin(int8_t pin, uint32_t durationUs = 50000) {
+  DigitalSample result;
+  uint32_t high = 0;
+  uint32_t total = 0;
+  int previous = digitalRead(pin);
+  const uint32_t started = micros();
+  while (static_cast<int32_t>(micros() - started) <
+         static_cast<int32_t>(durationUs)) {
+    const int current = digitalRead(pin);
+    high += current == HIGH;
+    ++total;
+    if (current != previous) {
+      ++result.transitions;
+      previous = current;
+    }
+    delayMicroseconds(80);
+    if ((total & 63U) == 0) {
+      esp_task_wdt_reset();
+      yield();
+    }
+  }
+  if (total) result.highPermille = high * 1000U / total;
+  return result;
+}
+
+void handleGpioTxScan() {
+  if (!requireAdmin()) return;
+  const int rx = server.arg("rx").toInt();
+  if (!server.hasArg("rx") || rx < 0 || rx > 10 || gpioScan.active ||
+      irPulse.active) {
+    server.send(400, "application/json", "{\"error\":\"invalid_rx_or_busy\"}");
+    return;
+  }
+  requestCpuBoost("gpio_tx_scan");
+  meterSerial.end();
+  resetSmlCapture();
+  pinMode(rx, INPUT);
+  int8_t pins[10] = {};
+  uint8_t pinCount = 0;
+  if (config.txPin >= 0 && config.txPin <= 10 && config.txPin != rx)
+    pins[pinCount++] = config.txPin;
+  for (int8_t pin = 0; pin <= 10; ++pin)
+    if (pin != rx && pin != config.txPin) pins[pinCount++] = pin;
+
+  int8_t foundPin = -1;
+  bool foundInverted = false;
+  uint8_t confidence = 0;
+  uint8_t tested = 0;
+  uint16_t foundActiveTransitions = 0;
+  uint16_t foundIdleTransitions = 0;
+  for (uint8_t index = 0; index < pinCount; ++index) {
+    const int8_t pin = pins[index];
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, LOW);
+    delay(20);
+    const DigitalSample low1 = sampleDigitalPin(rx);
+    digitalWrite(pin, HIGH);
+    delay(20);
+    const DigitalSample high1 = sampleDigitalPin(rx);
+    digitalWrite(pin, LOW);
+    delay(20);
+    const DigitalSample low2 = sampleDigitalPin(rx);
+    digitalWrite(pin, HIGH);
+    delay(20);
+    const DigitalSample high2 = sampleDigitalPin(rx);
+    digitalWrite(pin, LOW);
+    pinMode(pin, INPUT);
+    ++tested;
+
+    const uint16_t lowTransitions =
+        (low1.transitions + low2.transitions) / 2U;
+    const uint16_t highTransitions =
+        (high1.transitions + high2.transitions) / 2U;
+    const uint16_t lowDuty = (low1.highPermille + low2.highPermille) / 2U;
+    const uint16_t highDuty =
+        (high1.highPermille + high2.highPermille) / 2U;
+    const bool activeLow = lowTransitions < highTransitions;
+    const uint16_t activeTransitions =
+        activeLow ? lowTransitions : highTransitions;
+    const uint16_t idleTransitions =
+        activeLow ? highTransitions : lowTransitions;
+    const uint16_t activeDuty = activeLow ? lowDuty : highDuty;
+    const bool saturated = activeDuty <= 120U || activeDuty >= 880U;
+    const bool correlated = idleTransitions >= 12U &&
+                            idleTransitions >= activeTransitions * 4U + 8U;
+    if (saturated && correlated) {
+      foundPin = pin;
+      foundInverted = activeLow;
+      foundActiveTransitions = activeTransitions;
+      foundIdleTransitions = idleTransitions;
+      const uint16_t transitionScore = std::min<uint16_t>(
+          70U, (idleTransitions - activeTransitions) * 2U);
+      const uint16_t saturationDistance =
+          std::min<uint16_t>(activeDuty, 1000U - activeDuty);
+      confidence = std::min<uint16_t>(
+          100U, 30U + transitionScore +
+                    (saturationDistance <= 50U ? 10U : 0U));
+      break;
+    }
+  }
+  restoreMeterSerialAfterScan();
+  if (foundPin < 0) {
+    eventLog.add("WARN", "GPIO_TX_SCAN",
+                 "Kein eindeutiger optischer TX-Rueckkanal erkannt");
+    server.send(200, "application/json",
+                "{\"complete\":true,\"found\":false,\"tested\":" +
+                    String(tested) +
+                    ",\"error\":\"no_optical_loopback\"}");
+    return;
+  }
+  eventLog.add("INFO", "GPIO_TX_SCAN",
+               "IR-Sender durch wiederholte optische RX-Korrelation auf GPIO " +
+                   String(foundPin) + " erkannt");
+  server.send(200, "application/json",
+              "{\"complete\":true,\"found\":true,\"pin\":" +
+                  String(foundPin) + ",\"inverted\":" +
+                  String(foundInverted ? "true" : "false") +
+                  ",\"confidence\":" + String(confidence) +
+                  ",\"tested\":" + String(tested) +
+                  ",\"active_transitions\":" +
+                  String(foundActiveTransitions) +
+                  ",\"idle_transitions\":" +
+                  String(foundIdleTransitions) + "}");
+}
+
 void handleIrStop() {
   if (!requireAdmin()) return;
   if (irPulse.active) finishIrPulseJob();
@@ -4278,6 +4203,15 @@ void manageWifi() {
                      "pool.ntp.org", "time.cloudflare.com");
         ntpConfigured = true;
       }
+      if (!mdnsRunning && MDNS.begin(config.hostname.c_str())) {
+        MDNS.addService("http", "tcp", 80);
+        mdnsRunning = true;
+        eventLog.add("INFO", "MDNS_STARTED",
+                     "Tracker erreichbar als " + config.hostname + ".local");
+      } else if (!mdnsRunning) {
+        eventLog.add("WARN", "MDNS_FAILED",
+                     "mDNS konnte nicht gestartet werden");
+      }
       Serial.printf("Wi-Fi connected: %s, %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
       eventLog.add("INFO", "WIFI_CONNECTED",
                    WiFi.SSID() + " " + WiFi.localIP().toString());
@@ -4290,6 +4224,10 @@ void manageWifi() {
       lastWifiPowerEvaluateMs = 0;
       wifiMinModemSleepActive = false;
       eventLog.add("WARN", "WIFI_LOST", "WLAN-Verbindung verloren");
+      if (mdnsRunning) {
+        MDNS.end();
+        mdnsRunning = false;
+      }
       wifiTried = 0;
       wifiCandidate = 0;
       wifiCandidateStartedMs = 0;
@@ -4463,12 +4401,41 @@ void setupRoutes() {
   const char *securityHeaders[] = {"Origin", "Referer", "Authorization",
                                    "X-CSRF-Token", "Cookie"};
   server.collectHeaders(securityHeaders, 5);
+  server.on("/assets/common.css", HTTP_GET, [] {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+    server.sendHeader("X-Content-Type-Options", "nosniff");
+    server.send_P(200, PSTR("text/css; charset=utf-8"),
+                  reinterpret_cast<PGM_P>(kCommonCssGzip), kCommonCssGzipSize);
+  });
+  server.on("/assets/common.js", HTTP_GET, [] {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+    server.sendHeader("X-Content-Type-Options", "nosniff");
+    server.send_P(200, PSTR("application/javascript; charset=utf-8"),
+                  reinterpret_cast<PGM_P>(kCommonJsGzip), kCommonJsGzipSize);
+  });
   server.on("/assets/i18n.js", HTTP_GET, [] {
     server.sendHeader("Content-Encoding", "gzip");
     server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
     server.sendHeader("X-Content-Type-Options", "nosniff");
     server.send_P(200, PSTR("application/javascript; charset=utf-8"),
                   reinterpret_cast<PGM_P>(kI18nJsGzip), kI18nJsGzipSize);
+  });
+  server.on("/assets/dashboard.js", HTTP_GET, [] {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+    server.sendHeader("X-Content-Type-Options", "nosniff");
+    server.send_P(200, PSTR("application/javascript; charset=utf-8"),
+                  reinterpret_cast<PGM_P>(kDashboardJsGzip),
+                  kDashboardJsGzipSize);
+  });
+  server.on("/assets/history.js", HTTP_GET, [] {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+    server.sendHeader("X-Content-Type-Options", "nosniff");
+    server.send_P(200, PSTR("application/javascript; charset=utf-8"),
+                  reinterpret_cast<PGM_P>(kHistoryJsGzip), kHistoryJsGzipSize);
   });
   server.on("/", HTTP_GET, handleRoot);
   server.on("/history", HTTP_GET, handleHistoryPage);
@@ -4497,23 +4464,20 @@ void setupRoutes() {
   });
   server.on("/api/v1/update/check", HTTP_POST, [] {
     if (!requireAdmin()) return;
-    const bool ok = checkGithubFirmwareUpdate();
-    String body = "<div class='card'><h2>GitHub-Updatepruefung</h2><pre>" +
-                  htmlEscape(githubUpdateJson()) +
-                  "</pre><a href='/maintenance'>Zurueck zur Wartung</a></div>";
-    server.send(ok ? 200 : 502, "text/html; charset=utf-8",
-                page(ok ? "Updatepruefung" : "Updatefehler", body));
+    checkGithubFirmwareUpdate();
+    server.sendHeader("Location", "/maintenance#firmware-update", true);
+    server.send(303, "text/plain", "");
   });
   server.on("/api/v1/update/install", HTTP_POST, [] {
     if (!requireAdmin()) return;
     if (!githubUpdate.available && !checkGithubFirmwareUpdate()) {
-      server.send(502, "application/json",
-                  "{\"error\":\"" + jsonEscape(githubUpdate.error) + "\"}");
+      server.sendHeader("Location", "/maintenance#firmware-update", true);
+      server.send(303, "text/plain", "");
       return;
     }
     if (!installGithubFirmwareUpdate()) {
-      server.send(400, "application/json",
-                  "{\"error\":\"" + jsonEscape(githubUpdate.error) + "\"}");
+      server.sendHeader("Location", "/maintenance#firmware-update", true);
+      server.send(303, "text/plain", "");
       return;
     }
     server.send(200, "text/html; charset=utf-8",
@@ -4541,6 +4505,9 @@ void setupRoutes() {
     if (gpioScan.active) finishGpioScan(false, "cancelled");
     server.send(200, "application/json", gpioScanJson());
   });
+  server.on("/api/v1/gpio-output-test", HTTP_POST,
+            handleGpioOutputTest);
+  server.on("/api/v1/gpio-scan-tx", HTTP_POST, handleGpioTxScan);
   server.on("/api/v1/selftest", HTTP_GET, [] {
     if (requireAdmin())
       server.send(200, "application/json", selfTestJson());

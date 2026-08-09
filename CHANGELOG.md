@@ -1,5 +1,21 @@
 # Änderungsprotokoll / Changelog
 
+## 1.0.2-beta.1 — 2026-08-09
+
+### Deutsch
+
+- Installer-kompatible, geschützte GPIO-Erkennung für RX und die automatische optische TX-Rückkopplungsprüfung ergänzt.
+- App-only-WLAN-Update gehärtet: Bootloader, Partitionstabelle, Einstellungen und Historie bleiben unberührt.
+- Status-API um eindeutige Installer-Fähigkeiten und Diagnosewerte erweitert.
+- Weboberfläche, mDNS, Speicherverwendung sowie deutsch/englische Texte und Dokumentation konsolidiert.
+
+### English
+
+- Added installer-compatible protected GPIO detection for RX and automatic optical TX loopback verification.
+- Hardened app-only Wi-Fi updates: bootloader, partition table, settings, and history remain untouched.
+- Extended the status API with explicit installer capabilities and diagnostic values.
+- Consolidated the web UI, mDNS, memory use, bilingual text, and documentation.
+
 ## 1.0.1-beta.2 — 2026-08-06
 
 - DE: Hauptnavigation auf fünf Bereiche reduziert; Diagnose ist nun als eigene
