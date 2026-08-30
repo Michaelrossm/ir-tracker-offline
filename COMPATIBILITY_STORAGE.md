@@ -41,13 +41,15 @@ Status:
 | 19 | Zendure | SolarFlow 1600 AC+ | 🟢 Ja | Offiziell unterstützt: Shelly 3EM, Shelly Pro 3EM, Everhome EcoTracker IR und HomeWizard P1. Neuere HEMS-Funktionen können bei einem einzelnen unterstützten SolarFlow-Gerät lokale Zählerkommunikation herstellen. Damit passt das Prinzip zur IR-Tracker-Shelly-Emulation. | ☐ |
 | 20 | Zendure | SolarFlow 2400 AC+ | 🟢 Ja | Offiziell unterstützt: Shelly 3EM, Shelly Pro 3EM, Everhome EcoTracker IR und HomeWizard P1. Neuere HEMS-Architektur unterstützt lokale Zählerkommunikation; daher technisch sehr guter Kandidat für den IR Tracker. | ☐ |
 | 21 | Zendure | SolarFlow 2400 Pro | 🟢 Ja | Offiziell unterstützt: Shelly 3EM, Shelly Pro 3EM und Everhome EcoTracker IR. HEMS-2.0-Produktfamilie mit lokaler Meter-Kommunikation; technisch passend, Feldtest mit IR Tracker steht aus. | ☐ |
-| 22 | Jackery | Navi 2000 | 🟡 Kandidat | Shelly Pro 3EM / Pro EM-50 werden offiziell unterstützt. Jackery koppelt die Shelly-Geräte über die Jackery-Home-App; genaue lokale Discovery-/RPC-/MQTT-Anforderungen eines emulierten Shelly sind noch nicht ausreichend bestätigt. | ☐ |
+| 22 | Jackery | Navi 2000 | 🟢 Ja | Shelly Pro 3EM / Pro EM-50 werden offiziell unterstützt. Die Jackery-Dokumentation zeigt eine **direkte lokale Kopplung**: Smart Meter können über die Jackery Home App direkt mit dem Navi 2000 verbunden werden; das Navi stellt dafür ein eigenes WLAN bereit, mit dem sich Smart-CT/Smart-Meter verbinden. Ein Jackery-/Shelly-Cloud-Pfad ist damit für die laufende Messwertübertragung nicht zwingend. Die genaue Shelly-Discovery/Identität bleibt noch praktisch zu testen. | ☐ |
 
 ## Besonders aussichtsreiche Kandidaten
 
 Sehr stark sind aktuell die Hoymiles-Modelle **HiBattery 4020 AC**, **HiBattery 4020 X** und **MS-A2**. Bei MS-A2 nennt Hoymiles ausdrücklich denselben WLAN-Router und „Link Shelly“, weshalb die technische Grundkompatibilität jetzt auf `🟢 Ja` angehoben wurde.
 
 Bei **Zendure SolarFlow 1600 AC+**, **2400 AC+** und **2400 Pro** ist die Lage ebenfalls besser als zunächst angenommen: Zendure unterstützt dort ausdrücklich Shelly und EcoTracker; neuere HEMS-Funktionen sehen lokale Zählerkommunikation vor. Diese Modelle sind deshalb jetzt ebenfalls `🟢 Ja`.
+
+**Jackery Navi 2000** ist nach genauerer Prüfung ebenfalls `🟢 Ja`: Jackery unterstützt Shelly Pro 3EM/Pro EM-50 offiziell, und die Navi-Dokumentation beschreibt einen direkten Kopplungsweg, bei dem sich das Smart Meter mit dem vom Navi bereitgestellten WLAN verbindet. Das ist technisch deutlich näher an einer lokalen Shelly-Emulation als an einer zwingenden Cloud-Integration. Für den IR Tracker muss nur noch praktisch geprüft werden, ob seine vorhandenen Shelly-Pro-Endpunkte für Jackerys Discovery/Identitätsprüfung vollständig ausreichen.
 
 **Anker SOLIX** und **EcoFlow STREAM** bleiben dagegen gelb, obwohl Shelly offiziell unterstützt wird. Bei Anker ist der dokumentierte Weg ausdrücklich Shelly-Cloud + Shelly-Konto; EcoFlow verlangt eine Bindung an dasselbe EcoFlow-Konto. Das ist nicht dieselbe einfache lokale Shelly-Nutzung wie bei den grünen Systemen.
 
