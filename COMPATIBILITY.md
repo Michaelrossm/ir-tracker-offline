@@ -1,23 +1,24 @@
-# IR Tracker Offline – Kompatibilitätsprüfung
+# IR Tracker Offline – Kompatibilität
 
 Stand: 2026-08-30
 
-Die Kompatibilitätsarbeit ist in drei getrennte Prüfmatrizen aufgeteilt:
+Die Kompatibilität ist in drei Listen aufgeteilt:
 
-1. [Stromzähler](COMPATIBILITY_METERS.md) – mindestens alle Modelle aus der aktuellen Solakon-PowerTracker-IR-Referenzliste; derzeit 76 Einträge.
-2. [Speicher / Energiemanagement](COMPATIBILITY_STORAGE.md) – 100 priorisierte Systeme, mit Schwerpunkt Deutschland und anschließend EU.
-3. [PV-Wechselrichter / Mikrowechselrichter](COMPATIBILITY_INVERTERS.md) – 100 priorisierte Systeme, mit Schwerpunkt Deutschland und anschließend EU.
+1. [Stromzähler](COMPATIBILITY_METERS.md)
+2. [Speicher / Energiemanagement](COMPATIBILITY_STORAGE.md)
+3. [PV-Wechselrichter / Mikrowechselrichter](COMPATIBILITY_INVERTERS.md)
 
-## Grundsatz
+## Status
 
-Eine Aufnahme in eine Liste bedeutet **nicht**, dass das Gerät kompatibel ist. `✅ verifiziert` darf erst nach einem reproduzierbaren Test mit echter Hardware vergeben werden.
+- ✅ **Getestet** – mit IR Tracker Offline auf echter Hardware erfolgreich geprüft.
+- 🟢 **Grundsätzlich kompatibel / ungetestet** – die erforderliche lokale Schnittstelle bzw. das Protokoll ist mit dem IR Tracker technisch abbildbar; das konkrete Gerät wurde noch nicht praktisch getestet.
+- 🟡 **Prüfung erforderlich** – technische Kompatibilität ist noch nicht ausreichend sicher geklärt.
+- ❌ **Nicht kompatibel** – mit den derzeit implementierten Schnittstellen nicht direkt nutzbar.
 
-Bei Stromzählern muss die optische Kommunikation einschließlich Messwerten, Integrität, Aktualisierungsrate und Wiederanlauf geprüft werden. Bei Speichern und Wechselrichtern muss das Zielsystem den IR Tracker tatsächlich als Netzmessquelle verwenden und korrekt auf Bezug/Einspeisung reagieren.
+Bei Speichern und Wechselrichtern wird `🟢 grundsätzlich kompatibel / ungetestet` nur verwendet, wenn eine passende **lokale** Messgeräte-/EMS-Schnittstelle vorhanden ist, die der IR Tracker mit seinen implementierten Schnittstellen nachbilden bzw. bedienen kann. Eine reine Hersteller-Cloud-Integration reicht dafür nicht.
 
-## Priorität
+## Firmware-Schnittstellen
 
-Deutschland zuerst. Danach werden vor allem Österreich, Schweiz sowie die wichtigsten EU-PV-Märkte berücksichtigt. Die Listen sind Test-Backlogs und keine behaupteten Verkaufsranglisten.
+Der IR Tracker unterstützt unter anderem SML, IEC 62056-21/D0, MQTT, HTTP/JSON sowie lokale Shelly-EM-/Shelly-Pro-EM-kompatible Leseendpunkte. Welche Messwerte verfügbar sind, hängt beim Stromzähler von dessen optischer Schnittstelle und Freischaltung ab.
 
-## Ziel
-
-Vor einer kommerziellen Kompatibilitätsaussage soll für jedes freigegebene Modell ein nachvollziehbarer Testnachweis mit Modell, Firmware, IR-Tracker-Version, verwendeter Schnittstelle und Ergebnis vorhanden sein.
+Die Listen unterscheiden bewusst zwischen **technisch kompatibel** und **praktisch getestet**. Dadurch können geeignete Geräte bereits als grundsätzlich kompatibel gekennzeichnet werden, ohne einen noch nicht durchgeführten Feldtest vorzutäuschen.
