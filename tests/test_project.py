@@ -14,7 +14,19 @@ from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
+MAIN_SOURCE = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
+
+
+def expanded_firmware_source() -> str:
+    """Mirror the ordered module includes used by the firmware build."""
+    pattern = re.compile(r'^#include "(app/[^"]+\.cpp)"$', re.MULTILINE)
+    return pattern.sub(
+        lambda match: (ROOT / "src" / match.group(1)).read_text(encoding="utf-8"),
+        MAIN_SOURCE,
+    )
+
+
+SOURCE = expanded_firmware_source()
 I18N_SOURCE = (ROOT / "web" / "i18n.js").read_text(encoding="utf-8")
 COMMON_JS_SOURCE = (ROOT / "web" / "common.js").read_text(encoding="utf-8")
 COMMON_CSS_SOURCE = (ROOT / "web" / "common.css").read_text(encoding="utf-8")
@@ -36,8 +48,26 @@ PARTITIONS = (ROOT / "partitions.csv").read_text(encoding="utf-8")
 
 
 class ProjectSecurityTests(unittest.TestCase):
+    def test_main_is_split_into_ordered_responsibility_modules(self):
+        required = (
+            "core/EcoManager.cpp",
+            "core/SecurityManager.cpp",
+            "meter/MeterSml.cpp",
+            "network/MqttManager.cpp",
+            "network/NetworkStatus.cpp",
+            "update/OtaManager.cpp",
+            "web/WebApi.cpp",
+            "web/ShellyEmulation.cpp",
+            "diagnostics/FactoryTest.cpp",
+        )
+        self.assertLess(len(MAIN_SOURCE.encode("utf-8")), 30000)
+        for relative in required:
+            self.assertTrue((ROOT / "src" / "app" / relative).is_file())
+            self.assertIn(f'#include "app/{relative}"', MAIN_SOURCE)
+        self.assertEqual(PLATFORMIO.count("build_src_filter = +<*> -<app/>"), 3)
+
     def test_release_version_and_bilingual_ui_are_embedded(self):
-        source = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
+        source = SOURCE
         self.assertIn('kFirmwareVersion[] = "1.3.0"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
@@ -47,7 +77,7 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("Michael Roßmann", source)
 
     def test_debug_partition_is_used_for_optional_frontend_assets(self):
-        source = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
+        source = SOURCE
         self.assertIn("LittleFS.begin(true, \"/coredump\", 10, \"coredump\")", source)
         self.assertIn("tryServeDebugAsset(\"/assets/i18n.js\"", source)
         self.assertIn("board_build.filesystem = littlefs", PLATFORMIO)

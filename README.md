@@ -54,7 +54,7 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 
 Der Tracker arbeitet dabei ausschließlich als **lesender Stromzähler**. Regelungen wie Nulleinspeisung, Ladegrenzen oder Zeitpläne gehören weiterhin in Speicher, Wechselrichter, Wallbox oder das jeweilige Automatisierungssystem.
 
-Die konkreten URLs und API-Endpunkte stehen in [INTERFACES.md](INTERFACES.md).
+Die konkreten URLs und API-Endpunkte stehen in [INTERFACES.md](docs/INTERFACES.md).
 
 ## Unterstützte Messwerte und Stromzähler
 
@@ -83,18 +83,19 @@ Die Oberfläche verwendet HTTP und gehört ausschließlich in ein vertrauenswür
 
 ## Installation
 
-Siehe [INSTALLATION.md](INSTALLATION.md). Vor jedem Flashvorgang vollständige Gerätesicherung, Einstellungen und Historie sichern. Die persönliche Original-Firmware darf nicht öffentlich verteilt werden.
+Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständige Gerätesicherung, Einstellungen und Historie sichern. Die persönliche Original-Firmware darf nicht öffentlich verteilt werden.
 
 ## Dokumentation
 
-- [Installation und Rückkehr / Installation and recovery](INSTALLATION.md)
+- [Installation und Rückkehr / Installation and recovery](docs/INSTALLATION.md)
 - [Sicherheit / Security](SECURITY.md)
-- [Schnittstellen / Interfaces](INTERFACES.md)
-- [USB-Umschaltung / USB switching](USB_SWITCHING.md)
-- [Hardwaretest / Hardware test](HARDWARE_TEST.md)
-- [Dauertest / Soak test](SOAK_TEST.md)
-- [Release-Prüfung / Release checklist](RELEASE_CHECKLIST.md)
+- [Schnittstellen / Interfaces](docs/INTERFACES.md)
+- [USB-Umschaltung / USB switching](docs/USB_SWITCHING.md)
+- [Hardwaretest / Hardware test](docs/HARDWARE_TEST.md)
+- [Dauertest / Soak test](docs/SOAK_TEST.md)
+- [Release-Prüfung / Release checklist](docs/RELEASE_CHECKLIST.md)
 - [Rechteprüfung / Rights review](RIGHTS_REVIEW.md)
+- [Firmware-Architektur / Firmware architecture](docs/ARCHITECTURE.md)
 
 ## Projektstatus
 
@@ -164,7 +165,7 @@ It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/Ope
 
 The tracker operates exclusively as a **read-only electricity meter**. Zero-export control, charge limits and schedules remain the responsibility of the battery, inverter, wallbox or automation system.
 
-See [INTERFACES.md](INTERFACES.md) for the actual URLs and API endpoints.
+See [INTERFACES.md](docs/INTERFACES.md) for the actual URLs and API endpoints.
 
 ### Supported readings and meters
 
@@ -192,18 +193,19 @@ The interface uses HTTP and must only be operated in a trusted home network or i
 
 ### Installation
 
-See [INSTALLATION.md](INSTALLATION.md). Before flashing, back up the complete device, settings and history. The personal original firmware must never be distributed publicly.
+See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the complete device, settings and history. The personal original firmware must never be distributed publicly.
 
 ### Documentation
 
-- [Installation and recovery](INSTALLATION.md)
+- [Installation and recovery](docs/INSTALLATION.md)
 - [Security](SECURITY.md)
-- [Interfaces](INTERFACES.md)
-- [USB switching](USB_SWITCHING.md)
-- [Hardware test](HARDWARE_TEST.md)
-- [Soak test](SOAK_TEST.md)
-- [Release checklist](RELEASE_CHECKLIST.md)
+- [Interfaces](docs/INTERFACES.md)
+- [USB switching](docs/USB_SWITCHING.md)
+- [Hardware test](docs/HARDWARE_TEST.md)
+- [Soak test](docs/SOAK_TEST.md)
+- [Release checklist](docs/RELEASE_CHECKLIST.md)
 - [Rights review](RIGHTS_REVIEW.md)
+- [Firmware architecture](docs/ARCHITECTURE.md)
 
 ### Project status
 

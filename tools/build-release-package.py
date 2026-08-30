@@ -65,14 +65,15 @@ def main() -> None:
         ROOT / "THIRD_PARTY_NOTICES.md",
         ROOT / "TRADEMARKS.md",
         ROOT / "CHANGELOG.md",
-        ROOT / "INSTALLATION.md",
+        ROOT / "docs" / "INSTALLATION.md",
         ROOT / "SECURITY.md",
-        ROOT / "INTERFACES.md",
-        ROOT / "USB_SWITCHING.md",
-        ROOT / "SOAK_TEST.md",
+        ROOT / "docs" / "INTERFACES.md",
+        ROOT / "docs" / "USB_SWITCHING.md",
+        ROOT / "docs" / "SOAK_TEST.md",
         ROOT / "RIGHTS_REVIEW.md",
-        ROOT / "RELEASE_CHECKLIST.md",
-        ROOT / "HARDWARE_TEST.md",
+        ROOT / "docs" / "RELEASE_CHECKLIST.md",
+        ROOT / "docs" / "HARDWARE_TEST.md",
+        ROOT / "docs" / "ARCHITECTURE.md",
         ROOT / "DEPENDENCIES.lock",
         ROOT / "signing" / "firmware-signing-public.pem",
         ROOT / "tools" / "flash-custom.ps1",
@@ -106,6 +107,8 @@ def main() -> None:
         for path in files:
             if path.parent == ROOT / "licenses":
                 target = f"licenses/{path.name}"
+            elif path.parent == ROOT / "docs":
+                target = f"docs/{path.name}"
             else:
                 target = path.name
             archive.write(path, target)

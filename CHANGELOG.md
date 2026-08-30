@@ -23,6 +23,9 @@
 - Weboberfläche, Assets und Navigation komprimiert und konsolidiert; Diagnose
   befindet sich unter Wartung, JSON unter Einstellungen.
 - Release-Build und Werksprüfungs-Build werden in CI getrennt geprüft.
+- Quellcode ohne Funktionsänderung in klar getrennte Core-, Meter-, Netzwerk-,
+  Update-, Web- und Diagnosemodule aufgeteilt; Projektdokumentation unter
+  `docs/` zusammengeführt.
 
 ### English
 
@@ -45,6 +48,9 @@
 - Compressed and consolidated the web UI, assets and navigation; diagnostics
   now lives under Maintenance and JSON under Settings.
 - CI verifies the release and factory-test builds separately.
+- Split source code into clear core, meter, network, update, web and diagnostic
+  modules without changing behavior; consolidated project documentation under
+  `docs/`.
 
 ## 1.0.2-beta.1 — 2026-08-09
 
