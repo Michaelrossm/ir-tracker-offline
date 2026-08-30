@@ -2,42 +2,52 @@
 
 Stand: 2026-08-30
 
-Diese Liste enthält nur Systeme, bei denen nach genauerer Prüfung ein realistischer Weg mit den **aktuell vorhandenen IR-Tracker-Schnittstellen** besteht.
-
-Nicht kompatible oder nur über Hersteller-/Shelly-Cloud autorisierbare Systeme werden hier nicht aufgeführt.
+Diese Liste enthält relevante Speicher- und Energiemanagementsysteme, bei denen ein Einsatz mit dem IR Tracker technisch sinnvoll ist. Systeme bleiben auch dann als Kandidat enthalten, wenn für die aktuelle Firmware noch einzelne Discovery-, Authentifizierungs- oder Push-Funktionen ergänzt werden müssten.
 
 ## Bedeutung der Spalten
 
-- **Kompatibel**: Die Messgeräte-Schnittstelle passt grundsätzlich zur aktuellen IR-Tracker-Firmware.
-- **Schnittstelle / Hinweis**: Warum das System als kompatibel bzw. als enger Kandidat gilt.
+- **Kompatibel**: Bewertung gegen die aktuell vorhandenen IR-Tracker-Schnittstellen.
+- **Schnittstelle / Hinweis**: Erwartete Smart-Meter-Anbindung und aktueller Kenntnisstand.
 - **Getestet**: Das konkrete System wurde mit IR Tracker Offline auf echter Hardware erfolgreich geprüft.
 
 Status:
-- 🟢 **Ja** – nach aktueller Dokumentation ist eine lokale Anbindung ohne zwingende Shelly-Cloud-Identität realistisch.
-- 🟡 **enger Kandidat** – lokale Fremdzähler-Anbindung ist dokumentiert, aber Discovery/Handshake bzw. das genaue MQTT-/Shelly-Profil muss noch gegen die IR-Tracker-Implementierung geprüft werden.
+- 🟢 **Ja** – lokale Fremdzähler-Anbindung ist dokumentiert und passt grundsätzlich zu den aktuellen IR-Tracker-Funktionen.
+- 🟡 **Kandidat** – das System unterstützt relevante Smart Meter wie Shelly/EcoTracker, aber Discovery, Account-Bindung oder Zusatzfunktionen müssen noch praktisch bzw. protokollseitig geklärt werden.
 
-> Der IR Tracker stellt aktuell HTTP/JSON, MQTT sowie lokale Shelly-EM-/Shelly-Pro-EM-kompatible Leseendpunkte bereit. Er sendet derzeit keine herstellerspezifischen Shelly-Skripte, keine Shelly-Cloud-Identität und keine speziellen RPC-over-UDP-Push-Telegramme an Speicher.
+> Der IR Tracker stellt aktuell HTTP/JSON, MQTT sowie lokale Shelly-EM-/Shelly-Pro-EM-kompatible Leseendpunkte bereit. Eine EcoTracker-spezifische Emulation ist derzeit noch nicht implementiert.
 
 ## Speicherliste
 
 | # | Hersteller | Modell/Familie | Kompatibel | Schnittstelle / Hinweis | Getestet |
 |---:|---|---|---|---|---|
-| 1 | Solakon | ONE | 🟢 Ja | Shelly 3EM / Shelly Pro 3EM; lokale Kommunikation im selben Heimnetz ist dokumentiert. Die Shelly-IP kann bei Bedarf manuell eingetragen werden. Damit passt das Prinzip sehr gut zur lokalen IR-Tracker-Emulation. | ☐ |
-| 2 | Growatt | NOAH 2000 | 🟢 Ja | Shelly 3EM / Shelly Pro 3EM werden offiziell unterstützt. Growatt dokumentiert die Einbindung in ShinePhone; lokale bzw. direkte Shelly-Nutzung ist für NOAH/NEXA vorgesehen. Praktischer IR-Tracker-Test steht noch aus. | ☐ |
-| 3 | Growatt | NEXA 2000 | 🟢 Ja | Shelly 3EM / Shelly Pro 3EM; reale Nutzerberichte bestätigen lokale Einbindung im selben WLAN ohne zwingende Kopplung des kompletten Shelly-Kontos. Sehr guter Kandidat für die IR-Tracker-Shelly-Emulation. | ☐ |
-| 4 | Hoymiles | MS-A2 | 🟡 enger Kandidat | Shelly Pro 3EM wird offiziell unterstützt. Hoymiles verlangt, dass MS-A2 und Shelly im selben WLAN liegen und der Shelly über „Link Shelly“ hinzugefügt wird. Das spricht für lokale Kommunikation; offen ist, welche Shelly-Discovery-/Identitäts-Endpunkte beim Hinzufügen zwingend erwartet werden. | ☐ |
-| 5 | Hoymiles | HiBattery 1920 AC | 🟡 enger Kandidat | Hoymiles wirbt mit Drittanbieter-Smart-Metern und offener MQTT-Konnektivität für Null-Einspeisung. Für eine direkte Freigabe muss noch das erwartete MQTT-/Smart-Meter-Datenprofil gegen die IR-Tracker-MQTT-Ausgabe geprüft werden. | ☐ |
+| 1 | Solakon | ONE | 🟢 Ja | Shelly 3EM / Shelly Pro 3EM; lokale Kommunikation im Heimnetz ist vorgesehen. Sehr guter Kandidat für die aktuelle Shelly-Emulation. | ☐ |
+| 2 | Growatt | NOAH 2000 | 🟢 Ja | Shelly 3EM / Shelly Pro 3EM werden für intelligenten Eigenverbrauch unterstützt. Praktischer IR-Tracker-Test steht noch aus. | ☐ |
+| 3 | Growatt | NEXA 2000 | 🟢 Ja | Shelly 3EM / Shelly Pro 3EM als Lastmessung. Direkte lokale Nutzung im selben WLAN ist realistisch. | ☐ |
+| 4 | Hoymiles | HiBattery 4020 AC | 🟢 Ja | Hoymiles dokumentiert ausdrücklich Shelly, EcoTracker und Linky **über lokales LAN** für die Null-Einspeisungsregelung. Zusätzlich Open MQTT; Cloud kann nach der Einrichtung deaktiviert werden. | ☐ |
+| 5 | Hoymiles | HiBattery 4020 X | 🟢 Ja | Wie 4020 AC: Drittanbieter-Zähler wie Shelly, EcoTracker und Linky über **lokales LAN**, plus Open MQTT. Sehr starker Kandidat für den IR Tracker. | ☐ |
+| 6 | Hoymiles | MS-A2 | 🟡 Kandidat | Shelly Pro 3EM offiziell unterstützt; Speicher und Shelly müssen am selben WLAN hängen. „Link Shelly“ spricht für lokale Kommunikation, aber Discovery/Identitätsprüfung muss noch gegen die IR-Tracker-Emulation getestet werden. | ☐ |
+| 7 | Hoymiles | HiBattery 1920 AC | 🟡 Kandidat | Drittanbieter-Smart-Meter und Open MQTT offiziell unterstützt. Reale Feldberichte zeigen: EcoTracker-Emulation funktioniert stabil; einfache Shelly-Pro-3EM-Emulation benötigt zusätzliche Anpassungen. Mit EcoTracker-Profil wäre die Freigabe sehr wahrscheinlich. | ☐ |
+| 8 | Anker SOLIX | Solarbank 2 E1600 Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt. Ankers dokumentierter Setup-Weg nutzt derzeit Shelly Cloud + Shelly-Konto; daher noch nicht direkt grün für eine reine lokale Emulation. | ☐ |
+| 9 | Anker SOLIX | Solarbank 2 E1600 Plus | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt; dokumentierte Kopplung über Shelly Cloud/Konto. | ☐ |
+| 10 | Anker SOLIX | Solarbank 2 E1600 AC | 🟡 Kandidat | Shelly-Unterstützung ist vorgesehen/produktabhängig verfügbar; genaue lokale Kopplung noch nicht ausreichend bestätigt. | ☐ |
+| 11 | Anker SOLIX | Solarbank 3 E2700 Pro | 🟡 Kandidat | Drittanbieter-Smart-Meter-Integration vorhanden; für die aktuelle IR-Tracker-Shelly-Emulation fehlt noch ein belastbarer lokaler Kopplungsnachweis. | ☐ |
+| 12 | Anker SOLIX | Solarbank 4 Pro / E5000 Pro | 🟡 Kandidat | Relevante neue Solarbank-Familie; Drittanbieter-Meter-Unterstützung vorhanden bzw. vorgesehen, lokale Clone-Kompatibilität noch offen. | ☐ |
+| 13 | EcoFlow | STREAM Ultra | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt. Handbuch verlangt derzeit gleiches WLAN **und dasselbe EcoFlow-Konto**; deshalb ist reine lokale Shelly-Emulation noch nicht bestätigt. | ☐ |
+| 14 | EcoFlow | STREAM Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt; gleicher EcoFlow-Account wird im Handbuch gefordert. | ☐ |
+| 15 | EcoFlow | STREAM Max | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt; Account-/Bindungsmechanismus muss für Clone-Betrieb geprüft werden. | ☐ |
+| 16 | EcoFlow | STREAM AC Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt; Handbuch fordert gleiches WLAN und gleiches EcoFlow-Konto. | ☐ |
+| 17 | Zendure | SolarFlow Hyper 2000 | 🟡 Kandidat | Shelly-Integration vorhanden. Für ältere HEMS-/App-Versionen läuft die Kopplung über Zendure/Shelly-Autorisierung; lokale Clone-Kompatibilität noch nicht sicher. | ☐ |
+| 18 | Zendure | SolarFlow 800 Pro | 🟡 Kandidat | Shelly-Unterstützung vorhanden. Aktuelle Community-Hinweise zeigen lokale Kommunikation ist mit neueren HEMS-Funktionen möglich, aber das genaue Enrollment eines Shelly-Klons muss geprüft werden. | ☐ |
+| 19 | Zendure | SolarFlow 1600 AC+ | 🟡 Kandidat | Shelly 3EM / Pro 3EM unterstützt; für eine grüne Freigabe fehlt noch der Nachweis, dass ein emulierter Shelly ohne Hersteller-Cloud-Identität eingebunden werden kann. | ☐ |
+| 20 | Zendure | SolarFlow 2400 AC+ | 🟡 Kandidat | Shelly Pro 3EM, Shelly 3EM, EcoTracker IR und HomeWizard P1 werden offiziell unterstützt. Neuere HEMS-Versionen können lokale Meter-Kommunikation nutzen; Enrollment/Discovery des IR Trackers noch prüfen. | ☐ |
+| 21 | Zendure | SolarFlow 2400 Pro | 🟡 Kandidat | Shelly-Unterstützung vorhanden; lokale Kommunikation ist grundsätzlich Teil der neueren Zendure-HEMS-Architektur, genaue Clone-Kopplung bleibt zu testen. | ☐ |
+| 22 | Jackery | Navi 2000 | 🟡 Kandidat | Shelly Pro 3EM / Pro EM-50 werden unterstützt. Jackery erlaubt direkte Shelly-Einbindung in der eigenen App, aber echte Shellys werden dabei teilweise mit MQTT/RPC-Funktionen konfiguriert. Diese Zusatzfunktionen emuliert der IR Tracker derzeit noch nicht vollständig. | ☐ |
 
-## Warum andere zuvor aufgeführte Systeme entfernt wurden
+## Besonders aussichtsreiche Kandidaten
 
-Bei der tieferen Prüfung zeigte sich, dass mehrere Hersteller zwar `Shelly 3EM / Pro 3EM` unterstützen, die Kopplung aber nicht nur durch Lesen der lokalen Shelly-HTTP-Endpunkte erfolgt:
+Am stärksten sind aktuell die Hoymiles-Modelle **HiBattery 4020 AC** und **HiBattery 4020 X**, weil Hoymiles explizit Drittanbieter-Zähler wie Shelly und EcoTracker über **lokales LAN** nennt und zusätzlich Open MQTT anbietet. Diese beiden sind deshalb auf `🟢 Ja` gesetzt.
 
-- **Anker SOLIX**: die dokumentierte Drittanbieter-Einrichtung läuft über `Shelly Cloud` und Shelly-Konto. Ein lokaler Shelly-Klon ohne echte Cloud-Identität kann damit derzeit nicht sauber hinzugefügt werden.
-- **EcoFlow STREAM**: Shelly 3EM/Pro 3EM werden unterstützt, die praktische Kopplung läuft jedoch über die EcoFlow-/Shelly-Account-Integration; Nutzerberichte zeigen Cloud-Abhängigkeit der Meter-Verbindung. Deshalb derzeit keine sichere IR-Tracker-Kompatibilität.
-- **Zendure SolarFlow**: Shelly wird unterstützt, aber die Einrichtung verwendet Shelly-Autorisierung/HEMS. Für echte lokale Regelung werden bei mehreren Geräten zusätzlich Shelly-RPC-Verbindungen zum Speicher verwendet. Diese Push-Funktion bildet der IR Tracker derzeit nicht nach.
-- **Jackery**: neuere lokale Kopplungen konfigurieren am echten Shelly unter anderem MQTT sowie `RPC over UDP` zum Jackery-Gerät. Diese ausgehenden Shelly-Funktionen emuliert der IR Tracker derzeit nicht.
-
-Diese Systeme können später wieder aufgenommen werden, wenn die jeweils benötigten Profile in der Firmware ergänzt wurden.
+Bei **HiBattery 1920 AC** gibt es bereits einen sehr wertvollen Feldhinweis aus der Praxis: eine EcoTracker-Emulation auf einem ESP-Lesekopf wurde erfolgreich mit der Batterie gekoppelt und lief stabil, während eine einfache Shelly-Pro-3EM-Emulation ohne zusätzliche Anpassungen nicht funktionierte. Für den IR Tracker wäre deshalb eine EcoTracker-kompatible Emulation wahrscheinlich der direkteste Weg von `🟡` zu `🟢`.
 
 ## Feldtest
 
