@@ -65,6 +65,8 @@ Die aktive Abfrage verwendet `/?!` und `ACK 000`. Für Hardware mit unbekannter
 RX-Belegung steht eine geschützte GPIO-/Baudraten-Diagnose zur Verfügung; ein
 Eingang wird erst nach einem frischen, gültigen Telegramm bestätigt.
 
+Die aktuelle Übersicht steht unter [Kompatibilität](docs/compatibility/README.md).
+
 ## Erster Zugang – Standardpasswort
 
 Nach einer frischen Installation startet der Tracker das WLAN `IR-Tracker-Setup-XXXX`.
@@ -79,7 +81,7 @@ Beispiel: Heißt das WLAN `IR-Tracker-Setup-F2A0`, lautet das Passwort `IRTracke
 
 ## Sicherheit
 
-Die Oberfläche verwendet HTTP und gehört ausschließlich in ein vertrauenswürdiges Heim- oder getrenntes IoT-Netz. **Keine Ports ins Internet freigeben.** Für Fernzugriff VPN verwenden. Details: [SECURITY.md](SECURITY.md).
+Die Oberfläche verwendet HTTP und gehört ausschließlich in ein vertrauenswürdiges Heim- oder getrenntes IoT-Netz. **Keine Ports ins Internet freigeben.** Für Fernzugriff VPN verwenden. Details: [SECURITY.md](.github/SECURITY.md).
 
 ## Installation
 
@@ -88,13 +90,16 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 ## Dokumentation
 
 - [Installation und Rückkehr / Installation and recovery](docs/INSTALLATION.md)
-- [Sicherheit / Security](SECURITY.md)
+- [Kompatibilität / Compatibility](docs/compatibility/README.md)
+- [Sicherheit / Security](.github/SECURITY.md)
 - [Schnittstellen / Interfaces](docs/INTERFACES.md)
 - [USB-Umschaltung / USB switching](docs/USB_SWITCHING.md)
 - [Hardwaretest / Hardware test](docs/HARDWARE_TEST.md)
 - [Dauertest / Soak test](docs/SOAK_TEST.md)
 - [Release-Prüfung / Release checklist](docs/RELEASE_CHECKLIST.md)
-- [Rechteprüfung / Rights review](RIGHTS_REVIEW.md)
+- [Rechteprüfung / Rights review](docs/legal/RIGHTS_REVIEW.md)
+- [Markenhinweis / Trademarks](docs/legal/TRADEMARKS.md)
+- [Hinweise zu Drittsoftware / Third-party notices](docs/legal/THIRD_PARTY_NOTICES.md)
 - [Firmware-Architektur / Firmware architecture](docs/ARCHITECTURE.md)
 
 ## Projektstatus
@@ -107,7 +112,7 @@ LAN-/PoE-Platine ist noch nicht auf echter Hardware validiert.
 
 ## Lizenz
 
-Copyright © 2026 Michael Roßmann. Lizenz: PolyForm Noncommercial 1.0.0. Private und sonstige nichtkommerzielle Nutzung ist gemäß Lizenz erlaubt; gewerbliche Nutzung ist nicht gestattet. Verbindlich sind [LICENSE.md](LICENSE.md), der [Urheberhinweis](AUTHORS.md), die [Rechteprüfung](RIGHTS_REVIEW.md) und der [Markenhinweis](TRADEMARKS.md).
+Copyright © 2026 Michael Roßmann. Lizenz: PolyForm Noncommercial 1.0.0. Private und sonstige nichtkommerzielle Nutzung ist gemäß Lizenz erlaubt; gewerbliche Nutzung ist nicht gestattet. Verbindlich sind [LICENSE.md](LICENSE.md), der [Urheberhinweis](AUTHORS.md), die [Rechteprüfung](docs/legal/RIGHTS_REVIEW.md) und der [Markenhinweis](docs/legal/TRADEMARKS.md).
 
 ---
 
@@ -176,6 +181,8 @@ meters. Active polling uses `/?!` and `ACK 000`. A protected GPIO/baud-rate
 diagnostic is available for hardware with an unknown RX pin; an input is only
 accepted after a fresh, valid telegram.
 
+See the current [compatibility overview](docs/compatibility/README.md).
+
 ### First access – default password
 
 After a fresh installation, the tracker starts the Wi-Fi network `IR-Tracker-Setup-XXXX`. Copy the four `XXXX` characters directly from that network name:
@@ -189,7 +196,7 @@ Example: If the Wi-Fi network is named `IR-Tracker-Setup-F2A0`, the password is 
 
 ### Security
 
-The interface uses HTTP and must only be operated in a trusted home network or isolated IoT network. **Never expose its ports to the internet.** Use a VPN for remote access. See [SECURITY.md](SECURITY.md).
+The interface uses HTTP and must only be operated in a trusted home network or isolated IoT network. **Never expose its ports to the internet.** Use a VPN for remote access. See [SECURITY.md](.github/SECURITY.md).
 
 ### Installation
 
@@ -198,13 +205,16 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 ### Documentation
 
 - [Installation and recovery](docs/INSTALLATION.md)
-- [Security](SECURITY.md)
+- [Compatibility](docs/compatibility/README.md)
+- [Security](.github/SECURITY.md)
 - [Interfaces](docs/INTERFACES.md)
 - [USB switching](docs/USB_SWITCHING.md)
 - [Hardware test](docs/HARDWARE_TEST.md)
 - [Soak test](docs/SOAK_TEST.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
-- [Rights review](RIGHTS_REVIEW.md)
+- [Rights review](docs/legal/RIGHTS_REVIEW.md)
+- [Trademarks](docs/legal/TRADEMARKS.md)
+- [Third-party notices](docs/legal/THIRD_PARTY_NOTICES.md)
 - [Firmware architecture](docs/ARCHITECTURE.md)
 
 ### Project status
@@ -217,7 +227,7 @@ The Ethernet/PoE board has not yet been validated on real hardware.
 
 ### License
 
-Copyright © 2026 Michael Roßmann. Licensed under PolyForm Noncommercial 1.0.0. Private and other noncommercial use is permitted under the license; commercial use is not permitted. See the authoritative [license](LICENSE.md), [authorship notice](AUTHORS.md), [rights review](RIGHTS_REVIEW.md), and [trademark notice](TRADEMARKS.md).
+Copyright © 2026 Michael Roßmann. Licensed under PolyForm Noncommercial 1.0.0. Private and other noncommercial use is permitted under the license; commercial use is not permitted. See the authoritative [license](LICENSE.md), [authorship notice](AUTHORS.md), [rights review](docs/legal/RIGHTS_REVIEW.md), and [trademark notice](docs/legal/TRADEMARKS.md).
 
 ---
 

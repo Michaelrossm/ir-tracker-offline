@@ -4,8 +4,8 @@ Stand: 2026-08-30
 
 Die Kompatibilität ist in zwei Listen aufgeteilt:
 
-1. [Stromzähler](COMPATIBILITY_METERS.md)
-2. [Speicher / Energiemanagement](COMPATIBILITY_STORAGE.md)
+1. [Stromzähler](METERS.md)
+2. [Speicher / Energiemanagement](STORAGE.md)
 
 ## Status
 
