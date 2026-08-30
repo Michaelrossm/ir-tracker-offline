@@ -27,18 +27,31 @@ HISTORY_SOURCE = (ROOT / "src" / "HistoryStore.cpp").read_text(encoding="utf-8")
 HISTORY_HEADER = (ROOT / "src" / "HistoryStore.h").read_text(encoding="utf-8")
 EVENT_SOURCE = (ROOT / "src" / "EventLog.cpp").read_text(encoding="utf-8")
 EVENT_HEADER = (ROOT / "src" / "EventLog.h").read_text(encoding="utf-8")
+HARDWARE_PROFILE = (ROOT / "src" / "HardwareProfile.h").read_text(encoding="utf-8")
+ETHERNET_SOURCE = (ROOT / "src" / "EthernetManager.cpp").read_text(encoding="utf-8")
+LEGACY_METER_HEADER = (ROOT / "src" / "LegacyMeterParser.h").read_text(encoding="utf-8")
+LEGACY_METER_SOURCE = (ROOT / "src" / "LegacyMeterParser.cpp").read_text(encoding="utf-8")
+PLATFORMIO = (ROOT / "platformio.ini").read_text(encoding="utf-8")
+PARTITIONS = (ROOT / "partitions.csv").read_text(encoding="utf-8")
 
 
 class ProjectSecurityTests(unittest.TestCase):
-    def test_beta_version_and_bilingual_ui_are_embedded(self):
+    def test_release_version_and_bilingual_ui_are_embedded(self):
         source = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
-        self.assertIn('kFirmwareVersion[] = "1.0.2-beta.1"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.0"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
         self.assertIn("URLSearchParams(location.search).get('lang')", I18N_SOURCE)
         self.assertIn('"Einstellungen":"Settings"', I18N_SOURCE)
         self.assertIn("Michael Roßmann", source)
+
+    def test_debug_partition_is_used_for_optional_frontend_assets(self):
+        source = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
+        self.assertIn("LittleFS.begin(true, \"/coredump\", 10, \"coredump\")", source)
+        self.assertIn("tryServeDebugAsset(\"/assets/i18n.js\"", source)
+        self.assertIn("board_build.filesystem = littlefs", PLATFORMIO)
+        self.assertIn("coredump,   data, spiffs", PARTITIONS)
 
     def test_original_backups_are_ignored(self) -> None:
         ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
@@ -91,9 +104,9 @@ class ProjectSecurityTests(unittest.TestCase):
             "addEventListener('pagehide',dStopLoads)",
             "addEventListener('pagehide',stopHistoryLoads)",
             "if (!responseClient.connected()) return false",
-            "localStorage.getItem('irtracker-theme-v1')",
-            "localStorage.setItem(key,JSON.stringify(clean))",
-            "data-theme-var='--card'",
+            "localStorage.getItem(themeKey)",
+            "localStorage.setItem(themeKey,n)",
+            "const themes=[['#07100c','#10231a']",
             "target=dFrom+f*(dTo-dFrom)",
             "class='chart-section'",
             "width:min(100%,1800px)",
@@ -143,6 +156,9 @@ class ProjectSecurityTests(unittest.TestCase):
             "name='eco_mode'",
             "requestCpuBoost(\"history_export\")",
             "requestCpuBoost(\"firmware_update\")",
+            "requestCpuBoost(\"wifi_connect\")",
+            "requestCpuBoost(\"lan_fallback\")",
+            "requestCpuBoost(\"factory_test\")",
             "manageCpuPowerMode()",
             "cpu_boost_remaining_s",
             "cpu_frequency_errors",
@@ -162,6 +178,9 @@ class ProjectSecurityTests(unittest.TestCase):
             'MDNS.addService("http", "tcp", 80)',
             "MDNS.end()",
             "mdns_running",
+            "IR_TRACKER_ENABLE_MDNS",
+            "trackerGpioAvailable(pin)",
+            "w5500_gpio_reserved",
             "kWifiPowerStableMs = 3UL * 60UL * 1000UL",
             "kWifiPowerEvaluateMs = 60UL * 1000UL",
             "WIFI_POWER_19_5dBm",
@@ -211,14 +230,115 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_theme_stays_browser_local(self) -> None:
         theme_script = COMMON_JS_SOURCE
-        self.assertEqual(SOURCE.count("data-theme-var="), 2)
-        self.assertIn("['--bg','--card'].forEach", theme_script)
-        self.assertIn("const defaults={'--bg':'#07100c','--card':'#10231a'}", theme_script)
-        self.assertIn("localStorage.getItem", theme_script)
-        self.assertIn("localStorage.setItem", theme_script)
-        self.assertIn("localStorage.removeItem", theme_script)
+        self.assertEqual(SOURCE.count("data-theme-var="), 0)
+        self.assertIn("const themes=[['#07100c','#10231a']", theme_script)
+        self.assertIn("localStorage.getItem(themeKey)", theme_script)
+        self.assertIn("localStorage.setItem(themeKey,n)", theme_script)
         self.assertNotIn("fetch(", theme_script)
         self.assertNotIn("XMLHttpRequest", theme_script)
+
+    def test_lan_profile_reserves_w5500_pins(self) -> None:
+        self.assertIn("IR_TRACKER_LAN_PROFILE", HARDWARE_PROFILE)
+        for pin_name in ("kW5500CsPin", "kW5500IntPin", "kW5500SckPin",
+                         "kW5500MosiPin", "kW5500MisoPin"):
+            self.assertIn(pin_name, HARDWARE_PROFILE)
+        self.assertIn("trackerGpioAvailable(pin)", SOURCE)
+
+    def test_universal_network_uses_one_lwip_stack(self) -> None:
+        standard = PLATFORMIO.split("[env:solakon_tracker_developer]", 1)[0]
+        self.assertIn("IR_TRACKER_LAN_PROFILE=1", standard)
+        self.assertNotIn("arduino-libraries/Ethernet", PLATFORMIO)
+        for marker in (
+            "esp_eth_mac_new_w5500", "esp_eth_phy_new_w5500",
+            "esp_eth_new_netif_glue", "esp_netif_attach",
+            "route_prio = kEthernetRoutePriority", "probeW5500()",
+            "transaction.rx_data[0] == 0x04",
+        ):
+            self.assertIn(marker, ETHERNET_SOURCE)
+        self.assertIn("bool networkConnected()", SOURCE)
+        self.assertIn("ethernet.hardwareDetected()", SOURCE)
+        self.assertIn("ethernet.loop();", SOURCE)
+        self.assertIn("if (!networkConnected() || !config.mqttHost.length())", SOURCE)
+        self.assertIn('hardware_profile', SOURCE)
+        self.assertIn('universal', SOURCE)
+
+    def test_legacy_meter_protocol_is_read_only_and_shared(self) -> None:
+        for marker in (
+            "IEC-62056-21/D0-Parser", "kMaximumFrame", "bccPresent",
+            "checksumErrors", "1.8.0", "1.8.1", "1.8.2",
+            "2.8.0", "2.8.1", "2.8.2", "16.7.0",
+            "36.7.0", "32.7.0", "31.7.0",
+        ):
+            self.assertIn(marker, LEGACY_METER_HEADER + LEGACY_METER_SOURCE)
+        for marker in (
+            '#include "LegacyMeterParser.h"', "MeterProtocol::Iec62056",
+            "commitMeterCandidate(candidate, MeterProtocol::Iec62056",
+            "SERIAL_7E1", "meter_protocol", "no_valid_meter_telegram",
+            "300, 600, 1200, 2400, 4800", "importPowerObis",
+            "exportPowerObis", "importTariffObis", "exportTariffObis",
+        ):
+            self.assertIn(marker, SOURCE)
+        for marker in ("Iec62056Active", "beginActiveD0Attempt",
+                       "updateActiveD0", "acknowledgement",
+                       "updateMeterRecovery", "METER_UART_RECOVERY"):
+            self.assertIn(marker, SOURCE)
+
+    def test_value_age_is_exposed_by_all_read_only_interfaces(self) -> None:
+        for marker in (
+            "power_age_s", "import_age_s", "export_age_s",
+            "telegram_age_s", "voltage_age_s", "current_age_s",
+            "irtracker_power_age_seconds", "irtracker_phase_power_age_seconds",
+            "power_age_s=", "metric,value,unit,age_seconds",
+            "irtracker_age_s",
+        ):
+            self.assertIn(marker, SOURCE)
+        self.assertIn("valueFresh(meter.powerUpdatedMs)", SOURCE)
+
+    def test_factory_test_is_isolated_and_fixture_based(self) -> None:
+        for marker in (
+            "[env:solakon_tracker_factory]",
+            "IR_TRACKER_ENABLE_FACTORY_TEST=1",
+            "IR_TRACKER_ENABLE_GITHUB_UPDATE=0",
+        ):
+            self.assertIn(marker, PLATFORMIO)
+        for marker in (
+            "kFactoryLoopbackPattern", "FCT_IR_LOOPBACK",
+            "/maintenance/factory-test", "factoryAutomatedChecksPass",
+            "ethernet.hardwareDetected()", "factoryTest.ledConfirmed",
+        ):
+            self.assertIn(marker, SOURCE)
+        standard = PLATFORMIO.split("[env:solakon_tracker_developer]", 1)[0]
+        self.assertIn("IR_TRACKER_ENABLE_FACTORY_TEST=0", standard)
+
+    def test_legacy_phase_import_export_power_is_combined(self) -> None:
+        for marker in ("21.7.0", "41.7.0", "61.7.0", "22.7.0",
+                       "42.7.0", "62.7.0", "phaseImportPowerW",
+                       "phaseExportPowerW"):
+            self.assertIn(marker, LEGACY_METER_SOURCE)
+
+    def test_production_is_read_only_and_developer_io_is_opt_in(self) -> None:
+        self.assertFalse((ROOT / "src" / "EnergyManager.cpp").exists())
+        self.assertFalse((ROOT / "src" / "EnergyManager.h").exists())
+        for legacy_marker in (
+            "energyConfig", "energyManager", "handleEnergyPage",
+            "handleEnergySave", "handleEnergyStop", 'name="em_enable"',
+        ):
+            self.assertNotIn(legacy_marker, SOURCE)
+        self.assertIn("IR_TRACKER_ENABLE_DEVELOPER_IO", HARDWARE_PROFILE)
+        self.assertIn("[env:solakon_tracker_developer]", PLATFORMIO)
+        standard = PLATFORMIO.split("[env:solakon_tracker_developer]", 1)[0]
+        self.assertIn("IR_TRACKER_ENABLE_DEVELOPER_IO=0", standard)
+        self.assertNotIn("links2004/WebSockets", standard)
+        self.assertIn("IR_TRACKER_ENABLE_DEVELOPER_IO=1", PLATFORMIO)
+
+    def test_read_only_integrations_remain_available(self) -> None:
+        for marker in (
+            "PubSubClient mqtt", "homeAssistantDiscovery", "/status",
+            "/emeter/0", "/rpc/EM.GetStatus", "/api/v1/history",
+            "/api/v1/values", "/metrics", "/openmetrics",
+        ):
+            self.assertIn(marker, SOURCE)
+        self.assertIn("normalizeHardwarePins();", SOURCE)
 
     def test_navigation_and_maintenance_are_reduced(self) -> None:
         nav_start = SOURCE.index("String nav()")

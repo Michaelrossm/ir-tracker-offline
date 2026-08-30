@@ -7,11 +7,45 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import struct
 import zipfile
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+IRFW_MAGIC = b"IRFW100\0"
+APP_PARTITION_BYTES = 0x150000
+
+
+def validate_firmware_pair(package_path: Path, usb_path: Path) -> None:
+    package = package_path.read_bytes()
+    if len(package) < 16:
+        raise SystemExit("IRFW-Paket ist zu kurz. / IRFW package is too short.")
+    magic, firmware_size, signature_size, reserved = struct.unpack(
+        "<8sIHH", package[:16]
+    )
+    expected_size = 16 + signature_size + firmware_size
+    if (
+        magic != IRFW_MAGIC
+        or reserved != 0
+        or not 64 <= signature_size <= 80
+        or len(package) != expected_size
+    ):
+        raise SystemExit("IRFW-Struktur ist ungültig. / Invalid IRFW structure.")
+    firmware = package[16 + signature_size :]
+    usb_firmware = usb_path.read_bytes()
+    if firmware != usb_firmware:
+        raise SystemExit(
+            "IRFW und USB-BIN stimmen nicht überein. / IRFW and USB BIN differ."
+        )
+    if firmware_size > APP_PARTITION_BYTES:
+        raise SystemExit(
+            f"Firmware ist {firmware_size - APP_PARTITION_BYTES} Byte zu groß. / "
+            f"Firmware exceeds the app partition by {firmware_size - APP_PARTITION_BYTES} bytes."
+        )
+    print(
+        f"App reserve / App-Reserve: {APP_PARTITION_BYTES - firmware_size} bytes"
+    )
 
 
 def main() -> None:
@@ -58,6 +92,11 @@ def main() -> None:
         lowered = str(path).lower()
         if "original bin" in lowered or "signing/private" in lowered:
             raise SystemExit(f"Private/proprietäre Datei abgewiesen / Private/proprietary file rejected: {path}")
+    validate_firmware_pair(firmware_files[0], firmware_files[1])
+    if firmware_files[2].stat().st_size != 3072:
+        raise SystemExit(
+            "Unerwartete Partitionstabellengröße. / Unexpected partition-table size."
+        )
     sums = "\n".join(
         f"{hashlib.sha256(path.read_bytes()).hexdigest().upper()}  {path.name}"
         for path in firmware_files

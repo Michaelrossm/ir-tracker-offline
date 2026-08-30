@@ -11,8 +11,11 @@ Vor Freigabe auf echter Hardware prüfen:
 5. Backup, Wiederherstellung und Löschen der Historie.
 6. Signiertes OTA; manipuliertes Paket muss abgewiesen werden.
 7. Admin-Sperre, CSRF, API-Modi und deaktivierte optionale Schnittstellen.
-8. Eco-Modus, WLAN-Wiederverbindung und Fehler-LED.
-9. Mindestens 72 Stunden Dauerlauf ohne Heapwarnung, Neustart oder Messlücke durch die Firmware.
+8. Eco-Modus: 80 MHz im Leerlauf; 160 MHz bei WLAN-Aufbau, LAN-Rückfall,
+   Firmwareupdate, GPIO-Suche und Werksprüfung; Rückkehr nach zwei Minuten.
+9. WLAN-Wiederverbindung, LAN-Rückfall und Fehler-LED.
+10. IEC-62056-21/D0 mit einem unterstützten älteren Zähler prüfen.
+11. Mindestens 72 Stunden Dauerlauf ohne Heapwarnung, Neustart oder Messlücke durch die Firmware.
 
 ## English
 
@@ -25,5 +28,8 @@ Before release, verify on real hardware:
 5. History backup, restore and deletion.
 6. Signed OTA; a tampered package must be rejected.
 7. Admin lockout, CSRF, API modes and disabled optional interfaces.
-8. Eco mode, Wi-Fi reconnection and error LED.
-9. At least 72 hours continuous operation without heap warning, reboot or firmware-caused measurement gap.
+8. Eco mode: 80 MHz while idle; 160 MHz during Wi-Fi association, Ethernet
+   fallback, firmware updates, GPIO scans and factory testing; return after two minutes.
+9. Wi-Fi reconnection, Ethernet fallback and the fault LED.
+10. Verify IEC 62056-21/D0 using a supported legacy meter.
+11. At least 72 hours continuous operation without heap warning, reboot or firmware-caused measurement gap.

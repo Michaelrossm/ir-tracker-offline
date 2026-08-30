@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.0.2 Beta
+# IR Tracker Offline — 1.3.0
 
 **Deutsch** | [English](#english)
 
@@ -20,7 +20,7 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 
 ## Funktionen
 
-- **vollständig lokale SML-/OBIS-Auswertung** ohne Cloud-Abhängigkeit
+- **vollständig lokale SML-/OBIS- sowie IEC-62056-21/D0-Auswertung** ohne Cloud-Abhängigkeit
 - Livewerte für Gesamtleistung, Netzbezug, Einspeisung sowie verfügbare L1/L2/L3-Werte
 - **Shelly-EM- und Shelly-Pro-EM-kompatible Leseendpunkte** für eine möglichst einfache Einbindung in bestehende Systeme
 - **Home Assistant über MQTT Discovery**
@@ -29,11 +29,17 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 - Spannungs- und Stromwerte nur im RAM, nicht in der Historie
 - interaktive Diagramme für Maus und Touch
 - bis zu drei WLANs; automatischer zeitbegrenzter Setup-Hotspot als Rückfall
+- eine Universal-Firmware für WLAN und optionales W5500-LAN; LAN wird bei
+  vorhandenem Link bevorzugt, WLAN bleibt als automatischer Rückfall verbunden
 - signierte manuelle WLAN-Updates sowie sichere GitHub-Prüfung mit optionaler automatischer Installation
 - Einstellungs-/Historienbackup, Selbsttest und Diagnose
 - geschützte GPIO-/Baudraten-Diagnose zur Unterstützung unterschiedlicher Hardware
 - browserlokale Farbauswahl und Sprache Deutsch/Englisch
-- Eco-Modus, adaptiver WLAN-Sendepegel und abschaltbare optionale Schnittstellen
+- Eco-Modus, adaptiver WLAN-Sendepegel und automatische Leistungs-Boosts für
+  Verbindungsaufbau, Updates, Exporte und Prüfungen
+- automatische UART-/Parser-Wiederherstellung bei ausbleibenden Zählerdaten
+- gesonderter Werksprüfungs-Build mit PASS/FAIL-Prüfung für die eigene LAN-/PoE-Platine
+- Produktions-Build ausschließlich mit lesenden Speicher-/Smart-Home-Schnittstellen
 
 ## Schnittstellen und Integration
 
@@ -54,7 +60,10 @@ Die konkreten URLs und API-Endpunkte stehen in [INTERFACES.md](INTERFACES.md).
 
 Welche Werte verfügbar sind, hängt vom angeschlossenen Stromzähler und dessen freigeschalteten OBIS-Daten ab. L1/L2/L3, Spannung oder Strom können nur ausgegeben werden, wenn der Zähler diese Werte tatsächlich über seine optische Schnittstelle überträgt.
 
-Die Unterstützung unterschiedlicher und insbesondere älterer Stromzähler wird weiter verbessert. Für Hardware mit unbekannter RX-Belegung steht eine geschützte GPIO-/Baudraten-Diagnose zur Verfügung; ein Eingang wird dabei erst nach einem frischen, CRC-gültigen SML-Telegramm bestätigt.
+Neben SML unterstützt die Firmware passive und aktive IEC-62056-21/D0-Zähler.
+Die aktive Abfrage verwendet `/?!` und `ACK 000`. Für Hardware mit unbekannter
+RX-Belegung steht eine geschützte GPIO-/Baudraten-Diagnose zur Verfügung; ein
+Eingang wird erst nach einem frischen, gültigen Telegramm bestätigt.
 
 ## Erster Zugang – Standardpasswort
 
@@ -89,9 +98,11 @@ Siehe [INSTALLATION.md](INSTALLATION.md). Vor jedem Flashvorgang vollständige G
 
 ## Projektstatus
 
-Das Projekt befindet sich in der **Beta-Phase**. Rückmeldungen zu unterschiedlichen Stromzählern, SML-/OBIS-Varianten und lokalen Integrationen sind willkommen.
+Version **1.3.0 ist die erste stabile Veröffentlichung** ohne Beta-Kennzeichnung.
+Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
 
-Eine LAN-/PoE-Hardwarevariante ist als mögliche zukünftige Erweiterung vorgesehen. Die aktuelle ESP32-C3-Plattform besitzt keinen nativen Ethernet-MAC; eine solche Variante benötigt daher zusätzliche Ethernet-Hardware, beispielsweise einen W5500 über SPI.
+Die Universal-Firmware enthält bereits W5500-LAN mit WLAN-Fallback. Die
+LAN-/PoE-Platine ist noch nicht auf echter Hardware validiert.
 
 ## Lizenz
 
@@ -119,7 +130,7 @@ It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/Ope
 
 ### Features
 
-- **fully local SML/OBIS processing** without cloud dependency
+- **fully local SML/OBIS and IEC 62056-21/D0 processing** without cloud dependency
 - live total power, grid import/export and available L1/L2/L3 readings
 - **read-only Shelly EM and Shelly Pro EM compatible endpoints** for easier integration with existing systems
 - **Home Assistant MQTT Discovery**
@@ -128,11 +139,17 @@ It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/Ope
 - voltage and current kept in RAM only, never in history
 - interactive mouse and touch charts
 - up to three Wi-Fi networks; automatic time-limited setup hotspot fallback
+- one universal firmware for Wi-Fi and optional W5500 Ethernet; Ethernet is
+  preferred while linked and Wi-Fi remains connected as automatic fallback
 - signed manual Wi-Fi updates plus secure GitHub checks and optional automatic installation
 - settings/history backup, guided self-test and diagnostics
 - protected GPIO/baud-rate diagnostics for different hardware variants
 - browser-local colors and German/English language selection
-- Eco mode, adaptive Wi-Fi transmit power and optional interfaces that can be disabled
+- Eco mode, adaptive Wi-Fi transmit power and automatic performance boosts for
+  association, updates, exports and tests
+- automatic UART/parser recovery when meter data stops
+- separate factory-test build with PASS/FAIL checks for the custom LAN/PoE board
+- production build contains read-only battery and smart-home interfaces only
 
 ### Interfaces and integration
 
@@ -153,7 +170,10 @@ See [INTERFACES.md](INTERFACES.md) for the actual URLs and API endpoints.
 
 Available readings depend on the connected electricity meter and the OBIS values it exposes. L1/L2/L3, voltage and current can only be provided when the meter actually transmits those values through its optical interface.
 
-Support for different, including older, electricity meters is being improved. A protected GPIO/baud-rate diagnostic is available for hardware with an unknown RX pin; an input is accepted only after receiving a fresh, CRC-valid SML telegram.
+In addition to SML, the firmware supports passive and active IEC 62056-21/D0
+meters. Active polling uses `/?!` and `ACK 000`. A protected GPIO/baud-rate
+diagnostic is available for hardware with an unknown RX pin; an input is only
+accepted after a fresh, valid telegram.
 
 ### First access – default password
 
@@ -187,10 +207,16 @@ See [INSTALLATION.md](INSTALLATION.md). Before flashing, back up the complete de
 
 ### Project status
 
-The project is currently **beta software**. Feedback about different electricity meters, SML/OBIS variants and local integrations is welcome.
+Version **1.3.0 is the first stable release** without a beta suffix. Feedback
+about different electricity meters and local integrations is welcome.
 
-A LAN/PoE hardware variant is being considered as a future extension. The current ESP32-C3 platform has no native Ethernet MAC, so such a variant requires additional Ethernet hardware such as a W5500 connected over SPI.
+The universal firmware already contains W5500 Ethernet with Wi-Fi fallback.
+The Ethernet/PoE board has not yet been validated on real hardware.
 
 ### License
 
 Copyright © 2026 Michael Roßmann. Licensed under PolyForm Noncommercial 1.0.0. Private and other noncommercial use is permitted under the license; commercial use is not permitted. See the authoritative [license](LICENSE.md), [authorship notice](AUTHORS.md), [rights review](RIGHTS_REVIEW.md), and [trademark notice](TRADEMARKS.md).
+
+---
+
+<small>Hinweis / Note: Die LAN-Unterstützung wurde noch nicht an echter Hardware getestet. / Ethernet support has not yet been tested on real hardware.</small>

@@ -1,5 +1,51 @@
 # Änderungsprotokoll / Changelog
 
+## 1.3.0 — 2026-08-30
+
+### Deutsch
+
+- Erste stabile Veröffentlichung ohne Beta-Kennzeichnung.
+- Eine Universal-Firmware unterstützt die bestehende WLAN-Hardware und optional
+  einen W5500 über SPI; bei LAN-Ausfall bleibt WLAN als Rückfallweg aktiv.
+- Ältere Stromzähler werden zusätzlich über passives und aktives
+  IEC 62056-21/D0 unterstützt. Die aktive Abfrage verwendet `/?!` und `ACK 000`.
+- Bleiben gültige Zählertelegramme aus, werden UART und Parser kontrolliert neu
+  initialisiert, ohne den ESP32 neu zu starten.
+- Jeder veröffentlichte Messwert enthält sein Alter, damit Empfänger veraltete
+  Daten sicher erkennen können.
+- Ein separater Werksprüfungs-Build prüft ESP32-C3, Flash, RAM, Historie, WLAN,
+  W5500/LAN, IR-Loopback, Status-LED und die bestätigte PoE-Versorgung.
+- Eco-Modus gehärtet: WLAN-Aufbau, LAN-Fallback, Firmwareupdate, GPIO-Suche,
+  Export/Import und Werksprüfung erhalten automatisch einen zeitlich begrenzten
+  160-MHz-Boost; normaler Messbetrieb bleibt bei 80 MHz.
+- Nicht benötigte schreibende Energieverwaltung vollständig entfernt;
+  IR-Sniffer und IR-Bridge verbleiben ausschließlich im Entwickler-Build.
+- Weboberfläche, Assets und Navigation komprimiert und konsolidiert; Diagnose
+  befindet sich unter Wartung, JSON unter Einstellungen.
+- Release-Build und Werksprüfungs-Build werden in CI getrennt geprüft.
+
+### English
+
+- First stable release without a beta suffix.
+- One universal firmware supports the existing Wi-Fi hardware and an optional
+  SPI W5500; Wi-Fi remains available as fallback when Ethernet fails.
+- Legacy electricity meters are additionally supported through passive and
+  active IEC 62056-21/D0. Active polling uses `/?!` and `ACK 000`.
+- UART and parser are reinitialized in a controlled manner when valid meter
+  telegrams stop, without rebooting the ESP32.
+- Every published measurement includes its age so consumers can reject stale
+  data safely.
+- A separate factory-test build verifies ESP32-C3, flash, RAM, history, Wi-Fi,
+  W5500/Ethernet, IR loopback, status LED and confirmed PoE-only operation.
+- Hardened Eco mode: Wi-Fi association, Ethernet fallback, firmware updates,
+  GPIO scans, import/export and factory testing automatically receive a timed
+  160 MHz boost; normal metering remains at 80 MHz.
+- Removed obsolete writable energy management completely; the IR sniffer and
+  writable IR bridge remain exclusive to the developer build.
+- Compressed and consolidated the web UI, assets and navigation; diagnostics
+  now lives under Maintenance and JSON under Settings.
+- CI verifies the release and factory-test builds separately.
+
 ## 1.0.2-beta.1 — 2026-08-09
 
 ### Deutsch

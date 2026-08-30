@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   firmware:
     name: Firmware prüfen / Verify firmware
@@ -19,5 +22,9 @@ jobs:
         run: pip install platformio cryptography
       - name: Tests ausführen / Run tests
         run: python -m unittest discover -s tests -p "test_*.py"
-      - name: Firmware bauen / Build firmware
-        run: platformio run
+      - name: Universal-Firmware bauen / Build universal firmware
+        run: platformio run -e solakon_tracker_offline
+      - name: Werksprüfung bauen / Build factory test
+        run: platformio run -e solakon_tracker_factory
+      - name: Entwicklerprofil bauen / Build developer profile
+        run: platformio run -e solakon_tracker_developer

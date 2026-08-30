@@ -1,0 +1,4 @@
+# Disable core dumps to prevent any core dump writing to the coredump partition
+# These defaults will be applied by ESP-IDF/PlatformIO when generating sdkconfig
+CONFIG_ESP_COREDUMP_ENABLE=n
+CONFIG_ESP_COREDUMP_TO_FLASH=n

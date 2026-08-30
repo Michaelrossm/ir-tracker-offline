@@ -1,11 +1,13 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <DNSServer.h>
-#include <ESPmDNS.h>
+#include <LittleFS.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <WebServer.h>
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
 #include <WebSocketsServer.h>
+#endif
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -27,15 +29,23 @@
 #include <vector>
 
 #include "HistoryStore.h"
-#include "EnergyManager.h"
+#include "HardwareProfile.h"
+#include "EthernetManager.h"
+#include "LegacyMeterParser.h"
 #include "EventLog.h"
 #include "FirmwareSigningPublicKey.h"
+#if IR_TRACKER_ENABLE_GITHUB_UPDATE
 #include "GithubRootCertificates.h"
+#endif
 #include "WebAssets.h"
+
+#if IR_TRACKER_ENABLE_MDNS
+#include <ESPmDNS.h>
+#endif
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.0.2-beta.1";
+constexpr char kFirmwareVersion[] = "1.3.0";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -67,17 +77,38 @@ constexpr uint8_t kSmlStart[] = {0x1b, 0x1b, 0x1b, 0x1b, 0x01, 0x01, 0x01, 0x01}
 constexpr uint8_t kSmlEnd[] = {0x1b, 0x1b, 0x1b, 0x1b, 0x1a};
 
 WebServer server(80);
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
 WebSocketsServer snifferSocket(81);
 WebSocketsServer bridgeSocket(82);
+#endif
 DNSServer dns;
 Preferences prefs;
 HardwareSerial meterSerial(1);
 WiFiClient mqttNetwork;
 PubSubClient mqtt(mqttNetwork);
 HistoryStore history;
-EnergyManager energyManager;
-EnergyManager::Config energyConfig;
 EventLog eventLog;
+EthernetManager ethernet;
+LegacyMeterParser legacyMeterParser;
+uint32_t legacyChecksumErrorsSeen = 0;
+uint32_t meterReinitializations = 0;
+uint32_t lastMeterRecoveryMs = 0;
+
+enum class MeterProtocol : uint8_t {
+  Auto = 0,
+  Sml = 1,
+  Iec62056 = 2,
+  Iec62056Active = 3,
+};
+
+const char *meterProtocolName(MeterProtocol protocol) {
+  switch (protocol) {
+    case MeterProtocol::Sml: return "sml";
+    case MeterProtocol::Iec62056: return "iec62056-21";
+    case MeterProtocol::Iec62056Active: return "iec62056-21-active";
+    default: return "auto";
+  }
+}
 
 struct Config {
   String ssid[kWifiSlots];
@@ -88,14 +119,17 @@ struct Config {
   int8_t ledPin = 5;
   bool ledInverted = true;
   uint32_t baud = kDefaultBaud;
+  MeterProtocol meterProtocol = MeterProtocol::Auto;
   String mqttHost;
   uint16_t mqttPort = 1883;
   String mqttUser;
   String mqttPassword;
   bool homeAssistantDiscovery = true;
   uint8_t apiAccess = 0;  // DE: 0=lokal offen, 1=Admin, 2=aus | EN: 0=local public, 1=admin, 2=off
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
   bool snifferEnabled = false;
   bool bridgeEnabled = false;
+#endif
   String meterPin;
   bool autoPin = false;
   bool pinInverted = false;
@@ -104,7 +138,7 @@ struct Config {
   String adminPassword;
   String timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
   uint16_t setupApMinutes = 15;
-  bool persistEventLog = false;
+  bool persistEventLog = false; // DEFAULT: keep EventLog in RAM only (do not persist to flash)
   bool ecoMode = true;
   bool ecoLedOff = true;
   bool adaptiveWifiPower = true;
@@ -124,7 +158,15 @@ struct MeterValues {
   uint32_t parseErrors = 0;
   uint32_t crcErrors = 0;
   uint32_t lastTelegramMs = 0;
+  uint32_t powerUpdatedMs = 0;
+  uint32_t importUpdatedMs = 0;
+  uint32_t exportUpdatedMs = 0;
+  uint32_t phasePowerUpdatedMs[3] = {};
+  uint32_t phaseVoltageUpdatedMs[3] = {};
+  uint32_t phaseCurrentUpdatedMs[3] = {};
   bool lastCrcValid = false;
+  bool lastIntegrityPresent = false;
+  MeterProtocol detectedProtocol = MeterProtocol::Auto;
 } meter;
 
 std::vector<uint8_t> telegram;
@@ -135,7 +177,9 @@ uint8_t smlTrailerRemaining = 0;
 bool accessPointMode = false;
 uint32_t accessPointStartedMs = 0;
 bool accessPointAllowed = true;
+#if IR_TRACKER_ENABLE_MDNS
 bool mdnsRunning = false;
+#endif
 uint32_t lastWifiAttemptMs = 0;
 uint32_t lastMqttAttemptMs = 0;
 uint32_t mqttRetryMs = 10000;
@@ -171,6 +215,24 @@ uint32_t wifiModeErrors = 0;
 bool wifiTxPowerRuntimeFault = false;
 bool wifiMinModemSleepActive = false;
 
+bool wifiConnected() { return WiFi.status() == WL_CONNECTED; }
+
+bool networkConnected() { return ethernet.connected() || wifiConnected(); }
+
+String primaryNetworkIp() {
+  if (ethernet.connected()) return ethernet.localIP().toString();
+  if (wifiConnected()) return WiFi.localIP().toString();
+  if (accessPointMode) return WiFi.softAPIP().toString();
+  return "0.0.0.0";
+}
+
+const char *primaryTransportName() {
+  if (ethernet.connected()) return "ethernet";
+  if (wifiConnected()) return "wifi";
+  if (accessPointMode) return "setup_ap";
+  return "offline";
+}
+
 struct GithubUpdateState {
   bool checking = false;
   bool installing = false;
@@ -194,7 +256,7 @@ struct GpioScanState {
   bool complete = false;
   bool found = false;
   uint8_t pins[11] = {};
-  uint32_t bauds[5] = {};
+  uint32_t bauds[10] = {};
   uint8_t pinCount = 0;
   uint8_t baudCount = 0;
   uint8_t pinIndex = 0;
@@ -210,7 +272,34 @@ struct GpioScanState {
   String error;
 } gpioScan;
 
+struct ActiveD0State {
+  bool active = false;
+  bool acknowledgementSent = false;
+  uint32_t startedMs = 0;
+  uint32_t lastAttemptMs = 0;
+} activeD0;
+
+#if IR_TRACKER_ENABLE_FACTORY_TEST
+struct FactoryTestState {
+  bool running = false;
+  bool finished = false;
+  bool loopbackPassed = false;
+  bool ledConfirmed = false;
+  bool poeConfirmed = false;
+  uint8_t matched = 0;
+  uint32_t startedMs = 0;
+} factoryTest;
+
+constexpr uint8_t kFactoryLoopbackPattern[] = {
+    'I', 'R', 'F', 'C', 'T', '-', '1', 0x55, 0x2a};
+constexpr uint32_t kFactoryLoopbackTimeoutMs = 5000;
+#endif
+
 constexpr uint32_t kGpioScanWindowMs = 2200;
+constexpr uint32_t kActiveD0InitialDelayMs = 45UL * 1000UL;
+constexpr uint32_t kActiveD0RetryMs = 30UL * 1000UL;
+constexpr uint32_t kActiveD0TimeoutMs = 6000;
+constexpr uint32_t kMeterRecoveryMs = 45UL * 1000UL;
 
 const char *wifiTxProfileName() {
   switch (wifiTxProfile) {
@@ -286,10 +375,9 @@ void manageAdaptiveWifiPower() {
 }
 
 bool trackerFaultActive() {
-  const bool meterFresh =
-      meter.lastTelegramMs &&
-      millis() - meter.lastTelegramMs < kReadingStaleMs;
-  return !meterFresh || WiFi.status() != WL_CONNECTED || !history.ready() ||
+  const bool meterFresh = meter.powerUpdatedMs &&
+                          millis() - meter.powerUpdatedMs < kReadingStaleMs;
+  return !meterFresh || !networkConnected() || !history.ready() ||
          heapWarningActive || cpuEcoRuntimeFault ||
          (meter.telegrams && !meter.lastCrcValid);
 }
@@ -430,6 +518,33 @@ String htmlEscape(String value) {
   value.replace("<", "&lt;");
   value.replace(">", "&gt;");
   return value;
+}
+
+bool tryServeDebugAsset(const char *relativePath, const char *mimeType,
+                        const uint8_t *fallback, size_t fallbackSize) {
+  const String debugPath = String("/coredump") + relativePath;
+  if (LittleFS.exists(debugPath)) {
+    File file = LittleFS.open(debugPath, "r");
+    if (file) {
+      server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+      server.sendHeader("X-Content-Type-Options", "nosniff");
+      server.streamFile(file, mimeType);
+      file.close();
+      return true;
+    }
+  }
+  server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+  server.sendHeader("X-Content-Type-Options", "nosniff");
+  if (strcmp(mimeType, "text/css; charset=utf-8") == 0) {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.send_P(200, PSTR("text/css; charset=utf-8"),
+                  reinterpret_cast<PGM_P>(fallback), fallbackSize);
+    return true;
+  }
+  server.sendHeader("Content-Encoding", "gzip");
+  server.send_P(200, PSTR("application/javascript; charset=utf-8"),
+                reinterpret_cast<PGM_P>(fallback), fallbackSize);
+  return true;
 }
 
 bool safeSingleLine(const String &value, size_t maximumLength) {
@@ -674,6 +789,30 @@ String numberOrNull(double value, uint8_t decimals = 3) {
   return std::isfinite(value) ? String(value, static_cast<unsigned int>(decimals)) : "null";
 }
 
+uint32_t valueAgeSeconds(uint32_t updatedMs) {
+  return updatedMs ? (millis() - updatedMs) / 1000U : UINT32_MAX;
+}
+
+String ageOrNull(uint32_t updatedMs) {
+  return updatedMs ? String(valueAgeSeconds(updatedMs)) : "null";
+}
+
+bool valueFresh(uint32_t updatedMs) {
+  return updatedMs && millis() - updatedMs < kReadingStaleMs;
+}
+
+uint32_t meterSerialMode() {
+  return config.meterProtocol == MeterProtocol::Iec62056 ||
+                 config.meterProtocol == MeterProtocol::Iec62056Active
+             ? SERIAL_7E1
+             : SERIAL_8N1;
+}
+
+uint32_t meterBaud() {
+  return config.meterProtocol == MeterProtocol::Iec62056Active ? 300U
+                                                               : config.baud;
+}
+
 String resetReasonText(esp_reset_reason_t reason) {
   switch (reason) {
     case ESP_RST_POWERON: return "power_on";
@@ -702,6 +841,19 @@ void createCsrfToken() {
   memset(randomBytes, 0, sizeof(randomBytes));
 }
 
+bool trackerGpioAvailable(const int pin) {
+  return HardwareProfile::trackerGpioAvailable(
+      pin, ethernet.hardwareDetected());
+}
+
+void normalizeHardwarePins() {
+  if (!trackerGpioAvailable(config.rxPin)) config.rxPin = kDefaultRxPin;
+  if (config.txPin >= 0 && !trackerGpioAvailable(config.txPin))
+    config.txPin = kDefaultTxPin;
+  if (config.ledPin >= 0 && !trackerGpioAvailable(config.ledPin))
+    config.ledPin = 5;
+}
+
 void loadConfig() {
   prefs.begin("offline", true);
   for (uint8_t i = 0; i < kWifiSlots; ++i) {
@@ -719,14 +871,18 @@ void loadConfig() {
   config.ledPin = prefs.getChar("led_pin", 5);
   config.ledInverted = prefs.getBool("led_inv", true);
   config.baud = prefs.getULong("baud", kDefaultBaud);
+  config.meterProtocol = static_cast<MeterProtocol>(
+      prefs.getUChar("meter_proto", static_cast<uint8_t>(MeterProtocol::Auto)));
   config.mqttHost = prefs.getString("mqtt_host", "");
   config.mqttPort = prefs.getUShort("mqtt_port", 1883);
   config.mqttUser = prefs.getString("mqtt_user", "");
   config.mqttPassword = prefs.getString("mqtt_pass", "");
   config.homeAssistantDiscovery = prefs.getBool("ha_disc", true);
   config.apiAccess = prefs.getUChar("api_access", 0);
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
   config.snifferEnabled = prefs.getBool("sniffer", false);
   config.bridgeEnabled = prefs.getBool("bridge", false);
+#endif
   config.meterPin = prefs.getString("meter_pin", "");
   config.autoPin = prefs.getBool("auto_pin", false);
   config.pinInverted = prefs.getBool("pin_inv", false);
@@ -742,36 +898,14 @@ void loadConfig() {
   config.adaptiveWifiPower = prefs.getBool("wifi_power_auto", true);
   config.githubUpdateCheck = prefs.getBool("gh_check", true);
   config.githubAutoInstall = prefs.getBool("gh_auto", false);
-  energyConfig.driver = static_cast<EnergyManager::Driver>(
-      prefs.getUChar("em_drv", 0));
-  energyConfig.enabled = prefs.getBool("em_enable", false);
-  energyConfig.dryRun = prefs.getBool("em_dry", true);
-  energyConfig.inverted = prefs.getBool("em_inv", false);
-  energyConfig.host = prefs.getString("em_host", "");
-  energyConfig.port = prefs.getUShort("em_port", 502);
-  energyConfig.unitId = prefs.getUChar("em_unit", 1);
-  energyConfig.powerRegister = prefs.getUShort("em_reg", 0);
-  energyConfig.registerWidth = prefs.getUChar("em_width", 1);
-  energyConfig.wordSwap = prefs.getBool("em_swap", false);
-  energyConfig.registerScale = prefs.getFloat("em_scale", 1.0f);
-  energyConfig.mqttTopic = prefs.getString("em_topic", "");
-  energyConfig.mqttPayload = prefs.getString("em_mqpay", "{power}");
-  energyConfig.httpPath = prefs.getString("em_path", "/api/power");
-  energyConfig.httpMethod = prefs.getString("em_method", "POST");
-  energyConfig.httpPayload = prefs.getString(
-      "em_httppay", "{\"setpoint_w\":{power},\"grid_w\":{grid}}");
-  energyConfig.httpBearerToken = prefs.getString("em_token", "");
-  energyConfig.targetGridW = prefs.getShort("em_target", 0);
-  energyConfig.deadbandW = prefs.getUShort("em_dead", 30);
-  energyConfig.maxChargeW = prefs.getUShort("em_charge", 800);
-  energyConfig.maxDischargeW = prefs.getUShort("em_discharge", 800);
-  energyConfig.rampWPerSecond = prefs.getUShort("em_ramp", 200);
-  energyConfig.intervalMs = prefs.getUShort("em_interval", 2000);
-  energyConfig.staleMs = prefs.getUShort("em_stale", 10000);
   prefs.end();
   if (config.rxPin > 10) config.rxPin = kDefaultRxPin;
   if (config.txPin > 10) config.txPin = -1;
   if (config.ledPin > 10) config.ledPin = -1;
+  normalizeHardwarePins();
+  if (static_cast<uint8_t>(config.meterProtocol) >
+      static_cast<uint8_t>(MeterProtocol::Iec62056Active))
+    config.meterProtocol = MeterProtocol::Auto;
   if (config.baud < 300 || config.baud > 115200) config.baud = kDefaultBaud;
   if (config.meterPin.length() != 4) {
     config.meterPin = "";
@@ -789,22 +923,6 @@ void loadConfig() {
     config.adminPassword = "";
   if (!config.timezone.length() || config.timezone.length() > 80)
     config.timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
-  if (static_cast<uint8_t>(energyConfig.driver) >
-      static_cast<uint8_t>(EnergyManager::Driver::Http)) {
-    energyConfig.driver = EnergyManager::Driver::Disabled;
-  }
-  energyConfig.registerWidth =
-      energyConfig.registerWidth == 2 ? 2 : 1;
-  energyConfig.intervalMs = constrain(energyConfig.intervalMs, 1000, 30000);
-  energyConfig.staleMs = constrain(energyConfig.staleMs, 3000, 60000);
-  energyConfig.deadbandW = constrain(energyConfig.deadbandW, 0, 500);
-  // DE: Version 1.x ist nur ein Zähler; niemals Stellbefehle wiederherstellen
-  // oder ausführen. | EN: Version 1.x is a read-only meter; never restore or
-  // execute actuator writes.
-  energyConfig.enabled = false;
-  energyConfig.dryRun = true;
-  energyConfig.driver = EnergyManager::Driver::Disabled;
-  energyManager.configure(energyConfig);
 }
 
 void saveConfig() {
@@ -819,14 +937,17 @@ void saveConfig() {
   prefs.putChar("led_pin", config.ledPin);
   prefs.putBool("led_inv", config.ledInverted);
   prefs.putULong("baud", config.baud);
+  prefs.putUChar("meter_proto", static_cast<uint8_t>(config.meterProtocol));
   prefs.putString("mqtt_host", config.mqttHost);
   prefs.putUShort("mqtt_port", config.mqttPort);
   prefs.putString("mqtt_user", config.mqttUser);
   prefs.putString("mqtt_pass", config.mqttPassword);
   prefs.putBool("ha_disc", config.homeAssistantDiscovery);
   prefs.putUChar("api_access", config.apiAccess);
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
   prefs.putBool("sniffer", config.snifferEnabled);
   prefs.putBool("bridge", config.bridgeEnabled);
+#endif
   prefs.putString("meter_pin", config.meterPin);
   prefs.putBool("auto_pin", config.autoPin);
   prefs.putBool("pin_inv", config.pinInverted);
@@ -841,30 +962,6 @@ void saveConfig() {
   prefs.putBool("wifi_power_auto", config.adaptiveWifiPower);
   prefs.putBool("gh_check", config.githubUpdateCheck);
   prefs.putBool("gh_auto", config.githubAutoInstall);
-  prefs.putUChar("em_drv", static_cast<uint8_t>(energyConfig.driver));
-  prefs.putBool("em_enable", energyConfig.enabled);
-  prefs.putBool("em_dry", energyConfig.dryRun);
-  prefs.putBool("em_inv", energyConfig.inverted);
-  prefs.putString("em_host", energyConfig.host);
-  prefs.putUShort("em_port", energyConfig.port);
-  prefs.putUChar("em_unit", energyConfig.unitId);
-  prefs.putUShort("em_reg", energyConfig.powerRegister);
-  prefs.putUChar("em_width", energyConfig.registerWidth);
-  prefs.putBool("em_swap", energyConfig.wordSwap);
-  prefs.putFloat("em_scale", energyConfig.registerScale);
-  prefs.putString("em_topic", energyConfig.mqttTopic);
-  prefs.putString("em_mqpay", energyConfig.mqttPayload);
-  prefs.putString("em_path", energyConfig.httpPath);
-  prefs.putString("em_method", energyConfig.httpMethod);
-  prefs.putString("em_httppay", energyConfig.httpPayload);
-  prefs.putString("em_token", energyConfig.httpBearerToken);
-  prefs.putShort("em_target", energyConfig.targetGridW);
-  prefs.putUShort("em_dead", energyConfig.deadbandW);
-  prefs.putUShort("em_charge", energyConfig.maxChargeW);
-  prefs.putUShort("em_discharge", energyConfig.maxDischargeW);
-  prefs.putUShort("em_ramp", energyConfig.rampWPerSecond);
-  prefs.putUShort("em_interval", energyConfig.intervalMs);
-  prefs.putUShort("em_stale", energyConfig.staleMs);
   prefs.end();
 }
 
@@ -875,24 +972,22 @@ String nav() {
            "<button id='langToggle' class='theme-toggle' "
            "type='button' aria-label='Sprache wechseln'>English</button>"
            "<button id='themeToggle' class='theme-toggle' "
-           "type='button' aria-expanded='false' aria-controls='themePanel'>Farben</button></nav>"
-           "<aside id='themePanel' class='theme-panel' hidden aria-label='Farbschema anpassen'>"
-           "<div class='theme-head'><strong>Farbschema</strong><button id='themeClose' class='secondary' type='button' aria-label='Schließen'>×</button></div>"
-           "<p class='muted'>Farben werden sofort und ausschließlich in diesem Browser gespeichert.</p>"
-           "<div class='theme-grid'>"
-           "<label>Hintergrund<input type='color' data-theme-var='--bg'></label>"
-           "<label>Karten<input type='color' data-theme-var='--card'></label>"
-           "</div><button id='themeReset' class='secondary' type='button'>Standardfarben wiederherstellen</button>"
-           "</aside>");
+           "type='button' title='Farbschema wechseln'>Farben</button></nav>");
 }
 
-String maintenanceTabs(const bool diagnostics) {
-  return String(F("<div class='subnav' aria-label='Wartungsbereiche'>"
+String maintenanceTabs(const bool diagnostics, const bool factory = false) {
+  String tabs = String(F("<div class='subnav' aria-label='Wartungsbereiche'>"
                   "<a href='/maintenance'")) +
-         (diagnostics ? "" : " class='active'") +
+         (diagnostics || factory ? "" : " class='active'") +
          F(">Backup &amp; System</a><a href='/maintenance/diagnostics'") +
-         (diagnostics ? " class='active'" : "") +
-         F(">Diagnose &amp; Zähler</a></div>");
+         (diagnostics && !factory ? " class='active'" : "") +
+         F(">Diagnose &amp; Zähler</a>");
+#if IR_TRACKER_ENABLE_FACTORY_TEST
+  tabs += String(F("<a href='/maintenance/factory-test'")) +
+          (factory ? " class='active'" : "") + F(">Werksprüfung</a>");
+#endif
+  tabs += "</div>";
+  return tabs;
 }
 
 String page(const String &title, const String &body,
@@ -1020,14 +1115,95 @@ uint16_t smlCrc16(const uint8_t *data, size_t length) {
   return crc ^ 0xffff;
 }
 
+bool commitMeterCandidate(MeterValues &candidate, MeterProtocol protocol,
+                          bool integrityPresent, bool integrityValid) {
+  if (!std::isfinite(candidate.powerW) &&
+      std::isfinite(candidate.phasePowerW[0]) &&
+      std::isfinite(candidate.phasePowerW[1]) &&
+      std::isfinite(candidate.phasePowerW[2])) {
+    candidate.powerW = candidate.phasePowerW[0] +
+                       candidate.phasePowerW[1] +
+                       candidate.phasePowerW[2];
+  }
+  const auto plausible = [](double value, double minimum, double maximum) {
+    return !std::isfinite(value) || (value >= minimum && value <= maximum);
+  };
+  bool found = std::isfinite(candidate.powerW) ||
+               std::isfinite(candidate.importKwh) ||
+               std::isfinite(candidate.exportKwh);
+  bool plausibleValues =
+      plausible(candidate.powerW, -100000.0, 100000.0) &&
+      plausible(candidate.importKwh, 0.0, 1.0e9) &&
+      plausible(candidate.exportKwh, 0.0, 1.0e9);
+  for (uint8_t phase = 0; phase < 3; ++phase) {
+    found |= std::isfinite(candidate.phasePowerW[phase]) ||
+             std::isfinite(candidate.phaseVoltageV[phase]) ||
+             std::isfinite(candidate.phaseCurrentA[phase]);
+    plausibleValues &=
+        plausible(candidate.phasePowerW[phase], -100000.0, 100000.0) &&
+        plausible(candidate.phaseVoltageV[phase], 0.0, 500.0) &&
+        plausible(candidate.phaseCurrentA[phase], 0.0, 200.0);
+  }
+  if (!found || !plausibleValues || !integrityValid) {
+    ++meter.parseErrors;
+    return false;
+  }
+
+  const bool firstValidTelegram = meter.lastTelegramMs == 0;
+  const uint32_t now = millis();
+  auto commit = [&](double value, double &target, uint32_t &updatedMs) {
+    if (!std::isfinite(value)) return;
+    target = value;
+    updatedMs = now;
+  };
+  commit(candidate.powerW, meter.powerW, meter.powerUpdatedMs);
+  commit(candidate.importKwh, meter.importKwh, meter.importUpdatedMs);
+  commit(candidate.exportKwh, meter.exportKwh, meter.exportUpdatedMs);
+  for (uint8_t phase = 0; phase < 3; ++phase) {
+    commit(candidate.phasePowerW[phase], meter.phasePowerW[phase],
+           meter.phasePowerUpdatedMs[phase]);
+    commit(candidate.phaseVoltageV[phase], meter.phaseVoltageV[phase],
+           meter.phaseVoltageUpdatedMs[phase]);
+    commit(candidate.phaseCurrentA[phase], meter.phaseCurrentA[phase],
+           meter.phaseCurrentUpdatedMs[phase]);
+  }
+  ++meter.telegrams;
+  meter.lastCrcValid = integrityValid;
+  meter.lastIntegrityPresent = integrityPresent;
+  meter.detectedProtocol = protocol;
+  meter.lastTelegramMs = now;
+  if (firstValidTelegram) {
+    eventLog.add("INFO", "METER_FIRST",
+                 "Erstes gueltiges Zaehlertelegramm empfangen (" +
+                     String(meterProtocolName(protocol)) + ")");
+  }
+  return true;
+}
+
 void parseTelegram() {
   const uint8_t powerObis[] = {0x01, 0x00, 0x10, 0x07, 0x00, 0xff};
+  const uint8_t importPowerObis[] = {0x01, 0x00, 0x01, 0x07, 0x00, 0xff};
+  const uint8_t exportPowerObis[] = {0x01, 0x00, 0x02, 0x07, 0x00, 0xff};
   const uint8_t importObis[] = {0x01, 0x00, 0x01, 0x08, 0x00, 0xff};
   const uint8_t exportObis[] = {0x01, 0x00, 0x02, 0x08, 0x00, 0xff};
+  const uint8_t importTariffObis[2][6] = {
+      {0x01, 0x00, 0x01, 0x08, 0x01, 0xff},
+      {0x01, 0x00, 0x01, 0x08, 0x02, 0xff}};
+  const uint8_t exportTariffObis[2][6] = {
+      {0x01, 0x00, 0x02, 0x08, 0x01, 0xff},
+      {0x01, 0x00, 0x02, 0x08, 0x02, 0xff}};
   const uint8_t phasePowerObis[3][6] = {
       {0x01, 0x00, 0x24, 0x07, 0x00, 0xff},
       {0x01, 0x00, 0x38, 0x07, 0x00, 0xff},
       {0x01, 0x00, 0x4c, 0x07, 0x00, 0xff}};
+  const uint8_t phaseImportPowerObis[3][6] = {
+      {0x01, 0x00, 0x15, 0x07, 0x00, 0xff},
+      {0x01, 0x00, 0x29, 0x07, 0x00, 0xff},
+      {0x01, 0x00, 0x3d, 0x07, 0x00, 0xff}};
+  const uint8_t phaseExportPowerObis[3][6] = {
+      {0x01, 0x00, 0x16, 0x07, 0x00, 0xff},
+      {0x01, 0x00, 0x2a, 0x07, 0x00, 0xff},
+      {0x01, 0x00, 0x3e, 0x07, 0x00, 0xff}};
   const uint8_t phaseVoltageObis[3][6] = {
       {0x01, 0x00, 0x20, 0x07, 0x00, 0xff},
       {0x01, 0x00, 0x34, 0x07, 0x00, 0xff},
@@ -1036,9 +1212,7 @@ void parseTelegram() {
       {0x01, 0x00, 0x1f, 0x07, 0x00, 0xff},
       {0x01, 0x00, 0x33, 0x07, 0x00, 0xff},
       {0x01, 0x00, 0x47, 0x07, 0x00, 0xff}};
-  const bool firstValidTelegram = meter.lastTelegramMs == 0;
   lastTelegram = telegram;
-  ++meter.telegrams;
   meter.lastCrcValid = false;
   if (telegram.size() < 12) {
     ++meter.parseErrors;
@@ -1059,6 +1233,17 @@ void parseTelegram() {
   MeterValues candidate;
   bool found = false;
   found |= extractObis(powerObis, candidate.powerW);
+  if (!std::isfinite(candidate.powerW)) {
+    double importPowerW = NAN;
+    double exportPowerW = NAN;
+    const bool hasImportPower = extractObis(importPowerObis, importPowerW);
+    const bool hasExportPower = extractObis(exportPowerObis, exportPowerW);
+    if (hasImportPower || hasExportPower) {
+      candidate.powerW = (hasImportPower ? importPowerW : 0.0) -
+                         (hasExportPower ? exportPowerW : 0.0);
+      found = true;
+    }
+  }
   double importWh = NAN;
   double exportWh = NAN;
   if (extractObis(importObis, importWh)) {
@@ -1069,64 +1254,79 @@ void parseTelegram() {
     candidate.exportKwh = exportWh / 1000.0;
     found = true;
   }
+  auto extractTariffTotal = [&](const uint8_t codes[2][6], double &target) {
+    if (std::isfinite(target)) return false;
+    double tariffs[2] = {NAN, NAN};
+    const bool first = extractObis(codes[0], tariffs[0]);
+    const bool second = extractObis(codes[1], tariffs[1]);
+    if (!first && !second) return false;
+    target = ((first ? tariffs[0] : 0.0) +
+              (second ? tariffs[1] : 0.0)) /
+             1000.0;
+    return true;
+  };
+  found |= extractTariffTotal(importTariffObis, candidate.importKwh);
+  found |= extractTariffTotal(exportTariffObis, candidate.exportKwh);
   for (uint8_t phase = 0; phase < 3; ++phase) {
-    found |= extractObis(phasePowerObis[phase],
-                         candidate.phasePowerW[phase]);
+    const bool netPhasePower = extractObis(
+        phasePowerObis[phase], candidate.phasePowerW[phase]);
+    found |= netPhasePower;
+    if (!netPhasePower) {
+      double phaseImportW = NAN;
+      double phaseExportW = NAN;
+      const bool hasImport = extractObis(phaseImportPowerObis[phase], phaseImportW);
+      const bool hasExport = extractObis(phaseExportPowerObis[phase], phaseExportW);
+      if (hasImport || hasExport) {
+        candidate.phasePowerW[phase] =
+            (hasImport ? phaseImportW : 0.0) -
+            (hasExport ? phaseExportW : 0.0);
+        found = true;
+      }
+    }
     found |= extractObis(phaseVoltageObis[phase],
                          candidate.phaseVoltageV[phase]);
     found |= extractObis(phaseCurrentObis[phase],
                          candidate.phaseCurrentA[phase]);
   }
-  if (std::isfinite(candidate.phasePowerW[0]) &&
-      std::isfinite(candidate.phasePowerW[1]) &&
-      std::isfinite(candidate.phasePowerW[2])) {
-    // DE: Die saldierte Summe folgt den vorzeichenbehafteten Phasenleistungen. | EN: The net total follows signed phase powers.
-    candidate.powerW = candidate.phasePowerW[0] +
-                       candidate.phasePowerW[1] +
-                       candidate.phasePowerW[2];
-  }
-  const auto plausible = [](double value, double maximum) {
-    return !std::isfinite(value) || std::abs(value) <= maximum;
-  };
-  bool plausibleValues =
-      plausible(candidate.powerW, 100000.0) &&
-      (!std::isfinite(candidate.importKwh) ||
-       (candidate.importKwh >= 0.0 && candidate.importKwh <= 1.0e9)) &&
-      (!std::isfinite(candidate.exportKwh) ||
-       (candidate.exportKwh >= 0.0 && candidate.exportKwh <= 1.0e9));
-  for (uint8_t phase = 0; phase < 3; ++phase) {
-    plausibleValues &= plausible(candidate.phasePowerW[phase], 100000.0);
-    plausibleValues &=
-        !std::isfinite(candidate.phaseVoltageV[phase]) ||
-        (candidate.phaseVoltageV[phase] >= 0.0 &&
-         candidate.phaseVoltageV[phase] <= 500.0);
-    plausibleValues &=
-        !std::isfinite(candidate.phaseCurrentA[phase]) ||
-        (candidate.phaseCurrentA[phase] >= 0.0 &&
-         candidate.phaseCurrentA[phase] <= 200.0);
-  }
-  if (!found || !plausibleValues) {
+  if (!found) {
     ++meter.parseErrors;
     return;
   }
 
   // DE: Atomar erst nach CRC, Parsing und Plausibilität übernehmen. | EN: Commit atomically only after CRC, parsing and plausibility succeed.
-  meter.powerW = candidate.powerW;
-  meter.importKwh = candidate.importKwh;
-  meter.exportKwh = candidate.exportKwh;
-  for (uint8_t phase = 0; phase < 3; ++phase) {
-    meter.phasePowerW[phase] = candidate.phasePowerW[phase];
-    meter.phaseVoltageV[phase] = candidate.phaseVoltageV[phase];
-    meter.phaseCurrentA[phase] = candidate.phaseCurrentA[phase];
-  }
-  if (firstValidTelegram)
-    eventLog.add("INFO", "METER_FIRST",
-                 "Erstes gültiges Zählertelegramm empfangen");
-  meter.lastTelegramMs = millis();
+  commitMeterCandidate(candidate, MeterProtocol::Sml, true, true);
 }
 
 void consumeMeterByte(uint8_t value) {
   ++meter.bytes;
+  if (config.meterProtocol != MeterProtocol::Sml) {
+    LegacyMeterReading legacy;
+    if (legacyMeterParser.consume(value, legacy)) {
+      MeterValues candidate;
+      candidate.powerW = legacy.powerW;
+      candidate.importKwh = legacy.importKwh;
+      candidate.exportKwh = legacy.exportKwh;
+      for (uint8_t phase = 0; phase < 3; ++phase) {
+        candidate.phasePowerW[phase] = legacy.phasePowerW[phase];
+        candidate.phaseVoltageV[phase] = legacy.phaseVoltageV[phase];
+        candidate.phaseCurrentA[phase] = legacy.phaseCurrentA[phase];
+      }
+      lastTelegram.assign(legacyMeterParser.lastFrameData(),
+                          legacyMeterParser.lastFrameData() +
+                              legacyMeterParser.lastFrameSize());
+      commitMeterCandidate(candidate, MeterProtocol::Iec62056,
+                           legacy.bccPresent,
+                           !legacy.bccPresent || legacy.bccValid);
+    }
+    const uint32_t checksumErrors = legacyMeterParser.checksumErrors();
+    if (checksumErrors > legacyChecksumErrorsSeen) {
+      meter.crcErrors += checksumErrors - legacyChecksumErrorsSeen;
+      legacyChecksumErrorsSeen = checksumErrors;
+    }
+  }
+  if (config.meterProtocol == MeterProtocol::Iec62056 ||
+      config.meterProtocol == MeterProtocol::Iec62056Active)
+    return;
   if (!capturing) {
     if (value == kSmlStart[startMatched]) {
       ++startMatched;
@@ -1167,12 +1367,219 @@ void resetSmlCapture() {
   startMatched = 0;
   capturing = false;
   smlTrailerRemaining = 0;
+  legacyMeterParser.reset();
+  legacyMeterParser.clearIdentificationReady();
 }
 
-void restoreMeterSerialAfterScan() {
+void restoreConfiguredMeterSerial() {
   meterSerial.end();
   resetSmlCapture();
-  meterSerial.begin(config.baud, SERIAL_8N1, config.rxPin, config.txPin);
+  meterSerial.begin(meterBaud(), meterSerialMode(), config.rxPin,
+                    config.txPin);
+}
+
+void finishActiveD0Attempt() {
+  activeD0.active = false;
+  activeD0.acknowledgementSent = false;
+  if (config.meterProtocol == MeterProtocol::Auto)
+    restoreConfiguredMeterSerial();
+}
+
+void beginActiveD0Attempt() {
+  if (activeD0.active || config.txPin < 0 || irPulse.active ||
+      gpioScan.active || apatorUnlock.active)
+    return;
+  meterSerial.end();
+  resetSmlCapture();
+  meterSerial.begin(300, SERIAL_7E1, config.rxPin, config.txPin);
+  static const uint8_t request[] = {'/', '?', '!', '\r', '\n'};
+  meterSerial.write(request, sizeof(request));
+  meterSerial.flush();
+  activeD0.active = true;
+  activeD0.acknowledgementSent = false;
+  activeD0.startedMs = millis();
+  activeD0.lastAttemptMs = activeD0.startedMs;
+}
+
+void updateActiveD0() {
+  if (activeD0.active) {
+    if (!activeD0.acknowledgementSent &&
+        legacyMeterParser.identificationReady()) {
+      // Original firmware uses IEC 62056-21 ACK 000 and remains at 300 baud.
+      static const uint8_t acknowledgement[] = {0x06, '0', '0', '0', '\r', '\n'};
+      meterSerial.write(acknowledgement, sizeof(acknowledgement));
+      meterSerial.flush();
+      legacyMeterParser.clearIdentificationReady();
+      activeD0.acknowledgementSent = true;
+    }
+    if ((meter.detectedProtocol == MeterProtocol::Iec62056 &&
+         meter.lastTelegramMs >= activeD0.startedMs) ||
+        millis() - activeD0.startedMs >= kActiveD0TimeoutMs)
+      finishActiveD0Attempt();
+    return;
+  }
+  const bool explicitActive =
+      config.meterProtocol == MeterProtocol::Iec62056Active;
+  const bool noUsableTelegram =
+      !meter.lastTelegramMs ||
+      millis() - meter.lastTelegramMs >= kMeterRecoveryMs;
+  const bool automaticDiscovery = config.meterProtocol == MeterProtocol::Auto &&
+                                  noUsableTelegram &&
+                                  millis() >= kActiveD0InitialDelayMs;
+  if ((explicitActive || automaticDiscovery) &&
+      (!activeD0.lastAttemptMs ||
+       millis() - activeD0.lastAttemptMs >= kActiveD0RetryMs))
+    beginActiveD0Attempt();
+}
+
+void updateMeterRecovery() {
+  if (activeD0.active || gpioScan.active || irPulse.active ||
+      apatorUnlock.active)
+    return;
+  const uint32_t now = millis();
+  const uint32_t lastValid = meter.lastTelegramMs;
+  if ((lastValid && now - lastValid < kMeterRecoveryMs) ||
+      (!lastValid && now < kMeterRecoveryMs) ||
+      (lastMeterRecoveryMs && now - lastMeterRecoveryMs < kMeterRecoveryMs))
+    return;
+  restoreConfiguredMeterSerial();
+  lastMeterRecoveryMs = now;
+  ++meterReinitializations;
+  eventLog.add("WARN", "METER_UART_RECOVERY",
+               "Zaehlerempfang nach Datenverlust neu initialisiert");
+}
+
+#if IR_TRACKER_ENABLE_FACTORY_TEST
+void finishFactoryLoopback(const bool passed) {
+  factoryTest.running = false;
+  factoryTest.finished = true;
+  factoryTest.loopbackPassed = passed;
+  restoreConfiguredMeterSerial();
+  eventLog.add(passed ? "INFO" : "ERROR", "FCT_IR_LOOPBACK",
+               passed ? "IR-Sender und IR-Empfaenger per Pruefreflektor bestaetigt"
+                      : "Kein passendes IR-Loopbackmuster empfangen");
+}
+
+bool startFactoryTest() {
+  if (factoryTest.running || gpioScan.active || irPulse.active ||
+      apatorUnlock.active)
+    return false;
+  if (activeD0.active) finishActiveD0Attempt();
+  requestCpuBoost("factory_test");
+  factoryTest = {};
+  factoryTest.running = true;
+  factoryTest.startedMs = millis();
+  meterSerial.end();
+  resetSmlCapture();
+  meterSerial.begin(9600, SERIAL_8N1, config.rxPin, config.txPin);
+  while (meterSerial.available()) meterSerial.read();
+  if (config.ledPin >= 0) {
+    pinMode(config.ledPin, OUTPUT);
+    digitalWrite(config.ledPin, !config.ledInverted);
+  }
+  for (uint8_t repeat = 0; repeat < 3; ++repeat)
+    meterSerial.write(kFactoryLoopbackPattern, sizeof(kFactoryLoopbackPattern));
+  meterSerial.flush();
+  eventLog.add("INFO", "FCT_START",
+               "Werkspruefung gestartet; IR-Pruefreflektor erforderlich");
+  return true;
+}
+
+void updateFactoryTest() {
+  if (!factoryTest.running) return;
+  while (meterSerial.available()) {
+    const uint8_t value = meterSerial.read();
+    if (value == kFactoryLoopbackPattern[factoryTest.matched]) {
+      if (++factoryTest.matched == sizeof(kFactoryLoopbackPattern)) {
+        finishFactoryLoopback(true);
+        return;
+      }
+    } else {
+      factoryTest.matched =
+          value == kFactoryLoopbackPattern[0] ? 1 : 0;
+    }
+  }
+  if (millis() - factoryTest.startedMs >= kFactoryLoopbackTimeoutMs)
+    finishFactoryLoopback(false);
+}
+
+bool factoryAutomatedChecksPass() {
+  return String(ESP.getChipModel()) == "ESP32-C3" &&
+         ESP.getFlashChipSize() >= 4UL * 1024UL * 1024UL &&
+         ESP.getFreeHeap() >= kHeapWarningBytes && history.ready() &&
+         wifiConnected() && ethernet.hardwareDetected() &&
+         ethernet.connected() && factoryTest.finished &&
+         factoryTest.loopbackPassed && factoryTest.poeConfirmed;
+}
+
+String factoryTestJson() {
+  const bool automated = factoryAutomatedChecksPass();
+  const bool passed = automated && factoryTest.ledConfirmed;
+  String json = "{\"state\":\"";
+  json += factoryTest.running ? "running"
+          : passed ? "pass"
+          : factoryTest.finished && factoryTest.loopbackPassed &&
+                    (!factoryTest.ledConfirmed || !factoryTest.poeConfirmed)
+              ? "waiting"
+          : factoryTest.finished ? "fail" : "idle";
+  json += "\",\"progress\":";
+  json += factoryTest.running
+              ? String((100U * factoryTest.matched) /
+                       sizeof(kFactoryLoopbackPattern))
+              : String(factoryTest.finished ? 100 : 0);
+  json += ",\"tests\":[";
+  auto test = [&](const char *id, const char *state, const String &detail,
+                  bool &first) {
+    if (!first) json += ',';
+    first = false;
+    json += "{\"id\":\"" + String(id) + "\",\"state\":\"" + state +
+            "\",\"detail\":\"" + jsonEscape(detail) + "\"}";
+  };
+  bool first = true;
+  test("chip", String(ESP.getChipModel()) == "ESP32-C3" ? "pass" : "fail",
+       String(ESP.getChipModel()) + ", Revision " + ESP.getChipRevision(), first);
+  test("flash", ESP.getFlashChipSize() >= 4UL * 1024UL * 1024UL ? "pass" : "fail",
+       String(ESP.getFlashChipSize() / (1024UL * 1024UL)) + " MiB", first);
+  test("ram", ESP.getFreeHeap() >= kHeapWarningBytes ? "pass" : "fail",
+       String(ESP.getFreeHeap()) + " Byte frei", first);
+  test("storage", history.ready() ? "pass" : "fail",
+       history.ready() ? "Historienpartition les- und schreibbereit"
+                       : "Historienpartition nicht bereit", first);
+  test("wifi", wifiConnected() ? "pass" : "fail",
+       wifiConnected() ? WiFi.SSID() + " (" + String(WiFi.RSSI()) + " dBm)"
+                       : "Keine WLAN-Verbindung", first);
+  test("w5500", ethernet.hardwareDetected() ? "pass" : "fail",
+       ethernet.hardwareDetected() ? "W5500 VERSIONR erkannt"
+                                   : "W5500 nicht erkannt", first);
+  test("ethernet", ethernet.connected() ? "pass" : "fail",
+       ethernet.connected() ? ethernet.localIP().toString()
+                            : "Keine LAN-Verbindung/DHCP-Adresse", first);
+  test("ir_loopback",
+       factoryTest.running ? "running"
+       : factoryTest.loopbackPassed ? "pass" : "fail",
+       factoryTest.loopbackPassed
+           ? "TX GPIO " + String(config.txPin) + " -> RX GPIO " +
+                 String(config.rxPin) + ": Testmuster fehlerfrei empfangen"
+           : "Optischen Pruefreflektor zwischen Sender und Empfaenger einsetzen",
+       first);
+  test("led", factoryTest.ledConfirmed ? "pass" : "manual",
+       factoryTest.ledConfirmed ? "Leuchtfunktion vom Bediener bestaetigt"
+                                : "Sichtpruefung ausstehend", first);
+  test("poe", factoryTest.poeConfirmed ? "pass" : "manual",
+       factoryTest.poeConfirmed
+           ? "Tracker blieb nach Trennen von USB/5 V ueber LAN erreichbar"
+           : "Seite ueber LAN oeffnen, USB/5 V trennen und danach bestaetigen",
+       first);
+  test("ble", "skip",
+       "Nicht Bestandteil der Produktfirmware; kein BLE-Stack eingebaut", first);
+  json += "],\"automated_pass\":" + String(automated ? "true" : "false") +
+          ",\"pass\":" + String(passed ? "true" : "false") + "}";
+  return json;
+}
+#endif
+
+void restoreMeterSerialAfterScan() {
+  restoreConfiguredMeterSerial();
   if (config.ledPin >= 0) {
     pinMode(config.ledPin, OUTPUT);
     digitalWrite(config.ledPin, config.ledInverted);
@@ -1192,7 +1599,7 @@ void finishGpioScan(bool found, const String &error = "") {
 
 void beginGpioScanCandidate() {
   if (gpioScan.pinIndex >= gpioScan.pinCount) {
-    finishGpioScan(false, "no_valid_sml_telegram");
+    finishGpioScan(false, "no_valid_meter_telegram");
     return;
   }
   gpioScan.currentPin = gpioScan.pins[gpioScan.pinIndex];
@@ -1208,6 +1615,7 @@ void beginGpioScanCandidate() {
 
 void startGpioScan() {
   if (gpioScan.active) return;
+  if (activeD0.active) finishActiveD0Attempt();
   irPulse.active = false;
   apatorUnlock.active = false;
   gpioScan = GpioScanState{};
@@ -1216,12 +1624,15 @@ void startGpioScan() {
   // DE: Den aktuellen Wert zuerst wirklich pruefen, danach alle anderen
   // zulaessigen C3-Trackerpins. | EN: Really test the current value first,
   // followed by every other allowed C3 tracker pin.
-  gpioScan.pins[gpioScan.pinCount++] = config.rxPin;
+  if (trackerGpioAvailable(config.rxPin))
+    gpioScan.pins[gpioScan.pinCount++] = config.rxPin;
   for (uint8_t pin = 0; pin <= 10; ++pin)
-    if (pin != config.rxPin) gpioScan.pins[gpioScan.pinCount++] = pin;
+    if (pin != config.rxPin && trackerGpioAvailable(pin))
+      gpioScan.pins[gpioScan.pinCount++] = pin;
 
   gpioScan.bauds[gpioScan.baudCount++] = config.baud;
-  const uint32_t commonBauds[] = {9600, 19200, 38400, 115200};
+  const uint32_t commonBauds[] = {300, 600, 1200, 2400, 4800,
+                                  9600, 19200, 38400, 115200};
   for (uint32_t baud : commonBauds)
     if (baud != config.baud) gpioScan.bauds[gpioScan.baudCount++] = baud;
   gpioScan.total = gpioScan.pinCount * gpioScan.baudCount;
@@ -1267,10 +1678,13 @@ String gpioScanJson() {
 }
 
 String statusJson() {
-  const bool fresh = meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
+  const bool fresh = valueFresh(meter.powerUpdatedMs);
   const bool browserSessionValid = validBrowserSession();
   String json = "{";
   json += "\"firmware\":\"offline-" + String(kFirmwareVersion) + "\",";
+  json += "\"hardware_profile\":\"universal\",";
+  json += "\"w5500_gpio_reserved\":" +
+          String(HardwareProfile::kLanPrepared ? "true" : "false") + ",";
   json += "\"installer_wifi_ota\":true,";
   json += "\"installer_gpio_tx_scan\":true,";
   json += "\"author\":\"" + String(kFirmwareAuthor) + "\",";
@@ -1280,15 +1694,39 @@ String statusJson() {
           String(browserSessionValid ? "true" : "false") + ",";
   json += "\"browser_session_state\":\"" +
           String(browserSessionState) + "\",";
-  json += "\"mode\":\"" + String(accessPointMode ? "setup_ap" : "wifi") + "\",";
+  json += "\"mode\":\"" + String(primaryTransportName()) + "\",";
   json += "\"hostname\":\"" + jsonEscape(config.hostname) + "\",";
-  json += "\"ip\":\"" + String(accessPointMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString()) + "\",";
+  json += "\"ip\":\"" + primaryNetworkIp() + "\",";
+  json += "\"ethernet_initialized\":" +
+          String(ethernet.initialized() ? "true" : "false") + ",";
+  json += "\"ethernet_detected\":" +
+          String(ethernet.hardwareDetected() ? "true" : "false") + ",";
+  json += "\"ethernet_link\":" +
+          String(ethernet.linkUp() ? "true" : "false") + ",";
+  json += "\"ethernet_connected\":" +
+          String(ethernet.connected() ? "true" : "false") + ",";
+  json += "\"ethernet_ip\":\"" + ethernet.localIP().toString() + "\",";
+  json += "\"ethernet_error\":\"" + jsonEscape(ethernet.lastError()) + "\",";
+  json += "\"ethernet_controller\":\"w5500_spi\",";
+  json += "\"poe_power_detectable\":false,";
+  json += "\"wifi_connected\":" +
+          String(wifiConnected() ? "true" : "false") + ",";
+  json += "\"wifi_ip\":\"" + WiFi.localIP().toString() + "\",";
   json += "\"wifi_rssi\":" + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + ",";
   json += "\"wifi_ssid\":\"" + jsonEscape(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "") + "\",";
   json += "\"setup_ap_active\":" +
           String(accessPointMode ? "true" : "false") + ",";
-  json += "\"mdns_running\":" + String(mdnsRunning ? "true" : "false") + ",";
-  json += "\"mdns_name\":\"" + jsonEscape(config.hostname) + ".local\",";
+  json += "\"mdns_running\":";
+#if IR_TRACKER_ENABLE_MDNS
+  json += String(mdnsRunning ? "true" : "false");
+#else
+  json += "false";
+#endif
+  json += ",\"mdns_name\":\"";
+#if IR_TRACKER_ENABLE_MDNS
+  json += jsonEscape(config.hostname) + ".local";
+#endif
+  json += "\",";
   json += "\"wifi_sta_only\":" +
           String(WiFi.getMode() == WIFI_STA ? "true" : "false") + ",";
   json += "\"wifi_min_modem_sleep\":" +
@@ -1304,16 +1742,27 @@ String statusJson() {
           String(wifiTxPowerRuntimeFault ? "true" : "false") + ",";
   json += "\"mqtt_connected\":" + String(mqtt.connected() ? "true" : "false") + ",";
   json += "\"meter_fresh\":" + String(fresh ? "true" : "false") + ",";
+  json += "\"meter_protocol\":\"" +
+          String(meterProtocolName(meter.detectedProtocol)) + "\",";
+  json += "\"configured_meter_protocol\":\"" +
+          String(meterProtocolName(config.meterProtocol)) + "\",";
+  json += "\"telegram_age_s\":" + ageOrNull(meter.lastTelegramMs) + ",";
   json += "\"power_w\":" + numberOrNull(meter.powerW) + ",";
+  json += "\"power_age_s\":" + ageOrNull(meter.powerUpdatedMs) + ",";
   json += "\"import_kwh\":" + numberOrNull(meter.importKwh) + ",";
+  json += "\"import_age_s\":" + ageOrNull(meter.importUpdatedMs) + ",";
   json += "\"export_kwh\":" + numberOrNull(meter.exportKwh) + ",";
+  json += "\"export_age_s\":" + ageOrNull(meter.exportUpdatedMs) + ",";
   json += "\"phases\":[";
   for (uint8_t phase = 0; phase < 3; ++phase) {
     if (phase) json += ",";
     json += "{\"phase\":\"L" + String(phase + 1) +
             "\",\"power_w\":" + numberOrNull(meter.phasePowerW[phase]) +
+            ",\"power_age_s\":" + ageOrNull(meter.phasePowerUpdatedMs[phase]) +
             ",\"voltage_v\":" + numberOrNull(meter.phaseVoltageV[phase]) +
+            ",\"voltage_age_s\":" + ageOrNull(meter.phaseVoltageUpdatedMs[phase]) +
             ",\"current_a\":" + numberOrNull(meter.phaseCurrentA[phase]) +
+            ",\"current_age_s\":" + ageOrNull(meter.phaseCurrentUpdatedMs[phase]) +
             "}";
   }
   json += "],";
@@ -1321,7 +1770,11 @@ String statusJson() {
   json += "\"received_bytes\":" + String(meter.bytes) + ",";
   json += "\"parse_errors\":" + String(meter.parseErrors) + ",";
   json += "\"crc_errors\":" + String(meter.crcErrors) + ",";
+  json += "\"meter_reinitializations\":" +
+          String(meterReinitializations) + ",";
   json += "\"last_crc_valid\":" + String(meter.lastCrcValid ? "true" : "false") + ",";
+  json += "\"last_integrity_present\":" +
+          String(meter.lastIntegrityPresent ? "true" : "false") + ",";
   json += "\"rx_gpio\":" + String(config.rxPin) + ",";
   json += "\"tx_gpio\":" + String(config.txPin) + ",";
   json += "\"ir_transmitting\":" + String(irPulse.active ? "true" : "false") + ",";
@@ -1357,7 +1810,8 @@ String statusJson() {
           String(heapWarningActive ? "true" : "false") + ",";
   json += "\"restart_reason\":\"" + bootResetReason + "\",";
   json += "\"led_gpio\":" + String(config.ledPin) + ",";
-  json += "\"baud\":" + String(config.baud) + ",";
+  json += "\"baud\":" + String(meterBaud()) + ",";
+  json += "\"configured_baud\":" + String(config.baud) + ",";
   json += "\"github_update_check\":" +
           String(config.githubUpdateCheck ? "true" : "false") + ",";
   json += "\"github_auto_install\":" +
@@ -1383,6 +1837,33 @@ String bytesToHex(const std::vector<uint8_t> &data) {
 }
 
 String obisJson() {
+  if (meter.detectedProtocol == MeterProtocol::Iec62056) {
+    String json = "{\"protocol\":\"iec62056-21\",\"values\":[";
+    bool first = true;
+    auto add = [&](const char *obis, double value, uint32_t updatedMs) {
+      if (!std::isfinite(value)) return;
+      if (!first) json += ",";
+      first = false;
+      json += "{\"obis\":\"" + String(obis) + "\",\"value\":" +
+              numberOrNull(value, 6) + ",\"age_s\":" +
+              ageOrNull(updatedMs) + "}";
+    };
+    add("1.8.0", meter.importKwh, meter.importUpdatedMs);
+    add("2.8.0", meter.exportKwh, meter.exportUpdatedMs);
+    add("16.7.0", meter.powerW, meter.powerUpdatedMs);
+    const char *powerCodes[3] = {"36.7.0", "56.7.0", "76.7.0"};
+    const char *voltageCodes[3] = {"32.7.0", "52.7.0", "72.7.0"};
+    const char *currentCodes[3] = {"31.7.0", "51.7.0", "71.7.0"};
+    for (uint8_t phase = 0; phase < 3; ++phase) {
+      add(powerCodes[phase], meter.phasePowerW[phase],
+          meter.phasePowerUpdatedMs[phase]);
+      add(voltageCodes[phase], meter.phaseVoltageV[phase],
+          meter.phaseVoltageUpdatedMs[phase]);
+      add(currentCodes[phase], meter.phaseCurrentA[phase],
+          meter.phaseCurrentUpdatedMs[phase]);
+    }
+    return json + "]}";
+  }
   String json = "{\"values\":[";
   bool first = true;
   for (size_t i = 2; i + 7 < lastTelegram.size(); ++i) {
@@ -1439,10 +1920,24 @@ String metricsText() {
   if (std::isfinite(meter.importKwh)) text += "irtracker_import_kwh " + String(meter.importKwh, 6) + "\n";
   text += "# HELP irtracker_export_kwh Exported grid energy\n# TYPE irtracker_export_kwh counter\n";
   if (std::isfinite(meter.exportKwh)) text += "irtracker_export_kwh " + String(meter.exportKwh, 6) + "\n";
+  if (meter.lastTelegramMs)
+    text += "irtracker_meter_age_seconds " + ageOrNull(meter.lastTelegramMs) + "\n";
+  if (meter.powerUpdatedMs)
+    text += "irtracker_power_age_seconds " + ageOrNull(meter.powerUpdatedMs) + "\n";
+  if (meter.importUpdatedMs)
+    text += "irtracker_import_age_seconds " + ageOrNull(meter.importUpdatedMs) + "\n";
+  if (meter.exportUpdatedMs)
+    text += "irtracker_export_age_seconds " + ageOrNull(meter.exportUpdatedMs) + "\n";
   text += "irtracker_telegrams_total " + String(meter.telegrams) + "\n";
   text += "irtracker_parse_errors_total " + String(meter.parseErrors) + "\n";
   text += "irtracker_crc_errors_total " + String(meter.crcErrors) + "\n";
   text += "irtracker_wifi_rssi_dbm " + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + "\n";
+  text += "irtracker_network_connected " +
+          String(networkConnected() ? 1 : 0) + "\n";
+  text += "irtracker_ethernet_link " +
+          String(ethernet.linkUp() ? 1 : 0) + "\n";
+  text += "irtracker_ethernet_connected " +
+          String(ethernet.connected() ? 1 : 0) + "\n";
   text += "irtracker_mqtt_connected " + String(mqtt.connected() ? 1 : 0) + "\n";
   for (uint8_t phase = 0; phase < 3; ++phase) {
     const String label = "{phase=\"L" + String(phase + 1) + "\"} ";
@@ -1455,6 +1950,15 @@ String metricsText() {
     if (std::isfinite(meter.phaseCurrentA[phase]))
       text += "irtracker_phase_current_a" + label +
               String(meter.phaseCurrentA[phase], 4) + "\n";
+    if (meter.phasePowerUpdatedMs[phase])
+      text += "irtracker_phase_power_age_seconds" + label +
+              ageOrNull(meter.phasePowerUpdatedMs[phase]) + "\n";
+    if (meter.phaseVoltageUpdatedMs[phase])
+      text += "irtracker_phase_voltage_age_seconds" + label +
+              ageOrNull(meter.phaseVoltageUpdatedMs[phase]) + "\n";
+    if (meter.phaseCurrentUpdatedMs[phase])
+      text += "irtracker_phase_current_age_seconds" + label +
+              ageOrNull(meter.phaseCurrentUpdatedMs[phase]) + "\n";
   }
   return text;
 }
@@ -1472,30 +1976,64 @@ String influxLineProtocol() {
   addFloat("power_w", meter.powerW);
   addFloat("import_kwh", meter.importKwh);
   addFloat("export_kwh", meter.exportKwh);
+  for (uint8_t phase = 0; phase < 3; ++phase) {
+    const String prefix = "l" + String(phase + 1) + "_";
+    addFloat((prefix + "power_w").c_str(), meter.phasePowerW[phase]);
+    addFloat((prefix + "voltage_v").c_str(), meter.phaseVoltageV[phase]);
+    addFloat((prefix + "current_a").c_str(), meter.phaseCurrentA[phase]);
+  }
   if (hasField) fields += ",";
   fields += "wifi_rssi=" + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + "i";
   fields += ",telegrams=" + String(meter.telegrams) + "i";
   fields += ",parse_errors=" + String(meter.parseErrors) + "i";
   fields += ",crc_errors=" + String(meter.crcErrors) + "i";
+  if (meter.lastTelegramMs)
+    fields += ",meter_age_s=" + ageOrNull(meter.lastTelegramMs) + "i";
+  if (meter.powerUpdatedMs)
+    fields += ",power_age_s=" + ageOrNull(meter.powerUpdatedMs) + "i";
+  if (meter.importUpdatedMs)
+    fields += ",import_age_s=" + ageOrNull(meter.importUpdatedMs) + "i";
+  if (meter.exportUpdatedMs)
+    fields += ",export_age_s=" + ageOrNull(meter.exportUpdatedMs) + "i";
+  for (uint8_t phase = 0; phase < 3; ++phase) {
+    const String prefix = ",l" + String(phase + 1) + "_";
+    if (meter.phasePowerUpdatedMs[phase])
+      fields += prefix + "power_age_s=" +
+                ageOrNull(meter.phasePowerUpdatedMs[phase]) + "i";
+    if (meter.phaseVoltageUpdatedMs[phase])
+      fields += prefix + "voltage_age_s=" +
+                ageOrNull(meter.phaseVoltageUpdatedMs[phase]) + "i";
+    if (meter.phaseCurrentUpdatedMs[phase])
+      fields += prefix + "current_age_s=" +
+                ageOrNull(meter.phaseCurrentUpdatedMs[phase]) + "i";
+  }
   fields += ",meter_fresh=" + String(meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs ? "true" : "false");
   return line + " " + fields + "\n";
 }
 
 String csvValues() {
-  String csv = "metric,value,unit\n";
-  csv += "power_w," + numberOrNull(meter.powerW, 3) + ",W\n";
-  csv += "import_kwh," + numberOrNull(meter.importKwh, 6) + ",kWh\n";
-  csv += "export_kwh," + numberOrNull(meter.exportKwh, 6) + ",kWh\n";
-  csv += "wifi_rssi," + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + ",dBm\n";
-  csv += "telegrams," + String(meter.telegrams) + ",count\n";
-  csv += "parse_errors," + String(meter.parseErrors) + ",count\n";
-  csv += "crc_errors," + String(meter.crcErrors) + ",count\n";
+  String csv = "metric,value,unit,age_seconds\n";
+  csv += "power_w," + numberOrNull(meter.powerW, 3) + ",W," + ageOrNull(meter.powerUpdatedMs) + "\n";
+  csv += "import_kwh," + numberOrNull(meter.importKwh, 6) + ",kWh," + ageOrNull(meter.importUpdatedMs) + "\n";
+  csv += "export_kwh," + numberOrNull(meter.exportKwh, 6) + ",kWh," + ageOrNull(meter.exportUpdatedMs) + "\n";
+  for (uint8_t phase = 0; phase < 3; ++phase) {
+    const String prefix = "l" + String(phase + 1) + "_";
+    csv += prefix + "power_w," + numberOrNull(meter.phasePowerW[phase], 3) +
+           ",W," + ageOrNull(meter.phasePowerUpdatedMs[phase]) + "\n";
+    csv += prefix + "voltage_v," + numberOrNull(meter.phaseVoltageV[phase], 3) +
+           ",V," + ageOrNull(meter.phaseVoltageUpdatedMs[phase]) + "\n";
+    csv += prefix + "current_a," + numberOrNull(meter.phaseCurrentA[phase], 4) +
+           ",A," + ageOrNull(meter.phaseCurrentUpdatedMs[phase]) + "\n";
+  }
+  csv += "wifi_rssi," + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + ",dBm,\n";
+  csv += "telegrams," + String(meter.telegrams) + ",count,\n";
+  csv += "parse_errors," + String(meter.parseErrors) + ",count,\n";
+  csv += "crc_errors," + String(meter.crcErrors) + ",count,\n";
   return csv;
 }
 
 String shellyGen1Status() {
-  const bool fresh =
-      meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
+  const bool fresh = valueFresh(meter.powerUpdatedMs);
   String json = "{\"wifi_sta\":{\"connected\":" +
                 String(WiFi.status() == WL_CONNECTED ? "true" : "false") +
                 ",\"ssid\":\"" + jsonEscape(WiFi.SSID()) + "\",\"rssi\":" +
@@ -1510,13 +2048,14 @@ String shellyGen1Status() {
                 (std::isfinite(meter.exportKwh)
                      ? String(meter.exportKwh * 1000.0, 3)
                      : "null") +
-                ",\"is_valid\":" + String(fresh ? "true" : "false") + "}]}";
+                ",\"is_valid\":" + String(fresh ? "true" : "false") +
+                ",\"irtracker_age_s\":" + ageOrNull(meter.powerUpdatedMs) +
+                "}]}";
   return json;
 }
 
 String shellyEmStatus() {
-  const bool fresh =
-      meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
+  const bool fresh = valueFresh(meter.powerUpdatedMs);
   String json = "{\"id\":0,\"total_act_power\":" +
                 numberOrNull(meter.powerW, 2) +
                 ",\"total_current\":null,\"total_aprt_power\":null,"
@@ -1537,10 +2076,10 @@ String shellyEmStatus() {
     json += names[phase];
     json += "_voltage\":" + numberOrNull(meter.phaseVoltageV[phase], 2) +
             ",\"";
-    json += names[phase];
     json += "_current\":" + numberOrNull(meter.phaseCurrentA[phase], 3);
   }
-  json += ",\"errors\":" + String(fresh ? "[]" : "[\"meter_stale\"]") +
+  json += ",\"irtracker_age_s\":" + ageOrNull(meter.powerUpdatedMs) +
+          ",\"errors\":" + String(fresh ? "[]" : "[\"meter_stale\"]") +
           "}";
   return json;
 }
@@ -1558,6 +2097,15 @@ String selfTestJson() {
             "\",\"detail\":\"" + jsonEscape(detail) + "\"}";
   };
   bool first = true;
+  add("ethernet", "LAN",
+      ethernet.connected() ? "ok"
+                           : (ethernet.hardwareDetected() ? "warn" : "off"),
+      ethernet.connected()
+          ? String("W5500 verbunden: ") + ethernet.localIP().toString()
+          : (ethernet.hardwareDetected()
+                 ? "W5500 erkannt, aber kein DHCP-Netzwerk verfügbar"
+                 : "Kein W5500 erkannt; WLAN-Betrieb bleibt aktiv"),
+      first);
   add("wifi", "WLAN", WiFi.status() == WL_CONNECTED ? "ok" : "warn",
       WiFi.status() == WL_CONNECTED
           ? WiFi.SSID() + " (" + String(WiFi.RSSI()) +
@@ -1646,7 +2194,12 @@ String selfTestJson() {
 String meterReportJson() {
   const bool fresh =
       meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
-  String json = "{\"manufacturer\":\"unknown\",\"model\":\"SML electricity meter\",";
+  String json = "{\"manufacturer\":\"unknown\",\"model\":\"electricity meter\",";
+  json += "\"protocol\":\"" +
+          String(meterProtocolName(meter.detectedProtocol)) + "\",";
+  json += "\"configured_protocol\":\"" +
+          String(meterProtocolName(config.meterProtocol)) + "\",";
+  json += "\"telegram_age_s\":" + ageOrNull(meter.lastTelegramMs) + ",";
   json += "\"telegram_fresh\":" + String(fresh ? "true" : "false") + ",";
   json += "\"telegram_count\":" + String(meter.telegrams) + ",";
   json += "\"last_crc_valid\":" +
@@ -2283,23 +2836,9 @@ void handleSetTime() {
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
-const char *driverName(EnergyManager::Driver driver) {
-  switch (driver) {
-    case EnergyManager::Driver::ModbusTcp:
-      return "Modbus TCP / SunSpec";
-    case EnergyManager::Driver::Mqtt:
-      return "MQTT";
-    case EnergyManager::Driver::Http:
-      return "HTTP / REST";
-    default:
-      return "Deaktiviert";
-  }
-}
-
 void handleInterfacesPage() {
   if (!requireAdmin()) return;
-  const String host =
-      accessPointMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
+  const String host = primaryNetworkIp();
   String body = F(
       "<div class='card'><span class='status-pill'><i class='dot'></i>Nur lesende Messwertausgabe</span>"
       "<h2>Der Tracker sendet keine Sollwerte</h2>"
@@ -2322,198 +2861,6 @@ void handleInterfacesPage() {
               page("Schnittstellen", body));
 }
 
-void handleEnergyPage() {
-  if (!requireAdmin()) return;
-  const EnergyManager::Status &status = energyManager.status();
-  String body = F(
-      "<div class='card'><p><strong>Status:</strong> ");
-  body += htmlEscape(status.message);
-  body += " | letzter Sollwert: " + String(status.sentW) +
-          " W | Fehler: " + String(status.failures) + F("</p>"
-      "<p class='muted'>Treiber sind standardmäßig deaktiviert und beginnen im Trockenlauf. "
-      "Vor echter Freigabe Herstellerdokumentation, Vorzeichen und Leistungsgrenzen prüfen.</p></div>"
-      "<form method='post' action='/energy/save'><fieldset><legend>Betriebsart</legend>"
-      "<label>Schnittstelle</label><select name='driver'>");
-  for (uint8_t value = 0; value <= 3; ++value) {
-    const auto driver = static_cast<EnergyManager::Driver>(value);
-    body += "<option value='" + String(value) + "'" +
-            (driver == energyConfig.driver ? " selected" : "") + ">" +
-            driverName(driver) + "</option>";
-  }
-  body += F("</select><label><input style='width:auto' type='checkbox' name='enabled' value='1'");
-  if (energyConfig.enabled) body += " checked";
-  body += F("> Regler aktivieren</label>"
-            "<label><input style='width:auto' type='checkbox' name='dry_run' value='1'");
-  if (energyConfig.dryRun) body += " checked";
-  body += F("> Trockenlauf: berechnen, aber nichts an den Speicher senden</label>"
-            "<label><input style='width:auto' type='checkbox' name='invert' value='1'");
-  if (energyConfig.inverted) body += " checked";
-  body += F("> Sollwert-Vorzeichen invertieren</label>"
-            "<label>LIVE-Bestätigung für echte Ausgabe</label>"
-            "<input name='live_confirm' autocomplete='off' placeholder='LIVE nur zur bewussten Freigabe'>"
-            "</fieldset><fieldset><legend>Netzwerk und Geräteprofil</legend>"
-            "<div class='inline'><div><label>Host/IP</label><input name='em_host' value='");
-  body += htmlEscape(energyConfig.host);
-  body += F("' placeholder='192.168.178.50'></div><div><label>Port</label>"
-            "<input type='number' name='em_port' min='1' max='65535' value='");
-  body += String(energyConfig.port);
-  body += F("'></div></div><div class='inline'><div><label>Modbus Unit-ID</label>"
-            "<input type='number' name='em_unit' min='1' max='247' value='");
-  body += String(energyConfig.unitId);
-  body += F("'></div><div><label>Leistungsregister</label>"
-            "<input type='number' name='em_reg' min='0' max='65535' value='");
-  body += String(energyConfig.powerRegister);
-  body += F("'></div></div><div class='inline'><div><label>Registerbreite</label>"
-            "<select name='em_width'><option value='1'");
-  if (energyConfig.registerWidth == 1) body += " selected";
-  body += F(">16 Bit</option><option value='2'");
-  if (energyConfig.registerWidth == 2) body += " selected";
-  body += F(">32 Bit</option></select></div><div><label>Register-Skalierung W/Einheit</label>"
-            "<input type='number' step='0.0001' name='em_scale' value='");
-  body += String(energyConfig.registerScale, 4);
-  body += F("'></div></div><label><input style='width:auto' type='checkbox' name='em_swap' value='1'");
-  if (energyConfig.wordSwap) body += " checked";
-  body += F("> 32-Bit-Wortreihenfolge tauschen</label>"
-            "<label>MQTT-Sollwertthema</label><input name='em_topic' value='");
-  body += htmlEscape(energyConfig.mqttTopic);
-  body += F("' placeholder='opendtu/power/set'>"
-            "<label>MQTT-Nutzlast ({power} wird ersetzt)</label>"
-            "<input name='em_mqpay' value='");
-  body += htmlEscape(energyConfig.mqttPayload);
-  body += F("' placeholder='{power}'><label>HTTP-Pfad</label>"
-            "<input name='em_path' value='");
-  body += htmlEscape(energyConfig.httpPath);
-  body += F("' placeholder='/api/power'><label>HTTP-Methode</label>"
-            "<select name='em_method'><option value='POST'");
-  if (energyConfig.httpMethod != "PUT") body += " selected";
-  body += F(">POST</option><option value='PUT'");
-  if (energyConfig.httpMethod == "PUT") body += " selected";
-  body += F(">PUT</option></select><label>HTTP-JSON-Schablone ({power}, {grid})</label>"
-            "<input name='em_httppay' value='");
-  body += htmlEscape(energyConfig.httpPayload);
-  body += F("'><label>HTTP Bearer-Token</label><input type='password' name='em_token' "
-            "placeholder='");
-  body += energyConfig.httpBearerToken.length() ? "gespeichert" : "optional";
-  body += F("' autocomplete='new-password'>"
-            "<label><input style='width:auto' type='checkbox' name='em_token_clear' value='1'>"
-            " Gespeichertes Bearer-Token löschen</label></fieldset>"
-            "<fieldset><legend>Sicherheitsgrenzen</legend>"
-            "<div class='inline'><div><label>Ziel-Netzleistung (W)</label>"
-            "<input type='number' name='em_target' min='-500' max='500' value='");
-  body += String(energyConfig.targetGridW);
-  body += F("'></div><div><label>Totband (W)</label>"
-            "<input type='number' name='em_dead' min='0' max='500' value='");
-  body += String(energyConfig.deadbandW);
-  body += F("'></div></div><div class='inline'><div><label>Max. Laden (W)</label>"
-            "<input type='number' name='em_charge' min='0' max='10000' value='");
-  body += String(energyConfig.maxChargeW);
-  body += F("'></div><div><label>Max. Entladen (W)</label>"
-            "<input type='number' name='em_discharge' min='0' max='10000' value='");
-  body += String(energyConfig.maxDischargeW);
-  body += F("'></div></div><div class='inline'><div><label>Rampe (W/s)</label>"
-            "<input type='number' name='em_ramp' min='10' max='5000' value='");
-  body += String(energyConfig.rampWPerSecond);
-  body += F("'></div><div><label>Regelintervall (ms)</label>"
-            "<input type='number' name='em_interval' min='1000' max='30000' value='");
-  body += String(energyConfig.intervalMs);
-  body += F("'></div></div><label>Messwert-Timeout (ms)</label>"
-            "<input type='number' name='em_stale' min='3000' max='60000' value='");
-  body += String(energyConfig.staleMs);
-  body += F("'></fieldset><button type='submit'>Konfiguration prüfen und speichern</button></form>"
-            "<form method='post' action='/energy/stop'><button class='danger' type='submit'>"
-            "Sofort Null-Sollwert senden und Regler stoppen</button></form>");
-  server.send(200, "text/html; charset=utf-8",
-              page("Lokale Nulleinspeisung", body));
-}
-
-void handleEnergySave() {
-  if (!requireAdmin()) return;
-  EnergyManager::Config next = energyConfig;
-  next.driver = static_cast<EnergyManager::Driver>(
-      constrain(server.arg("driver").toInt(), 0, 3));
-  next.enabled = server.hasArg("enabled");
-  next.dryRun = server.hasArg("dry_run");
-  next.inverted = server.hasArg("invert");
-  next.host = server.arg("em_host");
-  next.host.trim();
-  next.port = constrain(server.arg("em_port").toInt(), 1, 65535);
-  next.unitId = constrain(server.arg("em_unit").toInt(), 1, 247);
-  next.powerRegister = constrain(server.arg("em_reg").toInt(), 0, 65535);
-  next.registerWidth = server.arg("em_width").toInt() == 2 ? 2 : 1;
-  next.wordSwap = server.hasArg("em_swap");
-  next.registerScale = server.arg("em_scale").toFloat();
-  next.mqttTopic = server.arg("em_topic");
-  next.mqttTopic.trim();
-  next.mqttPayload = server.arg("em_mqpay");
-  if (!next.mqttPayload.length()) next.mqttPayload = "{power}";
-  next.httpPath = server.arg("em_path");
-  next.httpPath.trim();
-  next.httpMethod = server.arg("em_method") == "PUT" ? "PUT" : "POST";
-  next.httpPayload = server.arg("em_httppay");
-  if (!next.httpPayload.length())
-    next.httpPayload = "{\"setpoint_w\":{power},\"grid_w\":{grid}}";
-  const String newBearerToken = server.arg("em_token");
-  if (server.hasArg("em_token_clear"))
-    next.httpBearerToken = "";
-  else if (newBearerToken.length())
-    next.httpBearerToken = newBearerToken;
-  next.targetGridW = constrain(server.arg("em_target").toInt(), -500, 500);
-  next.deadbandW = constrain(server.arg("em_dead").toInt(), 0, 500);
-  next.maxChargeW = constrain(server.arg("em_charge").toInt(), 0, 10000);
-  next.maxDischargeW =
-      constrain(server.arg("em_discharge").toInt(), 0, 10000);
-  next.rampWPerSecond = constrain(server.arg("em_ramp").toInt(), 10, 5000);
-  next.intervalMs =
-      constrain(server.arg("em_interval").toInt(), 1000, 30000);
-  next.staleMs = constrain(server.arg("em_stale").toInt(), 3000, 60000);
-  if (!std::isfinite(next.registerScale) || next.registerScale == 0 ||
-      (next.driver == EnergyManager::Driver::ModbusTcp &&
-       !next.host.length()) ||
-      (next.driver == EnergyManager::Driver::Mqtt &&
-       !next.mqttTopic.length()) ||
-      (next.driver == EnergyManager::Driver::Http &&
-       (!next.host.length() || !next.httpPath.startsWith("/")))) {
-    server.send(400, "application/json",
-                "{\"error\":\"invalid_energy_configuration\"}");
-    return;
-  }
-  if (next.enabled && !next.dryRun &&
-      server.arg("live_confirm") != "LIVE") {
-    server.send(400, "application/json",
-                "{\"error\":\"live_confirmation_required\"}");
-    return;
-  }
-  if (energyConfig.enabled && !energyConfig.dryRun) {
-    energyManager.stop([](const String &topic, const String &payload) {
-      return mqtt.connected() &&
-             mqtt.publish(topic.c_str(), payload.c_str(), false);
-    });
-  }
-  energyConfig = next;
-  energyManager.configure(energyConfig);
-  saveConfig();
-  eventLog.add("INFO", "ENERGY_CONFIG",
-               energyConfig.enabled
-                   ? (energyConfig.dryRun ? "Regler im Trockenlauf aktiviert"
-                                          : "Regler LIVE aktiviert")
-                   : "Regler deaktiviert");
-  server.sendHeader("Location", "/energy", true);
-  server.send(303, "text/plain", "");
-}
-
-void handleEnergyStop() {
-  if (!requireAdmin()) return;
-  energyManager.stop([](const String &topic, const String &payload) {
-    return mqtt.connected() && mqtt.publish(topic.c_str(), payload.c_str(), false);
-  });
-  energyConfig.enabled = false;
-  energyManager.configure(energyConfig);
-  saveConfig();
-  eventLog.add("WARN", "ENERGY_STOP", "Regler manuell gestoppt");
-  server.sendHeader("Location", "/energy", true);
-  server.send(303, "text/plain", "");
-}
-
 String settingsBackupJson() {
   DynamicJsonDocument document(8192);
   document["format"] = "irtracker-settings";
@@ -2532,9 +2879,12 @@ String settingsBackupJson() {
   device["led_pin"] = config.ledPin;
   device["led_inverted"] = config.ledInverted;
   device["baud"] = config.baud;
+  device["meter_protocol"] = static_cast<uint8_t>(config.meterProtocol);
   device["api_access"] = config.apiAccess;
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
   device["sniffer"] = config.snifferEnabled;
   device["bridge"] = config.bridgeEnabled;
+#endif
   device["timezone"] = config.timezone;
   device["setup_ap_minutes"] = config.setupApMinutes;
   device["persist_event_log"] = config.persistEventLog;
@@ -2555,31 +2905,6 @@ String settingsBackupJson() {
   pin["inverted"] = config.pinInverted;
   pin["pulse_ms"] = config.pinPulseMs;
   pin["digit_gap_ms"] = config.pinDigitGapMs;
-  JsonObject energy = document.createNestedObject("energy");
-  energy["driver"] = static_cast<uint8_t>(energyConfig.driver);
-  energy["enabled"] = energyConfig.enabled;
-  energy["dry_run"] = energyConfig.dryRun;
-  energy["inverted"] = energyConfig.inverted;
-  energy["host"] = energyConfig.host;
-  energy["port"] = energyConfig.port;
-  energy["unit_id"] = energyConfig.unitId;
-  energy["power_register"] = energyConfig.powerRegister;
-  energy["register_width"] = energyConfig.registerWidth;
-  energy["word_swap"] = energyConfig.wordSwap;
-  energy["register_scale"] = energyConfig.registerScale;
-  energy["mqtt_topic"] = energyConfig.mqttTopic;
-  energy["mqtt_payload"] = energyConfig.mqttPayload;
-  energy["http_path"] = energyConfig.httpPath;
-  energy["http_method"] = energyConfig.httpMethod;
-  energy["http_payload"] = energyConfig.httpPayload;
-  energy["http_bearer_token"] = energyConfig.httpBearerToken;
-  energy["target_grid_w"] = energyConfig.targetGridW;
-  energy["deadband_w"] = energyConfig.deadbandW;
-  energy["max_charge_w"] = energyConfig.maxChargeW;
-  energy["max_discharge_w"] = energyConfig.maxDischargeW;
-  energy["ramp_w_per_second"] = energyConfig.rampWPerSecond;
-  energy["interval_ms"] = energyConfig.intervalMs;
-  energy["stale_ms"] = energyConfig.staleMs;
   String output;
   serializeJsonPretty(document, output);
   return output;
@@ -2639,12 +2964,6 @@ void handleSettingsRestore() {
                 "{\"error\":\"invalid_settings_text\"}");
     return;
   }
-  if (energyConfig.enabled && !energyConfig.dryRun) {
-    energyManager.stop([](const String &topic, const String &payload) {
-      return mqtt.connected() &&
-             mqtt.publish(topic.c_str(), payload.c_str(), false);
-    });
-  }
   for (uint8_t i = 0; i < kWifiSlots; ++i) {
     config.ssid[i] = wifi[i]["ssid"] | "";
     config.password[i] = wifi[i]["password"] | "";
@@ -2654,11 +2973,17 @@ void handleSettingsRestore() {
   config.rxPin = constrain(device["rx_pin"] | 3, 0, 10);
   config.txPin = constrain(device["tx_pin"] | 6, -1, 10);
   config.ledPin = constrain(device["led_pin"] | 5, -1, 10);
+  normalizeHardwarePins();
   config.ledInverted = device["led_inverted"] | true;
   config.baud = constrain(device["baud"] | 9600, 300, 115200);
+  config.meterProtocol = static_cast<MeterProtocol>(constrain(
+      device["meter_protocol"] | static_cast<int>(MeterProtocol::Auto), 0,
+      static_cast<int>(MeterProtocol::Iec62056Active)));
   config.apiAccess = constrain(device["api_access"] | 0, 0, 2);
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
   config.snifferEnabled = device["sniffer"] | false;
   config.bridgeEnabled = device["bridge"] | false;
+#endif
   config.setupApMinutes =
       constrain(device["setup_ap_minutes"] | 15, 5, 60);
   config.persistEventLog = device["persist_event_log"] | false;
@@ -2684,50 +3009,9 @@ void handleSettingsRestore() {
   config.pinPulseMs = constrain(pin["pulse_ms"] | 300, 50, 1000);
   config.pinDigitGapMs =
       constrain(pin["digit_gap_ms"] | 3000, 1000, 10000);
-  JsonObject energy = document["energy"];
-  energyConfig.driver = static_cast<EnergyManager::Driver>(
-      constrain(energy["driver"] | 0, 0, 3));
-  // DE: Wiederherstellung aktiviert nie echte Schreibzugriffe ohne neue LIVE-Bestätigung. | EN: Restore never enables real writes without fresh LIVE confirmation.
-  energyConfig.enabled = false;
-  energyConfig.dryRun = true;
-  energyConfig.inverted = energy["inverted"] | false;
-  energyConfig.host = String(energy["host"] | "");
-  energyConfig.port = constrain(energy["port"] | 502, 1, 65535);
-  energyConfig.unitId = constrain(energy["unit_id"] | 1, 1, 247);
-  energyConfig.powerRegister =
-      constrain(energy["power_register"] | 0, 0, 65535);
-  energyConfig.registerWidth =
-      energy["register_width"].as<int>() == 2 ? 2 : 1;
-  energyConfig.wordSwap = energy["word_swap"] | false;
-  energyConfig.registerScale = energy["register_scale"] | 1.0f;
-  energyConfig.mqttTopic = String(energy["mqtt_topic"] | "");
-  energyConfig.mqttPayload = String(energy["mqtt_payload"] | "{power}");
-  energyConfig.httpPath = String(energy["http_path"] | "/api/power");
-  energyConfig.httpMethod =
-      String(energy["http_method"] | "POST") == "PUT" ? "PUT" : "POST";
-  energyConfig.httpPayload = String(
-      energy["http_payload"] |
-      "{\"setpoint_w\":{power},\"grid_w\":{grid}}");
-  energyConfig.httpBearerToken =
-      String(energy["http_bearer_token"] | "");
-  energyConfig.targetGridW =
-      constrain(energy["target_grid_w"] | 0, -500, 500);
-  energyConfig.deadbandW =
-      constrain(energy["deadband_w"] | 30, 0, 500);
-  energyConfig.maxChargeW =
-      constrain(energy["max_charge_w"] | 800, 0, 10000);
-  energyConfig.maxDischargeW =
-      constrain(energy["max_discharge_w"] | 800, 0, 10000);
-  energyConfig.rampWPerSecond =
-      constrain(energy["ramp_w_per_second"] | 200, 10, 5000);
-  energyConfig.intervalMs =
-      constrain(energy["interval_ms"] | 2000, 1000, 30000);
-  energyConfig.staleMs =
-      constrain(energy["stale_ms"] | 10000, 3000, 60000);
-  energyManager.configure(energyConfig);
   saveConfig();
   eventLog.add("INFO", "SETTINGS_RESTORE",
-               "Einstellungen wiederhergestellt; Regler im Trockenlauf");
+               "Einstellungen wiederhergestellt");
   server.send(200, "application/json", "{\"ok\":true,\"restarting\":true}");
   delay(500);
   ESP.restart();
@@ -3002,6 +3286,7 @@ bool finishSignedOta() {
   return true;
 }
 
+#if IR_TRACKER_ENABLE_GITHUB_UPDATE
 uint64_t firmwareVersionNumber(const String &value) {
   String normalized = value;
   if (normalized.startsWith("v")) normalized.remove(0, 1);
@@ -3047,8 +3332,8 @@ bool checkGithubFirmwareUpdate() {
   githubUpdate.assetName = "";
   githubUpdate.assetUrl = "";
   githubUpdate.assetSize = 0;
-  if (WiFi.status() != WL_CONNECTED) {
-    githubUpdate.error = "wifi_not_connected";
+  if (!networkConnected()) {
+    githubUpdate.error = "network_not_connected";
     githubUpdate.checking = false;
     return false;
   }
@@ -3214,7 +3499,7 @@ bool installGithubFirmwareUpdate() {
 void manageGithubFirmwareUpdate() {
   if (!config.githubUpdateCheck || githubUpdate.checking ||
       githubUpdate.installing || gpioScan.active || irPulse.active ||
-      WiFi.status() != WL_CONNECTED)
+      !networkConnected())
     return;
   const uint32_t interval = githubUpdate.checked ? kGithubCheckIntervalMs
                                                  : kGithubInitialCheckMs;
@@ -3225,6 +3510,18 @@ void manageGithubFirmwareUpdate() {
     ESP.restart();
   }
 }
+#else
+String githubUpdateJson() {
+  return "{\"current_version\":\"" + String(kFirmwareVersion) +
+         "\",\"automatic_checks\":false,\"automatic_install\":false,"
+         "\"checked\":true,\"checking\":false,\"installing\":false,"
+         "\"available\":false,\"latest_version\":\"\",\"asset_name\":\"\","
+         "\"asset_size\":0,\"last_success\":0,\"error\":\"factory_build\"}";
+}
+bool checkGithubFirmwareUpdate() { return false; }
+bool installGithubFirmwareUpdate() { return false; }
+void manageGithubFirmwareUpdate() {}
+#endif
 
 void handleOtaUpload() {
   HTTPUpload &upload = server.upload();
@@ -3372,7 +3669,7 @@ void handleMaintenancePage() {
       "<p id='maintenanceStatus' class='muted'></p>");
   String script = F(
       "const el=id=>document.getElementById(id),status=t=>el('maintenanceStatus').textContent=t;"
-      "const updateText=e=>{if(e==='wifi_not_connected')return'Keine WLAN-Verbindung. Netzwerkverbindung prüfen.';if(e==='system_time_not_synchronized')return'Die Gerätezeit ist noch nicht synchronisiert.';if(e==='github_json_invalid')return'Die Antwort der Updatequelle konnte nicht verarbeitet werden.';if(e.startsWith('github_http_'))return'Die Updatequelle ist momentan nicht erreichbar.';return'Die Updateprüfung konnte nicht abgeschlossen werden.'};"
+      "const updateText=e=>{if(e==='network_not_connected')return'Keine LAN- oder WLAN-Verbindung. Netzwerkverbindung prüfen.';if(e==='system_time_not_synchronized')return'Die Gerätezeit ist noch nicht synchronisiert.';if(e==='github_json_invalid')return'Die Antwort der Updatequelle konnte nicht verarbeitet werden.';if(e.startsWith('github_http_'))return'Die Updatequelle ist momentan nicht erreichbar.';return'Die Updateprüfung konnte nicht abgeschlossen werden.'};"
       "async function loadUpdate(){try{const r=await fetch('/api/v1/update/status'),u=await r.json();el('updateCurrent').textContent=u.current_version;el('updateAvailable').textContent=u.available?u.latest_version:'–';el('updateLast').textContent=u.last_success?new Date(u.last_success*1000).toLocaleString():'Noch nicht geprüft';el('updateInstall').hidden=!u.available;const s=el('updateState'),d=el('updateError');d.hidden=!u.error;el('updateErrorCode').textContent=u.error||'';s.className=u.error?'error':u.checked?'status-pill':'muted';s.textContent=u.error?'Updateprüfung fehlgeschlagen: '+updateText(u.error):u.available?'Eine neuere signierte Firmware ist verfügbar.':u.checked?'Die installierte Firmware ist aktuell.':'Es wurde in dieser Laufzeit noch keine manuelle Prüfung durchgeführt.'}catch(e){el('updateState').className='error';el('updateState').textContent='Update-Status konnte nicht geladen werden.'}}loadUpdate();"
       "const download=(name,data)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};"
       "el('fullBackup').onclick=()=>{status('Vollständiges Backup wird erstellt …');el('settingsExport').click();setTimeout(()=>el('historyExport').click(),800)};"
@@ -3430,28 +3727,50 @@ void handleSetup() {
             "</fieldset><fieldset><legend>Stromzähler</legend>"
             "<label>IR-Eingang (GPIO)</label><select name='rx_pin'>");
   for (int pin = 0; pin <= 10; ++pin) {
+    if (!trackerGpioAvailable(pin)) continue;
     body += "<option value='" + String(pin) + "'" + (pin == config.rxPin ? " selected" : "") + ">" + String(pin) + "</option>";
   }
   body += F("</select><label>IR-Sendeausgang (GPIO, -1 = aus)</label><select name='tx_pin'>"
             "<option value='-1'>Aus</option>");
   for (int pin = 0; pin <= 10; ++pin) {
+    if (!trackerGpioAvailable(pin)) continue;
     body += "<option value='" + String(pin) + "'" + (pin == config.txPin ? " selected" : "") + ">" + String(pin) + "</option>";
   }
-  body += "</select><label><input style='width:auto' type='checkbox' name='sniffer' value='1'" +
+  body += "</select>";
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
+  body += "<label><input style='width:auto' type='checkbox' name='sniffer' value='1'" +
           String(config.snifferEnabled ? " checked" : "") +
           "> IR-Sniffer auf Port 81 aktivieren</label>"
           "<label><input style='width:auto' type='checkbox' name='bridge' value='1'" +
           String(config.bridgeEnabled ? " checked" : "") +
-          "> Schreibende IR-Bridge aktivieren</label><p class='muted'>Aus Sicherheitsgründen standardmäßig deaktiviert.</p>";
+          "> Schreibende IR-Bridge aktivieren</label>"
+          "<p class='muted'>Nur im Entwickler-Build verfuegbar.</p>";
+#endif
   body += F("<label>Status-LED (GPIO, -1 = aus)</label><select name='led_pin'>"
             "<option value='-1'>Aus</option>");
   for (int pin = 0; pin <= 10; ++pin) {
+    if (!trackerGpioAvailable(pin)) continue;
     body += "<option value='" + String(pin) + "'" + (pin == config.ledPin ? " selected" : "") + ">" + String(pin) + "</option>";
   }
   body += "</select><label><input style='width:auto' type='checkbox' name='led_inv' value='1'" +
           String(config.ledInverted ? " checked" : "") + "> LED invertieren</label>";
-  body += F("<label>Baudrate</label><select name='baud'>");
-  const uint32_t rates[] = {9600, 19200, 38400, 115200};
+  body += F("<label>Zählerprotokoll</label><select name='meter_protocol'>"
+            "<option value='0'");
+  if (config.meterProtocol == MeterProtocol::Auto) body += " selected";
+  body += F(">Automatisch (SML und älteres IEC 62056-21)</option>"
+            "<option value='1'");
+  if (config.meterProtocol == MeterProtocol::Sml) body += " selected";
+  body += F(">SML</option><option value='2'");
+  if (config.meterProtocol == MeterProtocol::Iec62056) body += " selected";
+  body += F(">IEC 62056-21 / D0 passiv (ASCII)</option><option value='3'");
+  if (config.meterProtocol == MeterProtocol::Iec62056Active) body += " selected";
+  body += F(">IEC 62056-21 / D0 aktiv (300 Baud)</option></select>"
+            "<p class='muted'>Automatisch liest SML und passive ASCII-Telegramme. "
+            "Bleiben gültige Daten aus, versucht der Tracker zusätzlich eine aktive "
+            "IEC-Abfrage. Der aktive Modus sendet /?! und ACK 000 an ältere Zähler.</p>"
+            "<label>Baudrate</label><select name='baud'>");
+  const uint32_t rates[] = {300, 600, 1200, 2400, 4800,
+                            9600, 19200, 38400, 115200};
   for (uint32_t rate : rates) {
     body += "<option value='" + String(rate) + "'" + (rate == config.baud ? " selected" : "") + ">" + String(rate) + "</option>";
   }
@@ -3584,8 +3903,10 @@ void handleSetupSave() {
     config.adminPassword = newAdminPassword;
   config.rxPin = constrain(server.arg("rx_pin").toInt(), 0, 10);
   config.txPin = constrain(server.arg("tx_pin").toInt(), -1, 10);
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
   config.snifferEnabled = server.hasArg("sniffer");
   config.bridgeEnabled = server.hasArg("bridge");
+#endif
   config.apiAccess = constrain(server.arg("api_access").toInt(), 0, 2);
   const bool previousEventPersistence = config.persistEventLog;
   config.persistEventLog = server.hasArg("event_flash");
@@ -3596,7 +3917,10 @@ void handleSetupSave() {
   config.githubAutoInstall = server.hasArg("gh_auto");
   if (config.githubAutoInstall) config.githubUpdateCheck = true;
   config.ledPin = constrain(server.arg("led_pin").toInt(), -1, 10);
+  normalizeHardwarePins();
   config.ledInverted = server.hasArg("led_inv");
+  config.meterProtocol = static_cast<MeterProtocol>(
+      constrain(server.arg("meter_protocol").toInt(), 0, 3));
   config.baud = server.arg("baud").toInt();
   config.mqttHost = server.arg("mqtt_host");
   config.mqttHost.trim();
@@ -3649,7 +3973,7 @@ void handleDiagnostics() {
                   "<details class='compact-details'><summary>Technische Details</summary>"
                   "<p><a href='/api/v1/memory-info'>Speicherinformationen</a></p>"
                   "<p><a href='/api/v1/obis'>Alle erkannten OBIS-Werte</a></p>"
-                  "<p><a href='/api/v1/raw'>Letztes SML-Telegramm (Hex)</a></p>"
+                  "<p><a href='/api/v1/raw'>Letztes Zählertelegramm (Hex)</a></p>"
                   "<p>IR-Sniffer WebSocket: <code>ws://GERAET:81/</code></p>"
                   "<p>IR-Bridge WebSocket: <code>ws://GERAET:82/</code></p>"
                   "<p class='muted'>Die Bridge ist nur aktiv, wenn ein TX-GPIO eingestellt wurde.</p>"
@@ -3708,6 +4032,35 @@ void handleDiagnostics() {
               page("Wartung – Diagnose", body, script));
 }
 
+#if IR_TRACKER_ENABLE_FACTORY_TEST
+void handleFactoryTestPage() {
+  if (!requireAdmin()) return;
+  String body = maintenanceTabs(true, true);
+  body += F(
+      "<div class='card'><span class='status-pill'>Nur Werksprüfungs-Build</span>"
+      "<h2>Werksprüfung</h2>"
+      "<p>Der Test prüft ESP32-C3, 4-MiB-Flash, RAM, Historienpartition, WLAN, "
+      "W5500/LAN sowie IR-Sender und IR-Empfänger. Für den IR-Test muss ein "
+      "optischer Prüfreflektor beide Bauteile koppeln.</p>"
+      "<div class='actions'><button id='fctStart'>Prüfung starten</button>"
+      "<button class='secondary' id='fctLed'>Leuchtende Status-LED bestätigen</button>"
+      "<button class='secondary' id='fctPoe'>Betrieb nur über PoE bestätigen</button></div>"
+      "<p><strong id='fctOverall'>Bereit</strong> <span id='fctProgress' class='muted'></span></p>"
+      "<div id='fctTests' class='stats'></div></div>");
+  const String script = F(
+      "const o=document.getElementById('fctOverall'),p=document.getElementById('fctProgress'),x=document.getElementById('fctTests');"
+      "const labels={chip:'ESP32-C3',flash:'Flash',ram:'RAM',storage:'Historie',wifi:'WLAN',w5500:'W5500',ethernet:'LAN',ir_loopback:'IR TX/RX',led:'Status-LED',poe:'PoE',ble:'Bluetooth'};"
+      "async function load(){const r=await fetch('/api/v1/factory-test',{cache:'no-store'}),j=await r.json();"
+      "o.textContent=j.state==='pass'?'PASS':j.state==='running'?'PRÜFUNG LÄUFT':j.state==='waiting'?'BESTÄTIGUNG AUSSTEHEND':j.state==='fail'?'FAIL':'BEREIT';o.className=j.state==='pass'?'ok':j.state==='fail'?'error':'status-pill';p.textContent=j.state==='running'?j.progress+' %':'';"
+      "x.innerHTML=j.tests.map(t=>`<div class='stat'><strong>${labels[t.id]||t.id}: ${t.state.toUpperCase()}</strong><small>${t.detail}</small></div>`).join('');if(j.state==='running')setTimeout(load,250)}"
+      "document.getElementById('fctStart').onclick=async()=>{await fetch('/api/v1/factory-test/start',{method:'POST'});load()};"
+      "document.getElementById('fctLed').onclick=async()=>{await fetch('/api/v1/factory-test/led-confirm',{method:'POST'});load()};"
+      "document.getElementById('fctPoe').onclick=async()=>{await fetch('/api/v1/factory-test/poe-confirm',{method:'POST'});load()};load();");
+  server.send(200, "text/html; charset=utf-8",
+              page("Werksprüfung", body, script));
+}
+#endif
+
 void setIrPulseOutput(bool active) {
   if (irPulse.pin < 0) return;
   digitalWrite(irPulse.pin, active ^ irPulse.inverted);
@@ -3723,7 +4076,7 @@ void finishIrPulseJob() {
   }
   irPulse.active = false;
   irPulse.outputActive = false;
-  meterSerial.begin(config.baud, SERIAL_8N1, config.rxPin, config.txPin);
+  restoreConfiguredMeterSerial();
   if (config.ledPin >= 0) {
     pinMode(config.ledPin, OUTPUT);
     digitalWrite(config.ledPin, config.ledInverted);
@@ -3737,6 +4090,7 @@ bool beginIrPulseJob(const uint8_t digits[4], uint16_t pulseMs,
   if (selectedPin < 0 || selectedPin > 10 || irPulse.active ||
       gpioScan.active || selectedPin == config.rxPin)
     return false;
+  if (activeD0.active) finishActiveD0Attempt();
   meterSerial.end();
   pinMode(selectedPin, OUTPUT);
   irPulse = {};
@@ -3943,7 +4297,8 @@ void handleIrPulse() {
 void handleGpioOutputTest() {
   if (!requireAdmin()) return;
   const int pin = server.arg("pin").toInt();
-  if (!server.hasArg("pin") || pin < 0 || pin > 10 || pin == config.rxPin) {
+  if (!server.hasArg("pin") || !trackerGpioAvailable(pin) ||
+      pin == config.rxPin) {
     server.send(400, "application/json",
                 "{\"error\":\"invalid_or_rx_gpio\"}");
     return;
@@ -3995,7 +4350,7 @@ DigitalSample sampleDigitalPin(int8_t pin, uint32_t durationUs = 50000) {
 void handleGpioTxScan() {
   if (!requireAdmin()) return;
   const int rx = server.arg("rx").toInt();
-  if (!server.hasArg("rx") || rx < 0 || rx > 10 || gpioScan.active ||
+  if (!server.hasArg("rx") || !trackerGpioAvailable(rx) || gpioScan.active ||
       irPulse.active) {
     server.send(400, "application/json", "{\"error\":\"invalid_rx_or_busy\"}");
     return;
@@ -4006,10 +4361,12 @@ void handleGpioTxScan() {
   pinMode(rx, INPUT);
   int8_t pins[10] = {};
   uint8_t pinCount = 0;
-  if (config.txPin >= 0 && config.txPin <= 10 && config.txPin != rx)
+  if (config.txPin >= 0 && trackerGpioAvailable(config.txPin) &&
+      config.txPin != rx)
     pins[pinCount++] = config.txPin;
   for (int8_t pin = 0; pin <= 10; ++pin)
-    if (pin != rx && pin != config.txPin) pins[pinCount++] = pin;
+    if (trackerGpioAvailable(pin) && pin != rx && pin != config.txPin)
+      pins[pinCount++] = pin;
 
   int8_t foundPin = -1;
   bool foundInverted = false;
@@ -4178,6 +4535,9 @@ bool beginNextKnownWifi() {
     wifiCandidate = (wifiCandidate + 1) % kWifiSlots;
     ++wifiTried;
     if (!config.ssid[slot].length()) continue;
+    // Association, DHCP and TLS setup are deliberately performed at the
+    // performance clock. Eco mode resumes two minutes after the last attempt.
+    requestCpuBoost("wifi_connect");
     WiFi.begin(config.ssid[slot].c_str(), config.password[slot].c_str());
     wifiCandidateStartedMs = millis();
     Serial.printf("Trying Wi-Fi slot %u: %s\n", slot + 1, config.ssid[slot].c_str());
@@ -4190,7 +4550,51 @@ bool beginNextKnownWifi() {
 
 void manageWifi() {
   static bool wasConnected = false;
+  static bool wasEthernetConnected = false;
+  static bool previousPrimaryEthernet = false;
   const bool connected = WiFi.status() == WL_CONNECTED;
+  const bool ethernetConnected = ethernet.connected();
+  const bool anyNetworkConnected = connected || ethernetConnected;
+
+  if (ethernetConnected != wasEthernetConnected) {
+    if (ethernetConnected) {
+      eventLog.add("INFO", "ETHERNET_CONNECTED",
+                   "LAN verbunden: " + ethernet.localIP().toString());
+      stopAccessPoint();
+    } else if (wasEthernetConnected) {
+      requestCpuBoost("lan_fallback");
+      eventLog.add("WARN", "ETHERNET_LOST",
+                   "LAN-Verbindung verloren, WLAN übernimmt");
+    }
+  }
+
+  // Existing TCP sessions cannot migrate between interfaces. Reconnect MQTT
+  // once when the preferred route changes; all other requests are short-lived.
+  if (ethernetConnected != previousPrimaryEthernet) {
+    if (mqtt.connected()) mqtt.disconnect();
+    mqttNetwork.stop();
+    lastMqttAttemptMs = 0;
+    previousPrimaryEthernet = ethernetConnected;
+  }
+
+  if (anyNetworkConnected && !ntpConfigured) {
+    configTzTime(config.timezone.c_str(), "fritz.box", "pool.ntp.org",
+                 "time.cloudflare.com");
+    ntpConfigured = true;
+  }
+#if IR_TRACKER_ENABLE_MDNS
+  if (anyNetworkConnected && !mdnsRunning) {
+    if (MDNS.begin(config.hostname.c_str())) {
+      MDNS.addService("http", "tcp", 80);
+      mdnsRunning = true;
+      eventLog.add("INFO", "MDNS_STARTED",
+                   "Tracker erreichbar als " + config.hostname + ".local");
+    } else {
+      eventLog.add("WARN", "MDNS_FAILED",
+                   "mDNS konnte nicht gestartet werden");
+    }
+  }
+#endif
   if (connected) {
     if (!wasConnected) {
       stopAccessPoint();
@@ -4198,20 +4602,6 @@ void manageWifi() {
       lastWifiPowerEvaluateMs = millis();
       forceFullWifiPower();
       accessPointAllowed = true;
-      if (!ntpConfigured) {
-        configTzTime(config.timezone.c_str(), "fritz.box",
-                     "pool.ntp.org", "time.cloudflare.com");
-        ntpConfigured = true;
-      }
-      if (!mdnsRunning && MDNS.begin(config.hostname.c_str())) {
-        MDNS.addService("http", "tcp", 80);
-        mdnsRunning = true;
-        eventLog.add("INFO", "MDNS_STARTED",
-                     "Tracker erreichbar als " + config.hostname + ".local");
-      } else if (!mdnsRunning) {
-        eventLog.add("WARN", "MDNS_FAILED",
-                     "mDNS konnte nicht gestartet werden");
-      }
       Serial.printf("Wi-Fi connected: %s, %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
       eventLog.add("INFO", "WIFI_CONNECTED",
                    WiFi.SSID() + " " + WiFi.localIP().toString());
@@ -4224,15 +4614,18 @@ void manageWifi() {
       lastWifiPowerEvaluateMs = 0;
       wifiMinModemSleepActive = false;
       eventLog.add("WARN", "WIFI_LOST", "WLAN-Verbindung verloren");
-      if (mdnsRunning) {
+#if IR_TRACKER_ENABLE_MDNS
+      if (mdnsRunning && !ethernetConnected) {
         MDNS.end();
         mdnsRunning = false;
       }
+#endif
       wifiTried = 0;
       wifiCandidate = 0;
       wifiCandidateStartedMs = 0;
     }
-    startAccessPoint();
+    if (!ethernetConnected) startAccessPoint();
+    else stopAccessPoint();
     if (accessPointMode && accessPointStartedMs &&
         millis() - accessPointStartedMs >=
             static_cast<uint32_t>(config.setupApMinutes) * 60000UL) {
@@ -4250,6 +4643,7 @@ void manageWifi() {
     }
   }
   wasConnected = connected;
+  wasEthernetConnected = ethernetConnected;
 }
 
 String mqttBaseTopic() {
@@ -4305,7 +4699,13 @@ void publishHomieMetadata() {
     if (strlen(property.unit)) mqtt.publish((base + "/$unit").c_str(), property.unit, true);
   }
   mqtt.publish((root + "/network/$name").c_str(), "Netzwerk", true);
-  mqtt.publish((root + "/network/$properties").c_str(), "rssi,ssid,ip", true);
+  mqtt.publish((root + "/network/$properties").c_str(),
+               "transport,rssi,ssid,ip", true);
+  mqtt.publish((root + "/network/transport/$name").c_str(),
+               "Aktiver Netzwerkweg", true);
+  mqtt.publish((root + "/network/transport/$datatype").c_str(), "enum", true);
+  mqtt.publish((root + "/network/transport/$format").c_str(),
+               "ethernet,wifi,setup_ap,offline", true);
   mqtt.publish((root + "/network/rssi/$name").c_str(), "WLAN Signal", true);
   mqtt.publish((root + "/network/rssi/$datatype").c_str(), "integer", true);
   mqtt.publish((root + "/network/rssi/$unit").c_str(), "dBm", true);
@@ -4349,13 +4749,18 @@ void publishMqttValues() {
   mqtt.publish((homie + "/meter/fresh").c_str(), fresh ? "true" : "false", true);
   mqtt.publish((homie + "/meter/telegrams").c_str(), String(meter.telegrams).c_str(), true);
   mqtt.publish((homie + "/meter/crc-errors").c_str(), String(meter.crcErrors).c_str(), true);
-  mqtt.publish((homie + "/network/rssi").c_str(), String(WiFi.RSSI()).c_str(), true);
-  mqtt.publish((homie + "/network/ssid").c_str(), WiFi.SSID().c_str(), true);
-  mqtt.publish((homie + "/network/ip").c_str(), WiFi.localIP().toString().c_str(), true);
+  mqtt.publish((homie + "/network/transport").c_str(),
+               primaryTransportName(), true);
+  mqtt.publish((homie + "/network/rssi").c_str(),
+               String(wifiConnected() ? WiFi.RSSI() : 0).c_str(), true);
+  mqtt.publish((homie + "/network/ssid").c_str(),
+               wifiConnected() ? WiFi.SSID().c_str() : "", true);
+  mqtt.publish((homie + "/network/ip").c_str(),
+               primaryNetworkIp().c_str(), true);
 }
 
 void manageMqtt() {
-  if (WiFi.status() != WL_CONNECTED || !config.mqttHost.length()) {
+  if (!networkConnected() || !config.mqttHost.length()) {
     if (mqtt.connected()) mqtt.disconnect();
     mqttNetwork.stop();
     mqttRetryMs = 10000;
@@ -4402,6 +4807,9 @@ void setupRoutes() {
                                    "X-CSRF-Token", "Cookie"};
   server.collectHeaders(securityHeaders, 5);
   server.on("/assets/common.css", HTTP_GET, [] {
+    if (tryServeDebugAsset("/assets/common.css", "text/css; charset=utf-8",
+                           kCommonCssGzip, kCommonCssGzipSize))
+      return;
     server.sendHeader("Content-Encoding", "gzip");
     server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
     server.sendHeader("X-Content-Type-Options", "nosniff");
@@ -4409,6 +4817,10 @@ void setupRoutes() {
                   reinterpret_cast<PGM_P>(kCommonCssGzip), kCommonCssGzipSize);
   });
   server.on("/assets/common.js", HTTP_GET, [] {
+    if (tryServeDebugAsset("/assets/common.js",
+                           "application/javascript; charset=utf-8",
+                           kCommonJsGzip, kCommonJsGzipSize))
+      return;
     server.sendHeader("Content-Encoding", "gzip");
     server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
     server.sendHeader("X-Content-Type-Options", "nosniff");
@@ -4416,6 +4828,10 @@ void setupRoutes() {
                   reinterpret_cast<PGM_P>(kCommonJsGzip), kCommonJsGzipSize);
   });
   server.on("/assets/i18n.js", HTTP_GET, [] {
+    if (tryServeDebugAsset("/assets/i18n.js",
+                           "application/javascript; charset=utf-8",
+                           kI18nJsGzip, kI18nJsGzipSize))
+      return;
     server.sendHeader("Content-Encoding", "gzip");
     server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
     server.sendHeader("X-Content-Type-Options", "nosniff");
@@ -4423,6 +4839,10 @@ void setupRoutes() {
                   reinterpret_cast<PGM_P>(kI18nJsGzip), kI18nJsGzipSize);
   });
   server.on("/assets/dashboard.js", HTTP_GET, [] {
+    if (tryServeDebugAsset("/assets/dashboard.js",
+                           "application/javascript; charset=utf-8",
+                           kDashboardJsGzip, kDashboardJsGzipSize))
+      return;
     server.sendHeader("Content-Encoding", "gzip");
     server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
     server.sendHeader("X-Content-Type-Options", "nosniff");
@@ -4431,6 +4851,10 @@ void setupRoutes() {
                   kDashboardJsGzipSize);
   });
   server.on("/assets/history.js", HTTP_GET, [] {
+    if (tryServeDebugAsset("/assets/history.js",
+                           "application/javascript; charset=utf-8",
+                           kHistoryJsGzip, kHistoryJsGzipSize))
+      return;
     server.sendHeader("Content-Encoding", "gzip");
     server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
     server.sendHeader("X-Content-Type-Options", "nosniff");
@@ -4442,6 +4866,37 @@ void setupRoutes() {
   server.on("/interfaces", HTTP_GET, handleInterfacesPage);
   server.on("/maintenance", HTTP_GET, handleMaintenancePage);
   server.on("/maintenance/diagnostics", HTTP_GET, handleDiagnostics);
+#if IR_TRACKER_ENABLE_FACTORY_TEST
+  server.on("/maintenance/factory-test", HTTP_GET, handleFactoryTestPage);
+  server.on("/api/v1/factory-test", HTTP_GET, [] {
+    if (requireAdmin())
+      server.send(200, "application/json", factoryTestJson());
+  });
+  server.on("/api/v1/factory-test/start", HTTP_POST, [] {
+    if (!requireAdmin()) return;
+    if (!startFactoryTest()) {
+      server.send(409, "application/json", factoryTestJson());
+      return;
+    }
+    server.send(202, "application/json", factoryTestJson());
+  });
+  server.on("/api/v1/factory-test/led-confirm", HTTP_POST, [] {
+    if (!requireAdmin()) return;
+    factoryTest.ledConfirmed = true;
+    if (config.ledPin >= 0)
+      digitalWrite(config.ledPin, config.ledInverted);
+    server.send(200, "application/json", factoryTestJson());
+  });
+  server.on("/api/v1/factory-test/poe-confirm", HTTP_POST, [] {
+    if (!requireAdmin()) return;
+    if (!ethernet.connected()) {
+      server.send(409, "application/json", factoryTestJson());
+      return;
+    }
+    factoryTest.poeConfirmed = true;
+    server.send(200, "application/json", factoryTestJson());
+  });
+#endif
   server.on("/setup", HTTP_GET, handleSetup);
   server.on("/setup/save", HTTP_POST, handleSetupSave);
   server.on("/auth/logout", HTTP_POST, handleLogout);
@@ -4538,8 +4993,8 @@ void setupRoutes() {
     server.send(200, "application/json",
                 "{\"sys\":{\"uptime\":" + String(millis() / 1000) +
                     "},\"wifi\":{\"sta_ip\":\"" +
-                    WiFi.localIP().toString() + "\",\"rssi\":" +
-                    String(WiFi.RSSI()) + "},\"em:0\":" +
+                    primaryNetworkIp() + "\",\"rssi\":" +
+                    String(wifiConnected() ? WiFi.RSSI() : 0) + "},\"em:0\":" +
                     shellyEmStatus() + "}");
   });
   server.on("/api/v1/memory-info", HTTP_GET, [] {
@@ -4607,6 +5062,7 @@ void setupRoutes() {
   server.begin();
 }
 
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
 void setupWebSockets() {
   if (config.snifferEnabled) snifferSocket.begin();
   if (config.bridgeEnabled) {
@@ -4623,11 +5079,18 @@ void setupWebSockets() {
         });
   }
 }
+#endif
 
 void updateLed() {
   static uint32_t lastToggle = 0;
   static bool state = false;
   if (gpioScan.active) return;
+#if IR_TRACKER_ENABLE_FACTORY_TEST
+  // Keep the LED steadily lit until the operator has completed the visual FCT.
+  if ((factoryTest.running || factoryTest.finished) &&
+      !factoryTest.ledConfirmed)
+    return;
+#endif
   if (config.ledPin < 0) return;
   if (ecoLedSuppressed()) {
     if (state) {
@@ -4673,6 +5136,20 @@ void setup() {
   const esp_partition_t *running = esp_ota_get_running_partition();
   esp_ota_mark_app_valid_cancel_rollback();
   loadConfig();
+  // Probe Ethernet before UART/LED GPIOs are configured. If no W5500 answers
+  // VERSIONR, the SPI bus is released and all GPIOs remain available to the
+  // existing Wi-Fi-only hardware configuration.
+  if (ethernet.begin(config.hostname.c_str())) {
+    Serial.println("Universal network: W5500 driver started");
+  } else {
+    Serial.printf("Universal network: Wi-Fi fallback (%s)\n",
+                  ethernet.lastError().c_str());
+  }
+  normalizeHardwarePins();
+  const bool debugStorageReady = LittleFS.begin(true, "/coredump", 10, "coredump");
+  if (!debugStorageReady) {
+    Serial.println("Coredump partition not mounted: falling back to firmware-stored assets");
+  }
   const bool historyReady = history.begin();
   eventLog.begin(config.persistEventLog);
   eventLog.add(historyReady ? "INFO" : "ERROR", "BOOT",
@@ -4684,7 +5161,7 @@ void setup() {
            static_cast<unsigned long>(ESP.getEfuseMac() & 0xffffffff));
   deviceId = idBuffer;
   meterSerial.setRxBufferSize(2048);
-  meterSerial.begin(config.baud, SERIAL_8N1, config.rxPin, config.txPin);
+  restoreConfiguredMeterSerial();
   if (config.ledPin >= 0) {
     pinMode(config.ledPin, OUTPUT);
     digitalWrite(config.ledPin, config.ledInverted);
@@ -4692,48 +5169,67 @@ void setup() {
   // DE: ESP-IDFs dauerhaften WLAN-Namensraum nicht nutzen; er gehört Solakon. | EN: Do not use ESP-IDF's persistent Wi-Fi namespace; it belongs to Solakon.
   WiFi.persistent(false);
   WiFi.setHostname(config.hostname.c_str());
+  // Start Eco control before networking so connection attempts can request a
+  // deterministic temporary boost instead of being down-clocked mid-DHCP.
+  startCpuPowerMode();
   startAccessPoint();
   wifiTried = 0;
   beginNextKnownWifi();
   mqtt.setServer(config.mqttHost.c_str(), config.mqttPort);
-  mqtt.setBufferSize(768);
+  // The retained state contains all values plus per-value age information.
+  // Keep enough packet space so MQTT never silently drops the complete JSON.
+  mqtt.setBufferSize(4096);
   mqtt.setSocketTimeout(1);
   setupRoutes();
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
   setupWebSockets();
-  startCpuPowerMode();
+#endif
   Serial.printf("Offline firmware %s, partition=%s, RX=GPIO%u @ %lu baud\n",
                 kFirmwareVersion, running ? running->label : "?", config.rxPin, config.baud);
-  Serial.printf("Open http://%s/\n",
-                accessPointMode ? WiFi.softAPIP().toString().c_str() : WiFi.localIP().toString().c_str());
+  Serial.printf("Open http://%s/\n", primaryNetworkIp().c_str());
 }
 
 void loop() {
   esp_task_wdt_reset();
+  ethernet.loop();
   manageWifi();
   manageAdaptiveWifiPower();
   manageMqtt();
   manageGithubFirmwareUpdate();
   if (accessPointMode) dns.processNextRequest();
   server.handleClient();
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
   if (config.snifferEnabled) snifferSocket.loop();
   if (config.bridgeEnabled) bridgeSocket.loop();
+#endif
   updateIrPulseJob();
   updateApatorUnlock();
   manageAutoPin();
+#if IR_TRACKER_ENABLE_FACTORY_TEST
+  updateFactoryTest();
+  if (factoryTest.running) {
+    monitorHeap();
+    delay(1);
+    return;
+  }
+#endif
   updateGpioScan();
+  updateMeterRecovery();
+  updateActiveD0();
   uint8_t incoming[128];
   size_t count = 0;
   while (!irPulse.active && meterSerial.available() && count < sizeof(incoming)) {
     incoming[count++] = meterSerial.read();
   }
   if (count) {
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
     if (config.snifferEnabled) snifferSocket.broadcastBIN(incoming, count);
+#endif
     for (size_t i = 0; i < count; ++i) consumeMeterByte(incoming[i]);
   }
+  updateActiveD0();
   updateGpioScan();
-  const bool meterFresh =
-      meter.lastTelegramMs &&
-      millis() - meter.lastTelegramMs < kReadingStaleMs;
+  const bool meterFresh = valueFresh(meter.powerUpdatedMs);
   if (millis() - lastHistorySampleMs >= 1000) {
     lastHistorySampleMs = millis();
     if (meterFresh && !gpioScan.active)

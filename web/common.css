@@ -70,14 +70,6 @@ footer{margin-top:42px;padding:20px 0 8px;border-top:1px solid #213d2d;color:var
 .chart-section h2{margin:0 0 8px;font-size:1.25rem}
 .chart-note{padding:10px 12px;border-left:3px solid var(--chart-power);background:var(--card);border-radius:6px;line-height:1.45}
 .theme-toggle{width:auto;margin:0 0 0 auto;padding:9px 12px;background:transparent;border-color:#355540;color:var(--muted)}
-.theme-panel{position:fixed;right:clamp(12px,2vw,34px);top:82px;z-index:20;width:min(430px,calc(100vw - 24px));max-height:calc(100vh - 100px);overflow:auto;padding:18px;background:var(--card);border:1px solid #456553;border-radius:16px;box-shadow:0 18px 60px #000b}
-.theme-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.theme-head button{width:42px;margin:0;padding:7px;font-size:1.2rem}
-.theme-panel p{margin:8px 0 4px}
-.theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
-.theme-grid label{margin:8px 0 0}
-.theme-grid input[type=color]{height:42px;padding:4px;cursor:pointer}
-.theme-panel>button{margin-top:16px}
 .subnav{display:flex;gap:8px;flex-wrap:wrap;margin:-8px 0 22px}
 .subnav a{padding:10px 14px;border:1px solid #355540;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:700}
 .subnav a:hover,.subnav a.active{background:var(--accent);border-color:var(--accent);color:var(--text)}
@@ -89,8 +81,6 @@ footer{margin-top:42px;padding:20px 0 8px;border-top:1px solid #213d2d;color:var
 nav{gap:2px;font-size:.86rem;position:static;min-width:0}
 nav a{padding:8px}
 .theme-toggle{margin-left:0}
-.theme-panel{top:12px}
-.theme-grid{grid-template-columns:1fr 1fr}
 .grid{grid-template-columns:minmax(0,1fr)}
 .card{padding:14px;min-width:0}
 .inline{grid-template-columns:1fr}

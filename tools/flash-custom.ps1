@@ -1,6 +1,6 @@
 param(
     [string]$Port = "COM3",
-    [string]$Version = "1.0.2-beta.1",
+    [string]$Version = "1.3.0",
     [string]$ConfirmCustomOnly = ""
 )
 

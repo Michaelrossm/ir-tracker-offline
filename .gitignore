@@ -1,4 +1,6 @@
 .pio
+.pio-core/
+.pio-build-shim/
 release/
 __pycache__/
 *.py[cod]
@@ -20,3 +22,10 @@ signing/private/
 # EN: Local exports contain Wi-Fi/MQTT credentials and private history.
 device-backups/
 soak-test*.csv
+history_backup*.csv
+settings_backup*.json
+/local-installer/
+/data/
+/hardware/*
+!/hardware/POWER_ORING.md
+!/hardware/STACK_INTERFACE.md
