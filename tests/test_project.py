@@ -532,7 +532,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn('kFirmwareAuthor[] = "Michael Roßmann"', SOURCE)
         self.assertIn("PolyForm Noncommercial 1.0.0", SOURCE)
         self.assertTrue((ROOT / "LICENSE.md").exists())
-        self.assertTrue((ROOT / "THIRD_PARTY_NOTICES.md").exists())
+        self.assertTrue(
+            (ROOT / "docs/legal/THIRD_PARTY_NOTICES.md").exists()
+        )
 
     def test_committed_public_key_matches_header(self) -> None:
         pem = (ROOT / "signing" / "firmware-signing-public.pem").read_text()

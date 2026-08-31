@@ -62,15 +62,15 @@ def main() -> None:
     documents = [
         ROOT / "README.md",
         ROOT / "LICENSE.md",
-        ROOT / "THIRD_PARTY_NOTICES.md",
-        ROOT / "TRADEMARKS.md",
+        ROOT / "docs" / "legal" / "THIRD_PARTY_NOTICES.md",
+        ROOT / "docs" / "legal" / "TRADEMARKS.md",
         ROOT / "CHANGELOG.md",
         ROOT / "docs" / "INSTALLATION.md",
-        ROOT / "SECURITY.md",
+        ROOT / ".github" / "SECURITY.md",
         ROOT / "docs" / "INTERFACES.md",
         ROOT / "docs" / "USB_SWITCHING.md",
         ROOT / "docs" / "SOAK_TEST.md",
-        ROOT / "RIGHTS_REVIEW.md",
+        ROOT / "docs" / "legal" / "RIGHTS_REVIEW.md",
         ROOT / "docs" / "RELEASE_CHECKLIST.md",
         ROOT / "docs" / "HARDWARE_TEST.md",
         ROOT / "docs" / "ARCHITECTURE.md",
@@ -83,6 +83,7 @@ def main() -> None:
         ROOT / "tools" / "soak-test.py",
         ROOT / "tests" / "http_functional_test.py",
         ROOT / "tests" / "http_security_test.py",
+        release / f"RELEASE_NOTES-{version}.md",
     ]
     license_files = sorted((ROOT / "licenses").glob("*"))
     files = firmware_files + documents + license_files
@@ -105,12 +106,8 @@ def main() -> None:
     zip_path = release / f"ir-tracker-custom-{version}-public.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for path in files:
-            if path.parent == ROOT / "licenses":
-                target = f"licenses/{path.name}"
-            elif path.parent == ROOT / "docs":
-                target = f"docs/{path.name}"
-            else:
-                target = path.name
+            target = (path.name if path.parent == release
+                      else path.relative_to(ROOT).as_posix())
             archive.write(path, target)
         archive.writestr("SHA256SUMS.txt", sums)
     print(zip_path)
