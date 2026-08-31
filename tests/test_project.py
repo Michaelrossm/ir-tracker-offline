@@ -119,7 +119,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.2-beta.1"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.2-beta.2"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -139,6 +139,49 @@ class ProjectSecurityTests(unittest.TestCase):
         )
         self.assertIn("const auto readRange", HISTORY_SOURCE)
         self.assertIn("tier.capacity - first", HISTORY_SOURCE)
+
+    def test_meter_diagnosis_reuses_one_evaluation_for_all_outputs(self):
+        diagnostics = (ROOT / "src/app/diagnostics/DiagnosticsApi.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("constexpr MeterDiagnosisCode evaluateMeterDiagnosisCode(", diagnostics)
+        self.assertGreaterEqual(diagnostics.count("meterDiagnosis();"), 3)
+        for case in (
+            "no bytes must report no IR signal",
+            "bytes without telegrams must be distinguished",
+            "power with missing energy values is a partial result",
+            "one missing energy counter must not be a communication error",
+            "complete stable readings must report OK",
+        ):
+            self.assertIn(case, diagnostics)
+        self.assertIn("attempts >= 20U", diagnostics)
+        self.assertIn("attempts) * 15U", diagnostics)
+
+    def test_support_report_is_on_demand_and_excludes_known_secrets(self):
+        diagnostics = (ROOT / "src/app/diagnostics/DiagnosticsApi.cpp").read_text(
+            encoding="utf-8"
+        )
+        report = diagnostics[
+            diagnostics.index("String supportReportText(bool technical)") :
+        ]
+        for forbidden in (
+            "config.ssid",
+            "config.password",
+            "config.adminPassword",
+            "config.mqttUser",
+            "config.mqttPassword",
+            "config.meterPin",
+            "WiFi.localIP",
+            "WiFi.macAddress",
+            "lastTelegram.data",
+        ):
+            self.assertNotIn(forbidden, report)
+        self.assertIn('report.reserve(technical ? 2600 : 1800);', report)
+        self.assertIn('/api/v1/support-report', SOURCE)
+        self.assertIn("copyReport(false)", SOURCE)
+        self.assertIn("copyReport(true)", SOURCE)
+        for heading in ("IR-Verbindung", "Protokoll", "Messwerte", "System"):
+            self.assertIn(heading, SOURCE)
 
     def test_debug_partition_is_used_for_optional_frontend_assets(self):
         source = SOURCE

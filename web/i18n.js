@@ -4,6 +4,7 @@ const originalTitle=document.title;
 const requestedLanguage=new URLSearchParams(location.search).get('lang');
 if(requestedLanguage==='de'||requestedLanguage==='en'){try{localStorage.setItem(storageKey,requestedLanguage)}catch(e){}}
 const translations={
+"Zählerdiagnose":"Meter diagnostics","Wird geprüft …":"Checking …","Zählerdaten werden ausgewertet.":"Meter data is being evaluated.","Diagnose für Support kopieren":"Copy support diagnostics","Technische Diagnose kopieren":"Copy technical diagnostics","IR-Verbindung":"IR connection","Protokoll":"Protocol","Messwerte":"Readings","System":"System",
 "EcoTracker-kompatibel":"EcoTracker compatible","Lokale, nur lesende EcoTracker-Messwertausgabe für kompatible Speicher und Anwendungen.":"Local read-only EcoTracker meter output for compatible batteries and applications.",
 "Sprache wechseln":"Change language","Farben":"Colors","Farbschema anpassen":"Customize color scheme","Farbschema":"Color scheme","Schließen":"Close","Farben werden sofort und ausschließlich in diesem Browser gespeichert.":"Colors are applied immediately and stored only in this browser.","Hintergrund":"Background","Karten":"Cards","Standardfarben wiederherstellen":"Restore default colors",
 "Dashboard":"Dashboard","Einstellungen":"Settings","Historie":"History","Schnittstellen":"Interfaces","Wartung":"Maintenance","Diagnose":"Diagnostics",

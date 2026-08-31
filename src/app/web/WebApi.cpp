@@ -174,6 +174,12 @@ void setupRoutes() {
     if (requireAdmin())
       server.send(200, "application/json", meterReportJson());
   });
+  server.on("/api/v1/support-report", HTTP_GET, [] {
+    if (!requireAdmin()) return;
+    sendIntegrationResponse(
+        "text/plain; charset=utf-8",
+        supportReportText(server.arg("technical") == "1"));
+  });
   // DE: Shelly-kompatible, nur lesende Zählerfassade für Speicher. | EN: Shelly-compatible read-only meter facade for storage systems.
   // DE: EcoTracker-kompatible, nur lesende lokale Zaehler-API.
   // EN: EcoTracker-compatible read-only local meter API.
