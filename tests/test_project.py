@@ -47,6 +47,8 @@ WEB_RUNTIME_SOURCE = "\n".join(
 )
 HISTORY_SOURCE = (ROOT / "src/app/storage/HistoryStore.cpp").read_text(encoding="utf-8")
 HISTORY_HEADER = (ROOT / "src/app/storage/HistoryStore.h").read_text(encoding="utf-8")
+DEBUG_STORAGE_SOURCE = (ROOT / "src/app/storage/DebugStorage.cpp").read_text(encoding="utf-8")
+DEBUG_STORAGE_HEADER = (ROOT / "src/app/storage/DebugStorage.h").read_text(encoding="utf-8")
 EVENT_SOURCE = (ROOT / "src/app/core/EventLog.cpp").read_text(encoding="utf-8")
 EVENT_HEADER = (ROOT / "src/app/core/EventLog.h").read_text(encoding="utf-8")
 HARDWARE_PROFILE = (ROOT / "src/app/hardware/HardwareProfile.h").read_text(encoding="utf-8")
@@ -69,6 +71,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "app/meter/SmlParser.cpp",
             "app/network/EthernetManager.cpp",
             "app/storage/HistoryStore.cpp",
+            "app/storage/DebugStorage.cpp",
         )
         for relative in expected:
             self.assertTrue((ROOT / "src" / relative).is_file(), relative)
@@ -108,6 +111,7 @@ class ProjectSecurityTests(unittest.TestCase):
         for compiled in (
             "app/core/EventLog.cpp", "app/network/EthernetManager.cpp",
             "app/storage/HistoryStore.cpp",
+            "app/storage/DebugStorage.cpp",
         ):
             self.assertEqual(PLATFORMIO.count(f"+<{compiled}>"), 3)
         self.assertEqual(PLATFORMIO.count("-flto"), 3)
@@ -125,10 +129,51 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_debug_partition_is_used_for_optional_frontend_assets(self):
         source = SOURCE
-        self.assertIn("LittleFS.begin(true, \"/coredump\", 10, \"coredump\")", source)
+        self.assertIn("debugStorage.begin()", source)
+        self.assertIn("debugStorage.openAsset(relativePath", source)
         self.assertIn("tryServeDebugAsset(\"/assets/i18n.js\"", source)
         self.assertIn("board_build.filesystem = littlefs", PLATFORMIO)
-        self.assertIn("coredump,   data, spiffs", PARTITIONS)
+        self.assertIn("debugfs,    data, spiffs,  0x2B0000, 0x10000", PARTITIONS)
+        self.assertNotIn("coredump,   data, spiffs", PARTITIONS)
+
+    def test_debug_partition_compatibility_contract(self):
+        # New labels win, old OTA layouts remain valid, and an absent optional
+        # partition is represented by nullptr rather than causing a crash.
+        self.assertIn(
+            'return hasDebugfs ? "debugfs" : (hasCoredump ? "coredump" : nullptr);',
+            DEBUG_STORAGE_HEADER,
+        )
+        self.assertLess(
+            DEBUG_STORAGE_SOURCE.index('findPartition("debugfs")'),
+            DEBUG_STORAGE_SOURCE.index('findPartition("coredump")'),
+        )
+        self.assertIn("if (!partitionLabel_)", DEBUG_STORAGE_SOURCE)
+        self.assertIn("State::Missing", DEBUG_STORAGE_SOURCE)
+        self.assertIn("debugfs must be preferred", DEBUG_STORAGE_HEADER)
+        self.assertIn("legacy coredump must remain supported", DEBUG_STORAGE_HEADER)
+        self.assertIn("missing debug storage must be safe", DEBUG_STORAGE_HEADER)
+        self.assertIn("partitionIsBlank", DEBUG_STORAGE_SOURCE)
+        self.assertIn("filesystem_.begin(false", DEBUG_STORAGE_SOURCE)
+        self.assertIn("existing_partition_not_littlefs_preserved", DEBUG_STORAGE_SOURCE)
+        self.assertIn('constexpr char kPreferredDirectory[] = "/debug"', DEBUG_STORAGE_SOURCE)
+        self.assertIn('constexpr char kLegacyDirectory[] = "/coredump"', DEBUG_STORAGE_SOURCE)
+        self.assertIn('LittleFS.begin(true, "/history", 10, "history")', HISTORY_SOURCE)
+        for fixed_entry in (
+            "ota_0,      app,  ota_0,   0x10000,  0x150000",
+            "ota_1,      app,  ota_1,   0x160000, 0x150000",
+            "history,    data, spiffs,  0x2C0000, 0x140000",
+        ):
+            self.assertIn(fixed_entry, PARTITIONS)
+
+    def test_release_size_optimizations_remain_enabled(self):
+        self.assertEqual(PLATFORMIO.count("-flto"), 3)
+        self.assertEqual(PLATFORMIO.count("-fno-unwind-tables"), 3)
+        self.assertEqual(PLATFORMIO.count("-fno-asynchronous-unwind-tables"), 3)
+        self.assertEqual(PLATFORMIO.count("CORE_DEBUG_LEVEL=0"), 2)
+        self.assertEqual(PLATFORMIO.count("CORE_DEBUG_LEVEL=1"), 1)
+        self.assertIn("gzip.compress(raw, compresslevel=9, mtime=0)", WEB_ASSET_SCRIPT)
+        self.assertIn("serializeJson(document, output)", SOURCE)
+        self.assertNotIn("serializeJsonPretty(document, output)", SOURCE)
 
     def test_original_backups_are_ignored(self) -> None:
         ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")

@@ -26,6 +26,18 @@
 - Gzip-komprimierte Browserassets werden reproduzierbar im Buildverzeichnis
   erzeugt und nicht mehr als generierter C++-Quellcode versioniert.
 - Die GitHub-CI verwendet die aktuellen Node-24-basierten offiziellen Actions.
+- Die optionale 64-kB-Debugpartition heißt bei neuen USB-Installationen nun
+  `debugfs`. Dieselbe Firmware bevorzugt dieses Label und fällt bei bestehenden
+  OTA-Geräten automatisch auf das alte Label `coredump` zurück; Offsets,
+  OTA-Slots und Historie bleiben unverändert.
+- `DebugStorage` trennt Partitionslabel und Dateipfade, mountet die
+  Debugpartition unabhängig von der Historie und unterstützt weiterhin alte
+  `/coredump/...`-Dateipfade neben dem neuen `/debug/...`-Pfad.
+  Nur eine vollständig leere Partition wird initialisiert; nicht lesbare,
+  nichtleere Bestandsdaten werden nicht automatisch formatiert.
+- Release- und Werks-Builds entfernen Arduino-Core-Debugausgaben und
+  unbenötigte Unwind-Tabellen. Einstellungsbackups werden als kompaktes JSON
+  ausgegeben; gzip-Webassets, LTO und Feature-Buildflags bleiben aktiv.
 
 ### English
 
@@ -49,6 +61,18 @@
 - Gzip-compressed browser assets are generated only in the build directory;
   `src/WebAssets.h` is no longer versioned source.
 - GitHub CI now uses the current official Node 24 based actions.
+- New USB installations now call the optional 64-kB debug partition `debugfs`.
+  The same firmware prefers that label and automatically falls back to the
+  legacy `coredump` label on existing OTA devices; offsets, OTA slots and
+  history remain unchanged.
+- `DebugStorage` separates partition labels from file paths, mounts debug
+  storage independently from history, and accepts legacy `/coredump/...`
+  paths alongside the preferred `/debug/...` path.
+  Only a completely blank partition is initialized; unreadable non-empty
+  existing data is never formatted automatically.
+- Release and factory builds remove Arduino core debug output and unused unwind
+  tables. Settings backups use compact JSON while gzip assets, LTO and feature
+  build flags remain enabled.
 
 ## 1.3.0 — 2026-08-30
 

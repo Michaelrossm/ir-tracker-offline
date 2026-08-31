@@ -110,6 +110,15 @@ String statusJson() {
           String(apatorUnlock.active ? "true" : "false") + ",";
   json += "\"apator_unlock_phase\":" + String(apatorUnlock.phase) + ",";
   json += "\"history_ready\":" + String(history.ready() ? "true" : "false") + ",";
+  json += "\"debug_storage_ready\":" +
+          String(debugStorage.ready() ? "true" : "false") + ",";
+  json += "\"debug_storage_label\":\"" +
+          jsonEscape(debugStorage.partitionLabel()
+                         ? String(debugStorage.partitionLabel())
+                         : String()) +
+          "\",";
+  json += "\"debug_storage_legacy\":" +
+          String(debugStorage.usingLegacyLabel() ? "true" : "false") + ",";
   json += "\"live_history_minutes\":70,";
   json += "\"time_valid\":" + String(time(nullptr) >= 1700000000 ? "true" : "false") + ",";
   json += "\"event_count\":" + String(eventLog.count()) + ",";

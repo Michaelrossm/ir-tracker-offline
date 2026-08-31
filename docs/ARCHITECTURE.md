@@ -37,6 +37,13 @@ Webquellen werden ausschließlich unter `web/` gepflegt. Der reproduzierbare,
 Gzip-komprimierte C++-Header entsteht bei jedem Build im jeweiligen
 PlatformIO-Buildverzeichnis und wird nicht versioniert.
 
+Die optionale 64-kB-Partition am unveränderten Offset `0x2B0000` wird durch
+`storage/DebugStorage` getrennt von `HistoryStore` gemountet. Neue
+Partitionstabellen verwenden das Label `debugfs`; bei einer durch OTA
+unveränderten alten Tabelle wird automatisch `coredump` verwendet. Die
+Historie bleibt ausschließlich auf `history` ab `0x2C0000`. Das bevorzugte
+interne Verzeichnis ist `/debug`, ältere `/coredump`-Pfade bleiben lesbar.
+
 ## English
 
 Firmware responsibilities are organized below `src/app/`:
@@ -73,3 +80,10 @@ CPU boost.
 Browser sources are maintained exclusively below `web/`. Every build creates
 the reproducible Gzip-compressed C++ header in its own PlatformIO build
 directory; generated code is not versioned.
+
+`storage/DebugStorage` mounts the optional 64-kB partition at the unchanged
+`0x2B0000` offset independently from `HistoryStore`. New partition tables use
+the `debugfs` label, while a partition table left unchanged by OTA
+automatically falls back to `coredump`. History remains exclusively on the
+`history` partition starting at `0x2C0000`. `/debug` is the preferred internal
+directory and legacy `/coredump` paths remain readable.

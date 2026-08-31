@@ -110,6 +110,11 @@ Version **1.3.1** vereinheitlicht und härtet die lokalen Integrationen, ergänz
 EcoTracker-Kompatibilität und erweitert die Shelly-Emulation.
 Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
 
+Neue USB-Installationen verwenden für den optionalen 64-kB-Debugspeicher das
+Label `debugfs`. Dieselbe Firmware erkennt bei bestehenden OTA-Geräten
+automatisch das frühere Label `coredump`; OTA-Slots, Offsets und Historie sind
+unverändert. Für die reine Umbenennung ist daher kein USB-Neuflash nötig.
+
 Die Universal-Firmware enthält bereits W5500-LAN mit WLAN-Fallback. Die
 LAN-/PoE-Platine ist noch nicht auf echter Hardware validiert.
 
@@ -227,6 +232,11 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 Version **1.3.1** unifies and hardens local integrations, adds EcoTracker
 compatibility and extends Shelly emulation. Feedback about different meters
 and local integrations is welcome.
+
+New USB installations use the `debugfs` label for optional 64-kB debug
+storage. The same firmware automatically detects the previous `coredump` label
+on existing OTA devices; OTA slots, offsets and history remain unchanged. A
+USB reflash is therefore not required merely for the renamed label.
 
 The universal firmware already contains W5500 Ethernet with Wi-Fi fallback.
 The Ethernet/PoE board has not yet been validated on real hardware.

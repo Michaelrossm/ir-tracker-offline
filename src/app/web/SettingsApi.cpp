@@ -91,7 +91,9 @@ String settingsBackupJson() {
   pin["pulse_ms"] = config.pinPulseMs;
   pin["digit_gap_ms"] = config.pinDigitGapMs;
   String output;
-  serializeJsonPretty(document, output);
+  // DE: Kompaktes JSON behaelt die Semantik und spart Uebertragung/Flash.
+  // EN: Compact JSON preserves semantics and saves transfer/flash space.
+  serializeJson(document, output);
   return output;
 }
 

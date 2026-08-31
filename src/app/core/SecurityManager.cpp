@@ -29,9 +29,8 @@ String htmlEscape(String value) {
 
 bool tryServeDebugAsset(const char *relativePath, const char *mimeType,
                         const uint8_t *fallback, size_t fallbackSize) {
-  const String debugPath = String("/coredump") + relativePath;
-  if (LittleFS.exists(debugPath)) {
-    File file = LittleFS.open(debugPath, "r");
+  if (debugStorage.existsAsset(relativePath)) {
+    File file = debugStorage.openAsset(relativePath, "r");
     if (file) {
       server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
       server.sendHeader("X-Content-Type-Options", "nosniff");

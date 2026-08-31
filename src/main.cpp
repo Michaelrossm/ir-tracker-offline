@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "app/storage/HistoryStore.h"
+#include "app/storage/DebugStorage.h"
 #include "app/hardware/HardwareProfile.h"
 #include "app/network/EthernetManager.h"
 #include "app/meter/MeterData.h"
@@ -94,6 +95,7 @@ HardwareSerial meterSerial(1);
 WiFiClient mqttNetwork;
 PubSubClient mqtt(mqttNetwork);
 HistoryStore history;
+DebugStorage debugStorage;
 EventLog eventLog;
 EthernetManager ethernet;
 D0Parser d0Parser;
@@ -415,12 +417,21 @@ void setup() {
                   ethernet.lastError().c_str());
   }
   normalizeHardwarePins();
-  const bool debugStorageReady = LittleFS.begin(true, "/coredump", 10, "coredump");
+  const bool debugStorageReady = debugStorage.begin();
   if (!debugStorageReady) {
-    Serial.println("Coredump partition not mounted: falling back to firmware-stored assets");
+    Serial.printf("Debug storage disabled (%s): using embedded web assets\n",
+                  debugStorage.lastError());
   }
   const bool historyReady = history.begin();
   eventLog.begin(config.persistEventLog);
+  if (!debugStorageReady) {
+    eventLog.add("WARN", "DEBUG_STORAGE_UNAVAILABLE",
+                 "Optionale Debug-Partition nicht verfuegbar: " +
+                     String(debugStorage.lastError()));
+  } else if (debugStorage.usingLegacyLabel()) {
+    eventLog.add("INFO", "DEBUG_STORAGE_LEGACY",
+                 "Legacy-Partitionslabel coredump wird kompatibel verwendet");
+  }
   eventLog.add(historyReady ? "INFO" : "ERROR", "BOOT",
                "Firmware " + String(kFirmwareVersion) +
                    (historyReady ? " gestartet" : " ohne Historie gestartet") +

@@ -1,4 +1,6 @@
-# Disable core dumps to prevent any core dump writing to the coredump partition
+# Disable ESP-IDF core dumps. The 64-kB debugfs partition is reserved for
+# optional IR Tracker diagnostic/web assets; legacy OTA layouts named
+# "coredump" are detected at runtime without enabling ESP-IDF core dumps.
 # These defaults will be applied by ESP-IDF/PlatformIO when generating sdkconfig
 CONFIG_ESP_COREDUMP_ENABLE=n
 CONFIG_ESP_COREDUMP_TO_FLASH=n
