@@ -1,6 +1,6 @@
 # Kompatibilität – Speicher / Energiemanagement
 
-Stand: 2026-08-30
+Stand: 2026-08-31
 
 Diese Liste enthält relevante Speicher- und Energiemanagementsysteme, bei denen ein Einsatz mit dem IR Tracker technisch sinnvoll ist. Systeme bleiben auch dann als Kandidat enthalten, wenn für die aktuelle Firmware noch einzelne Discovery-, Authentifizierungs- oder Push-Funktionen ergänzt werden müssten.
 
@@ -32,29 +32,16 @@ Status:
 | 10 | Anker SOLIX | Solarbank 2 E1600 AC | 🟡 Kandidat | Relevantes Solarbank-2-System; Shelly-Unterstützung ist produkt-/firmwareabhängig. Für dieses Modell fehlt noch ein belastbarer Nachweis einer rein lokalen Shelly-Kopplung. | ☐ |
 | 11 | Anker SOLIX | Solarbank 3 E2700 Pro | 🟡 Kandidat | Anker bestätigt Shelly 3EM und Shelly Pro 3EM als kompatible Smart Meter. Da Anker die Shelly-Integration weiterhin über die Anker-App/Plattform verwaltet, ist lokale Clone-Kompatibilität noch nicht sicher. | ☐ |
 | 12 | Anker SOLIX | Solarbank 4 Pro / E5000 Pro | 🟡 Kandidat | Relevante neue Solarbank-Familie. Shelly-Kompatibilität ist für die Produktfamilie relevant, aber es gibt noch keinen belastbaren Nachweis, dass ein lokaler Shelly-Klon ohne Anker-/Shelly-Cloud-Bindung akzeptiert wird. | ☐ |
-| 13 | EcoFlow | STREAM Ultra | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt. EcoFlow verlangt ausdrücklich **dasselbe WLAN und dasselbe EcoFlow-Konto** wie beim STREAM-System. Damit ist die Kopplung nicht nur ein einfacher lokaler HTTP-Abruf. | ☐ |
-| 14 | EcoFlow | STREAM Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt; laut Handbuch müssen Zähler und STREAM im selben WLAN liegen und an dasselbe EcoFlow-Konto gebunden sein. | ☐ |
-| 15 | EcoFlow | STREAM Max | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt; auch hier fordert EcoFlow dasselbe WLAN und dasselbe EcoFlow-Konto. Clone-Betrieb ohne Account-Bindung nicht bestätigt. | ☐ |
-| 16 | EcoFlow | STREAM AC Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt; EcoFlow-Handbuch fordert gleiches WLAN und gleiche Account-Bindung. | ☐ |
+| 13 | EcoFlow | STREAM Ultra | 🟢 Ja | Shelly 3EM / Pro 3EM offiziell unterstützt. STREAM unterstützt einen Local Mode, in dem System, Zubehör und lokal angebundene Messgeräte ausschließlich über das Heimnetz kommunizieren und keine Messdaten in die Cloud hochladen. Ersteinrichtung/Bindung bleibt erforderlich; IR-Tracker-Feldtest steht aus. | ☐ |
+| 14 | EcoFlow | STREAM Pro | 🟢 Ja | Shelly 3EM / Pro 3EM offiziell unterstützt. Die STREAM-Serie unterstützt lokale Smart-Meter-Kommunikation und einen Offline-/Local-Mode. Die technische Grundkompatibilität zur lokalen Shelly-Emulation ist damit gegeben; Feldtest steht aus. | ☐ |
+| 15 | EcoFlow | STREAM Max | 🟢 Ja | Shelly 3EM / Pro 3EM offiziell unterstützt. STREAM kann kompatible Messgeräte lokal im Heimnetz nutzen; die Account-Bindung bei der Einrichtung bedeutet nicht, dass die laufende Messwertübertragung zwingend über die Cloud erfolgt. | ☐ |
+| 16 | EcoFlow | STREAM AC Pro | 🟢 Ja | Shelly 3EM / Pro 3EM offiziell unterstützt. EcoFlow dokumentiert für STREAM einen Local Mode mit ausschließlich lokaler LAN-Kommunikation zu unterstütztem Zubehör und Messgeräten. Damit technisch passend zur IR-Tracker-Shelly-Emulation; Feldtest steht aus. | ☐ |
 | 17 | Zendure | SolarFlow Hyper 2000 | 🟢 Ja | Shelly Pro 3EM kann im **CT-Modus direkt lokal** mit dem Hyper kommunizieren, ohne HEMS und auch bei Internetausfall weiterregeln. Für Problemfälle ist aus der Praxis Shelly `RPC over UDP` zur Hyper-IP auf Port 8006 dokumentiert. Wichtig: In HEMS selbst bleibt der Hyper cloudgebunden; für die lokale Nutzung daher Hyper direkt im CT-Modus betreiben. | ☐ |
 | 18 | Zendure | SolarFlow 800 Pro | 🟡 Kandidat | Shelly-Unterstützung vorhanden, aber die lokale Shelly-Regelung über Zendure-App/HEMS ist nicht so eindeutig und konsistent dokumentiert wie beim Hyper. Lokaler Betrieb über EcoTracker bzw. Home Assistant/ZenSDK ist aus der Praxis belegt; für die aktuelle IR-Tracker-Shelly-Emulation bleibt ein Feldtest nötig. | ☐ |
 | 19 | Zendure | SolarFlow 1600 AC+ | 🟢 Ja | Offiziell unterstützt: Shelly 3EM, Shelly Pro 3EM und Everhome EcoTracker IR. Zendure bestätigt, dass bei einem unterstützten einzelnen SolarFlow-Gerät in HEMS die lokale Kommunikation mit CT/Zählerleser automatisch hergestellt werden kann; bei Internetausfall funktioniert die lokale Kommunikation im gemeinsamen WLAN weiter. | ☐ |
 | 20 | Zendure | SolarFlow 2400 AC+ | 🟢 Ja | Offiziell unterstützt: Shelly 3EM, Shelly Pro 3EM und Everhome EcoTracker IR. Praxisberichte bestätigen lokale Shelly-Kommunikation und lokale Regelung im HEMS; Zendures neuere HEMS-Funktion stellt bei einem einzelnen unterstützten SolarFlow-Gerät die lokale Zählerkommunikation automatisch her. | ☐ |
 | 21 | Zendure | SolarFlow 2400 Pro | 🟢 Ja | Offiziell unterstützt: Shelly 3EM, Shelly Pro 3EM und Everhome EcoTracker IR. Gehört zur aktuellen HEMS-2.0-Produktfamilie; lokale Zählerkommunikation für unterstützte Einzelgeräte ist vorgesehen. Die exakte lokale Regelung über alle Lade-/Entladezustände sollte im Feldtest noch bestätigt werden. | ☐ |
 | 22 | Jackery | Navi 2000 | 🟢 Ja | Shelly Pro 3EM / Pro EM-50 werden offiziell unterstützt. Die Jackery-Dokumentation zeigt eine **direkte lokale Kopplung**: Smart Meter können über die Jackery Home App direkt mit dem Navi 2000 verbunden werden; das Navi stellt dafür ein eigenes WLAN bereit, mit dem sich Smart-CT/Smart-Meter verbinden. Ein Jackery-/Shelly-Cloud-Pfad ist damit für die laufende Messwertübertragung nicht zwingend. Die genaue Shelly-Discovery/Identität bleibt noch praktisch zu testen. | ☐ |
-
-## Besonders aussichtsreiche Kandidaten
-
-Bei Zendure ist die Lage nach genauerer Prüfung differenzierter als eine einfache Aussage „HEMS = Cloud“:
-
-- **Hyper 2000** kann mit Shelly Pro 3EM tatsächlich direkt lokal arbeiten. Der entscheidende Punkt ist, ihn dafür **ohne HEMS im CT-Modus** zu betreiben. Mehrere Praxisberichte bestätigen, dass die Regelung bei Internetausfall weiterläuft. Damit ist der Hyper jetzt `🟢 Ja`.
-- **SolarFlow 1600 AC+** und **2400 AC+** unterstützen Shelly/EcoTracker offiziell. Für einzelne unterstützte SolarFlow-Geräte kann HEMS die lokale Meter-Kommunikation automatisch herstellen; beim 1600 AC+ wird ausdrücklich berichtet, dass diese lokale Verbindung bei ausgefallenem Internet weiterarbeitet.
-- **SolarFlow 2400 Pro** unterstützt dieselben relevanten Fremdzähler und gehört zur neuen HEMS-2.0-Generation. Die technische Grundkompatibilität ist deshalb `🟢 Ja`, auch wenn ein Feldtest mit der IR-Tracker-Emulation weiterhin sinnvoll ist.
-- **SolarFlow 800 Pro** bleibt vorerst `🟡 Kandidat`. Es gibt lokale Betriebswege und Praxisberichte, aber die direkte lokale Shelly-Nutzung über Zendures eigene App/HEMS ist weniger eindeutig als bei Hyper bzw. den neueren AC+/Pro-Geräten.
-
-**Anker SOLIX** und **EcoFlow STREAM** bleiben dagegen gelb, obwohl Shelly offiziell unterstützt wird. Bei Anker ist der dokumentierte Weg ausdrücklich Shelly-Cloud + Shelly-Konto; EcoFlow verlangt eine Bindung an dasselbe EcoFlow-Konto. Das ist nicht dieselbe einfache lokale Shelly-Nutzung wie bei den grünen Systemen.
-
-Bei **HiBattery 1920 AC** gibt es bereits einen wertvollen Praxisnachweis für EcoTracker-Emulation. Ein EcoTracker-kompatibler `/v1/json`-Endpunkt im IR Tracker wäre hier sehr wahrscheinlich der direkteste Weg von `🟡` zu `🟢`.
 
 ## Feldtest
 
