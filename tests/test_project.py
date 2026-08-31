@@ -26,7 +26,17 @@ def expanded_firmware_source() -> str:
     )
 
 
-SOURCE = expanded_firmware_source()
+METER_DIR = ROOT / "src" / "app" / "meter"
+STANDALONE_MODULE_SOURCE = "\n".join(
+    path.read_text(encoding="utf-8")
+    for path in (
+        METER_DIR / "MeterData.h",
+        METER_DIR / "MeterParser.h",
+        METER_DIR / "SmlParser.cpp",
+        METER_DIR / "D0Parser.cpp",
+    )
+)
+SOURCE = expanded_firmware_source() + "\n" + STANDALONE_MODULE_SOURCE
 I18N_SOURCE = (ROOT / "web" / "i18n.js").read_text(encoding="utf-8")
 COMMON_JS_SOURCE = (ROOT / "web" / "common.js").read_text(encoding="utf-8")
 COMMON_CSS_SOURCE = (ROOT / "web" / "common.css").read_text(encoding="utf-8")
@@ -35,28 +45,57 @@ HISTORY_JS_SOURCE = (ROOT / "web" / "history.js").read_text(encoding="utf-8")
 WEB_RUNTIME_SOURCE = "\n".join(
     (SOURCE, COMMON_JS_SOURCE, COMMON_CSS_SOURCE, DASHBOARD_JS_SOURCE, HISTORY_JS_SOURCE)
 )
-HISTORY_SOURCE = (ROOT / "src" / "HistoryStore.cpp").read_text(encoding="utf-8")
-HISTORY_HEADER = (ROOT / "src" / "HistoryStore.h").read_text(encoding="utf-8")
-EVENT_SOURCE = (ROOT / "src" / "EventLog.cpp").read_text(encoding="utf-8")
-EVENT_HEADER = (ROOT / "src" / "EventLog.h").read_text(encoding="utf-8")
-HARDWARE_PROFILE = (ROOT / "src" / "HardwareProfile.h").read_text(encoding="utf-8")
-ETHERNET_SOURCE = (ROOT / "src" / "EthernetManager.cpp").read_text(encoding="utf-8")
-LEGACY_METER_HEADER = (ROOT / "src" / "LegacyMeterParser.h").read_text(encoding="utf-8")
-LEGACY_METER_SOURCE = (ROOT / "src" / "LegacyMeterParser.cpp").read_text(encoding="utf-8")
+HISTORY_SOURCE = (ROOT / "src/app/storage/HistoryStore.cpp").read_text(encoding="utf-8")
+HISTORY_HEADER = (ROOT / "src/app/storage/HistoryStore.h").read_text(encoding="utf-8")
+EVENT_SOURCE = (ROOT / "src/app/core/EventLog.cpp").read_text(encoding="utf-8")
+EVENT_HEADER = (ROOT / "src/app/core/EventLog.h").read_text(encoding="utf-8")
+HARDWARE_PROFILE = (ROOT / "src/app/hardware/HardwareProfile.h").read_text(encoding="utf-8")
+ETHERNET_SOURCE = (ROOT / "src/app/network/EthernetManager.cpp").read_text(encoding="utf-8")
+LEGACY_METER_HEADER = (METER_DIR / "D0Parser.h").read_text(encoding="utf-8")
+LEGACY_METER_SOURCE = (METER_DIR / "D0Parser.cpp").read_text(encoding="utf-8")
+WEB_ASSET_SCRIPT = (ROOT / "tools/embed_web_assets.py").read_text(encoding="utf-8")
 PLATFORMIO = (ROOT / "platformio.ini").read_text(encoding="utf-8")
 PARTITIONS = (ROOT / "partitions.csv").read_text(encoding="utf-8")
 
 
 class ProjectSecurityTests(unittest.TestCase):
+    def test_source_tree_and_meter_model_are_consistent(self):
+        expected = (
+            "app/core/EventLog.cpp",
+            "app/hardware/HardwareProfile.h",
+            "app/meter/D0Parser.cpp",
+            "app/meter/MeterData.h",
+            "app/meter/MeterParser.h",
+            "app/meter/SmlParser.cpp",
+            "app/network/EthernetManager.cpp",
+            "app/storage/HistoryStore.cpp",
+        )
+        for relative in expected:
+            self.assertTrue((ROOT / "src" / relative).is_file(), relative)
+        self.assertEqual(
+            [path.name for path in (ROOT / "src").iterdir() if path.is_file()],
+            ["main.cpp"],
+        )
+        meter_header = (METER_DIR / "MeterData.h").read_text(encoding="utf-8")
+        parser_header = (METER_DIR / "MeterParser.h").read_text(encoding="utf-8")
+        sml_header = (METER_DIR / "SmlParser.h").read_text(encoding="utf-8")
+        self.assertIn("struct MeterData", meter_header)
+        self.assertIn("class MeterParser", parser_header)
+        self.assertIn("public MeterParser", sml_header)
+        self.assertIn("public MeterParser", LEGACY_METER_HEADER)
+        self.assertNotIn("struct MeterValues", SOURCE)
+
     def test_main_is_split_into_ordered_responsibility_modules(self):
         required = (
             "core/EcoManager.cpp",
             "core/SecurityManager.cpp",
-            "meter/MeterSml.cpp",
+            "meter/MeterManager.cpp",
             "network/MqttManager.cpp",
             "network/NetworkStatus.cpp",
             "update/OtaManager.cpp",
             "web/WebApi.cpp",
+            "web/IntegrationApi.cpp",
+            "web/EcoTrackerEmulation.cpp",
             "web/ShellyEmulation.cpp",
             "diagnostics/FactoryTest.cpp",
         )
@@ -64,11 +103,19 @@ class ProjectSecurityTests(unittest.TestCase):
         for relative in required:
             self.assertTrue((ROOT / "src" / "app" / relative).is_file())
             self.assertIn(f'#include "app/{relative}"', MAIN_SOURCE)
-        self.assertEqual(PLATFORMIO.count("build_src_filter = +<*> -<app/>"), 3)
+        for parser in ("app/meter/D0Parser.cpp", "app/meter/SmlParser.cpp"):
+            self.assertIn(f'#include "{parser}"', MAIN_SOURCE)
+        for compiled in (
+            "app/core/EventLog.cpp", "app/network/EthernetManager.cpp",
+            "app/storage/HistoryStore.cpp",
+        ):
+            self.assertEqual(PLATFORMIO.count(f"+<{compiled}>"), 3)
+        self.assertEqual(PLATFORMIO.count("-flto"), 3)
+        self.assertEqual(PLATFORMIO.count("post:tools/enable_lto.py"), 3)
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.0"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.1"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -301,8 +348,8 @@ class ProjectSecurityTests(unittest.TestCase):
         ):
             self.assertIn(marker, LEGACY_METER_HEADER + LEGACY_METER_SOURCE)
         for marker in (
-            '#include "LegacyMeterParser.h"', "MeterProtocol::Iec62056",
-            "commitMeterCandidate(candidate, MeterProtocol::Iec62056",
+            '#include "app/meter/D0Parser.h"', "MeterProtocol::Iec62056",
+            "commitMeterCandidate(candidate, result.protocol",
             "SERIAL_7E1", "meter_protocol", "no_valid_meter_telegram",
             "300, 600, 1200, 2400, 4800", "importPowerObis",
             "exportPowerObis", "importTariffObis", "exportTariffObis",
@@ -365,10 +412,25 @@ class ProjectSecurityTests(unittest.TestCase):
         for marker in (
             "PubSubClient mqtt", "homeAssistantDiscovery", "/status",
             "/emeter/0", "/rpc/EM.GetStatus", "/api/v1/history",
-            "/api/v1/values", "/metrics", "/openmetrics",
+            "/api/v1/values", "/metrics", "/openmetrics", "/v1/json",
         ):
             self.assertIn(marker, SOURCE)
         self.assertIn("normalizeHardwarePins();", SOURCE)
+
+    def test_integrations_share_hardened_read_only_response_path(self) -> None:
+        integration = (ROOT / "src" / "app" / "web" /
+                       "IntegrationApi.cpp").read_text(encoding="utf-8")
+        security = (ROOT / "src" / "app" / "core" /
+                    "SecurityManager.cpp").read_text(encoding="utf-8")
+        eco = (ROOT / "src" / "app" / "web" /
+               "EcoTrackerEmulation.cpp").read_text(encoding="utf-8")
+        self.assertIn("X-IR-Tracker-Mode", integration)
+        self.assertIn("X-IR-Tracker-Version", integration)
+        api_access = security[security.index("bool requireApiAccess()") :]
+        self.assertLess(api_access.index("config.apiAccess == 2"),
+                        api_access.index('server.authenticate("admin"'))
+        self.assertIn("kLiveSamples - 1U - i", eco)
+        self.assertIn('requestCpuBoost("gpio_scan")', SOURCE)
 
     def test_navigation_and_maintenance_are_reduced(self) -> None:
         nav_start = SOURCE.index("String nav()")
@@ -427,7 +489,6 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertNotIn('"application/json"', ota_handler)
 
     def test_embedded_translation_asset_is_valid_gzip(self) -> None:
-        header = (ROOT / "src" / "WebAssets.h").read_text(encoding="utf-8")
         assets = {
             "kCommonCssGzip": COMMON_CSS_SOURCE,
             "kCommonJsGzip": COMMON_JS_SOURCE,
@@ -436,16 +497,14 @@ class ProjectSecurityTests(unittest.TestCase):
             "kHistoryJsGzip": HISTORY_JS_SOURCE,
         }
         for symbol, source in assets.items():
-            match = re.search(
-                rf"{symbol}\[\] PROGMEM = \{{(.*?)\n\}};", header, re.DOTALL
-            )
-            self.assertIsNotNone(match, symbol)
-            payload = bytes(
-                int(value, 16) for value in re.findall(r"0x([0-9a-f]{2})", match.group(1))
-            )
             expected = source.replace("\r\n", "\n").encode("utf-8")
+            payload = gzip.compress(expected, compresslevel=9, mtime=0)
             self.assertEqual(gzip.decompress(payload), expected, symbol)
             self.assertLess(len(payload), len(expected), symbol)
+            self.assertIn(symbol, WEB_ASSET_SCRIPT)
+        self.assertIn('Path(env.subst("$BUILD_DIR")) / "generated"', WEB_ASSET_SCRIPT)
+        self.assertIn("env.Prepend(CPPPATH", WEB_ASSET_SCRIPT)
+        self.assertFalse((ROOT / "src" / "WebAssets.h").exists())
 
     def test_large_pages_use_cached_external_assets(self) -> None:
         dashboard = SOURCE[SOURCE.index("void handleRoot()") : SOURCE.index("void handleHistoryPage()")]
@@ -477,7 +536,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_committed_public_key_matches_header(self) -> None:
         pem = (ROOT / "signing" / "firmware-signing-public.pem").read_text()
-        header = (ROOT / "src" / "FirmwareSigningPublicKey.h").read_text()
+        header = (ROOT / "src/app/update/FirmwareSigningPublicKey.h").read_text()
         self.assertIn(pem.strip(), header)
         key = serialization.load_pem_public_key(pem.encode())
         self.assertIsInstance(key, ec.EllipticCurvePublicKey)

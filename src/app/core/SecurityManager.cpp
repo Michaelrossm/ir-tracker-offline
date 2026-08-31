@@ -282,12 +282,16 @@ bool requireAdmin() {
 bool requireApiAccess() {
   server.sendHeader("Cache-Control", "no-store");
   server.sendHeader("X-Content-Type-Options", "nosniff");
+  server.sendHeader("Referrer-Policy", "no-referrer");
+  server.sendHeader("X-Frame-Options", "DENY");
   if (config.apiAccess == 0) return true;
-  const String password = localAdminPassword();
-  if (server.authenticate("admin", password.c_str())) return true;
+  // Disabled means disabled for every caller, including administrators. The
+  // maintenance UI remains available through requireAdmin().
   if (config.apiAccess == 2) {
     server.send(404, "application/json", "{\"error\":\"api_disabled\"}");
     return false;
   }
+  const String password = localAdminPassword();
+  if (server.authenticate("admin", password.c_str())) return true;
   return requireAdmin();
 }

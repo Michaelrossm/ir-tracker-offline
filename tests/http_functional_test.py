@@ -22,6 +22,23 @@ def get(base: str, path: str, auth: str) -> tuple[int, bytes, str]:
         return error.code, error.read(), error.headers.get_content_type()
 
 
+def post_json(base: str, path: str, auth: str, payload: dict) -> tuple[int, bytes]:
+    request = urllib.request.Request(
+        base.rstrip("/") + path,
+        data=json.dumps(payload).encode(),
+        headers={
+            "Authorization": "Basic " + auth,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="http://192.168.178.66")
@@ -53,10 +70,32 @@ def main() -> None:
     code, body, _ = get(args.base, "/metrics", auth)
     assert code == 200 and b"irtracker_power_w" in body
 
+    code, body, _ = get(args.base, "/v1/json", auth)
+    assert code == 200
+    eco_tracker = json.loads(body)
+    for field in ("power", "powerAvg", "energyCounterIn", "agePower"):
+        assert field in eco_tracker, f"EcoTracker field missing: {field}"
+    assert "energyCounterInT1" not in eco_tracker
+    assert "energyCounterInT2" not in eco_tracker
+
     code, body, _ = get(args.base, "/rpc/EM.GetStatus?id=0", auth)
     assert code == 200
     shelly = json.loads(body)
     assert "total_act_power" in shelly
+    assert "a_current" in shelly and "errors" in shelly
+
+    code, body, _ = get(args.base, "/rpc/EMData.GetStatus?id=0", auth)
+    assert code == 200
+    shelly_data = json.loads(body)
+    assert "total_act" in shelly_data and "total_act_power" not in shelly_data
+
+    code, body = post_json(
+        args.base, "/rpc", auth,
+        {"id": 7, "src": "acceptance-test", "method": "EM.GetStatus",
+         "params": {"id": 0}},
+    )
+    rpc = json.loads(body)
+    assert code == 200 and rpc["id"] == 7 and "result" in rpc
 
     print("HTTP functional acceptance tests: PASS")
 

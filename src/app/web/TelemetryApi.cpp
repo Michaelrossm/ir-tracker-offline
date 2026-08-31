@@ -50,7 +50,7 @@ String obisJson() {
     if (lastTelegram[i - 2] != 0x77 || lastTelegram[i - 1] != 0x07) continue;
     const uint8_t *code = lastTelegram.data() + i;
     double value = NAN;
-    if (!extractObisFrom(lastTelegram, code, value)) continue;
+    if (!SmlParser::extractObis(lastTelegram, code, value)) continue;
     if (!first) json += ",";
     first = false;
     char name[28];

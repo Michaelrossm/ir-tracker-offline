@@ -28,16 +28,18 @@
 #include <cmath>
 #include <vector>
 
-#include "HistoryStore.h"
-#include "HardwareProfile.h"
-#include "EthernetManager.h"
-#include "LegacyMeterParser.h"
-#include "EventLog.h"
-#include "FirmwareSigningPublicKey.h"
+#include "app/storage/HistoryStore.h"
+#include "app/hardware/HardwareProfile.h"
+#include "app/network/EthernetManager.h"
+#include "app/meter/MeterData.h"
+#include "app/meter/D0Parser.h"
+#include "app/meter/SmlParser.h"
+#include "app/core/EventLog.h"
+#include "app/update/FirmwareSigningPublicKey.h"
 #if IR_TRACKER_ENABLE_GITHUB_UPDATE
-#include "GithubRootCertificates.h"
+#include "app/update/GithubRootCertificates.h"
 #endif
-#include "WebAssets.h"
+#include <WebAssets.h>
 
 #if IR_TRACKER_ENABLE_MDNS
 #include <ESPmDNS.h>
@@ -45,9 +47,15 @@
 
 #define IR_TRACKER_AMALGAMATED_BUILD 1
 
+// Keep protocol implementations in dedicated source files, but compile them
+// into the main translation unit so the size optimizer can devirtualize the
+// parser interface on the small ESP32-C3 OTA partition.
+#include "app/meter/D0Parser.cpp"
+#include "app/meter/SmlParser.cpp"
+
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.0";
+constexpr char kFirmwareVersion[] = "1.3.1";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -71,12 +79,9 @@ constexpr uint32_t kWifiPowerEvaluateMs = 60UL * 1000UL;
 constexpr uint32_t kGithubInitialCheckMs = 5UL * 60UL * 1000UL;
 constexpr uint32_t kGithubCheckIntervalMs = 24UL * 60UL * 60UL * 1000UL;
 constexpr size_t kGithubMaximumPackageBytes = 4UL * 1024UL * 1024UL;
-constexpr size_t kTelegramMax = 2048;
 constexpr uint8_t kDefaultRxPin = 3;
 constexpr int8_t kDefaultTxPin = 6;
 constexpr uint32_t kDefaultBaud = 9600;
-constexpr uint8_t kSmlStart[] = {0x1b, 0x1b, 0x1b, 0x1b, 0x01, 0x01, 0x01, 0x01};
-constexpr uint8_t kSmlEnd[] = {0x1b, 0x1b, 0x1b, 0x1b, 0x1a};
 
 WebServer server(80);
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
@@ -91,26 +96,10 @@ PubSubClient mqtt(mqttNetwork);
 HistoryStore history;
 EventLog eventLog;
 EthernetManager ethernet;
-LegacyMeterParser legacyMeterParser;
-uint32_t legacyChecksumErrorsSeen = 0;
+D0Parser d0Parser;
+SmlParser smlParser;
 uint32_t meterReinitializations = 0;
 uint32_t lastMeterRecoveryMs = 0;
-
-enum class MeterProtocol : uint8_t {
-  Auto = 0,
-  Sml = 1,
-  Iec62056 = 2,
-  Iec62056Active = 3,
-};
-
-const char *meterProtocolName(MeterProtocol protocol) {
-  switch (protocol) {
-    case MeterProtocol::Sml: return "sml";
-    case MeterProtocol::Iec62056: return "iec62056-21";
-    case MeterProtocol::Iec62056Active: return "iec62056-21-active";
-    default: return "auto";
-  }
-}
 
 struct Config {
   String ssid[kWifiSlots];
@@ -148,34 +137,8 @@ struct Config {
   bool githubAutoInstall = false;
 } config;
 
-struct MeterValues {
-  double powerW = NAN;
-  double importKwh = NAN;
-  double exportKwh = NAN;
-  double phasePowerW[3] = {NAN, NAN, NAN};
-  double phaseVoltageV[3] = {NAN, NAN, NAN};
-  double phaseCurrentA[3] = {NAN, NAN, NAN};
-  uint32_t telegrams = 0;
-  uint32_t bytes = 0;
-  uint32_t parseErrors = 0;
-  uint32_t crcErrors = 0;
-  uint32_t lastTelegramMs = 0;
-  uint32_t powerUpdatedMs = 0;
-  uint32_t importUpdatedMs = 0;
-  uint32_t exportUpdatedMs = 0;
-  uint32_t phasePowerUpdatedMs[3] = {};
-  uint32_t phaseVoltageUpdatedMs[3] = {};
-  uint32_t phaseCurrentUpdatedMs[3] = {};
-  bool lastCrcValid = false;
-  bool lastIntegrityPresent = false;
-  MeterProtocol detectedProtocol = MeterProtocol::Auto;
-} meter;
-
-std::vector<uint8_t> telegram;
+MeterData meter;
 std::vector<uint8_t> lastTelegram;
-size_t startMatched = 0;
-bool capturing = false;
-uint8_t smlTrailerRemaining = 0;
 bool accessPointMode = false;
 uint32_t accessPointStartedMs = 0;
 bool accessPointAllowed = true;
@@ -349,11 +312,13 @@ struct ApatorUnlockJob {
 
 #include "app/core/CoreHelpers.cpp"
 
+#include "app/web/IntegrationApi.cpp"
+
 #include "app/core/ConfigManager.cpp"
 
 #include "app/web/WebUi.cpp"
 
-#include "app/meter/MeterSml.cpp"
+#include "app/meter/MeterManager.cpp"
 
 #include "app/diagnostics/FactoryTest.cpp"
 
@@ -362,6 +327,8 @@ struct ApatorUnlockJob {
 #include "app/web/StatusApi.cpp"
 
 #include "app/web/TelemetryApi.cpp"
+
+#include "app/web/EcoTrackerEmulation.cpp"
 
 #include "app/web/ShellyEmulation.cpp"
 
@@ -527,7 +494,7 @@ void loop() {
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
     if (config.snifferEnabled) snifferSocket.broadcastBIN(incoming, count);
 #endif
-    for (size_t i = 0; i < count; ++i) consumeMeterByte(incoming[i]);
+    consumeMeterBytes(incoming, count);
   }
   updateActiveD0();
   updateGpioScan();

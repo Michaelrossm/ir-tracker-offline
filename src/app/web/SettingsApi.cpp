@@ -29,6 +29,10 @@ void handleInterfacesPage() {
       "<p>Für Speicher, die einen Shelly EM oder Shelly Pro EM als externen Zähler unterstützen.</p><code>http://");
   body += host;
   body += F("/status</code><br><code>/emeter/0</code><br><code>/rpc/EM.GetStatus?id=0</code></div>"
+            "<div class='card'><h2>EcoTracker-kompatibel</h2>"
+            "<p>Lokale, nur lesende EcoTracker-Messwertausgabe für kompatible Speicher und Anwendungen.</p><code>http://");
+  body += host;
+  body += F("/v1/json</code></div>"
             "<div class='card'><h2>Home Assistant / MQTT</h2>"
             "<p>MQTT und automatische Home-Assistant-Erkennung werden unter Einstellungen konfiguriert.</p>"
             "<a href='/setup'>MQTT konfigurieren</a></div>"

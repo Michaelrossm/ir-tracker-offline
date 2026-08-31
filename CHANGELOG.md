@@ -1,5 +1,53 @@
 # Änderungsprotokoll / Changelog
 
+## Unveröffentlicht / Unreleased
+
+## 1.3.1 — 2026-08-31
+
+### Deutsch
+
+- Alle lesenden Integrationen verwenden einen gemeinsamen Antwortpfad mit
+  einheitlichem Zugriffsschutz, Cache-Verhalten und Versionsmetadaten.
+- Der Modus „API deaktiviert“ sperrt Schnittstellen nun auch bei mitgesendeten
+  Admin-Zugangsdaten zuverlässig.
+- EcoTracker-Abfragen werten für den Minutenmittelwert nur noch das notwendige
+  60-Sekunden-Fenster aus und lösen keinen CPU-Boost aus.
+- Lange GPIO-Suchen halten den Leistungsmodus bis zum tatsächlichen Ende aktiv;
+  danach kehrt der Eco-Modus automatisch in den 80-MHz-Betrieb zurück.
+- Nur lesende Shelly-JSON-RPC-Anfragen sind größenbegrenzt und liefern
+  einheitlich gehärtete Antworten.
+- EcoTracker-kompatible API unter `/v1/json` mit Momentanleistung,
+  1-Minuten-Mittelwert, Energiezählern, optionalen Phasenwerten und Datenalter.
+- Shelly-Kompatibilität um Geräteerkennung, getrennte EM-/EMData-Antworten,
+  dreiphasige Momentanwerte und nur lesende JSON-RPC-Aufrufe erweitert.
+- Firmwarekomponenten vollständig unter `src/app/` einsortiert; SML und
+  IEC 62056-21/D0 verwenden eine gemeinsame Parser-Schnittstelle und das
+  zentrale `MeterData`-Messwertmodell.
+- Gzip-komprimierte Browserassets werden reproduzierbar im Buildverzeichnis
+  erzeugt und nicht mehr als generierter C++-Quellcode versioniert.
+
+### English
+
+- All read-only integrations now use one response path with consistent access
+  control, caching and version metadata.
+- The "API disabled" mode now reliably blocks interfaces even when valid admin
+  credentials are supplied.
+- EcoTracker requests process only the required 60-second average window and
+  do not trigger a CPU boost.
+- Long GPIO scans keep performance mode active until they actually finish;
+  Eco mode subsequently returns to 80 MHz automatically.
+- Read-only Shelly JSON-RPC requests are size-limited and use the common
+  hardened response path.
+- Added a read-only EcoTracker-compatible `/v1/json` API with current power,
+  one-minute average, energy counters, optional phase readings and data age.
+- Extended Shelly compatibility with device discovery, separate EM/EMData
+  responses, three-phase live values and read-only JSON-RPC calls.
+- Moved all self-contained firmware components below `src/app/`.
+- SML and IEC 62056-21/D0 now implement one parser interface and produce a
+  central `MeterData` reading model.
+- Gzip-compressed browser assets are generated only in the build directory;
+  `src/WebAssets.h` is no longer versioned source.
+
 ## 1.3.0 — 2026-08-30
 
 ### Deutsch

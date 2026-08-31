@@ -11,8 +11,9 @@ Der Tracker arbeitet als **nur lesender Stromzähler**. Null-Einspeisung, Ladegr
 | `/api/v1/values.csv` | aktuelle CSV-Werte |
 | `/metrics`, `/openmetrics` | Prometheus/OpenMetrics |
 | `/api/v1/influx` | Influx Line Protocol |
-| `/status`, `/emeter/0` | Shelly-EM-kompatible Abfrage |
-| `/rpc/EM.GetStatus?id=0` | Shelly-Pro-EM-kompatible Abfrage |
+| `/v1/json` | EcoTracker-kompatible lokale Messwertabfrage (nur lesend) |
+| `/shelly`, `/status`, `/emeter/0` | Shelly-EM-kompatible Erkennung und Abfrage |
+| `/rpc`, `/rpc/EM.GetStatus?id=0`, `/rpc/EMData.GetStatus?id=0` | Nur lesende Shelly-Pro-3EM-kompatible RPC-Abfrage |
 | MQTT Discovery | automatische Home-Assistant-Sensoren |
 
 Weitere lokale Systeme: ioBroker, Node-RED, openHAB und jede Anwendung mit HTTP/JSON oder MQTT. L1/L2/L3 werden nur ausgegeben, wenn der Stromzähler diese OBIS-Werte sendet.
@@ -41,8 +42,9 @@ The tracker operates as a **read-only electricity meter**. Zero export, charge l
 | `/api/v1/values.csv` | current CSV values |
 | `/metrics`, `/openmetrics` | Prometheus/OpenMetrics |
 | `/api/v1/influx` | Influx Line Protocol |
-| `/status`, `/emeter/0` | Shelly EM compatible request |
-| `/rpc/EM.GetStatus?id=0` | Shelly Pro EM compatible request |
+| `/v1/json` | EcoTracker-compatible local meter request (read-only) |
+| `/shelly`, `/status`, `/emeter/0` | Shelly EM compatible discovery and request |
+| `/rpc`, `/rpc/EM.GetStatus?id=0`, `/rpc/EMData.GetStatus?id=0` | Read-only Shelly Pro 3EM compatible RPC request |
 | MQTT Discovery | automatic Home Assistant sensors |
 
 Other local systems include ioBroker, Node-RED, openHAB and any HTTP/JSON or MQTT application. L1/L2/L3 are exposed only when the electricity meter transmits those OBIS values.

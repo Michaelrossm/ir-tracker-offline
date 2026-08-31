@@ -109,7 +109,7 @@ void setupRoutes() {
   });
   server.on("/api/v1/status", HTTP_GET, [] {
     if (requireApiAccess())
-      server.send(200, "application/json", statusJson());
+      sendIntegrationJson(statusJson());
   });
   server.on("/api/v1/admin-session", HTTP_GET, [] {
     if (!requireAdmin()) return;
@@ -175,61 +175,77 @@ void setupRoutes() {
       server.send(200, "application/json", meterReportJson());
   });
   // DE: Shelly-kompatible, nur lesende Zählerfassade für Speicher. | EN: Shelly-compatible read-only meter facade for storage systems.
+  // DE: EcoTracker-kompatible, nur lesende lokale Zaehler-API.
+  // EN: EcoTracker-compatible read-only local meter API.
+  server.on("/v1/json", HTTP_GET, [] {
+    if (requireApiAccess())
+      sendIntegrationJson(ecoTrackerJson());
+  });
+  server.on("/shelly", HTTP_GET, [] {
+    if (requireApiAccess()) sendIntegrationJson(shellyDeviceInfo());
+  });
   server.on("/status", HTTP_GET, [] {
     if (requireApiAccess())
-      server.send(200, "application/json", shellyGen1Status());
+      sendIntegrationJson(shellyGen1Status());
   });
   server.on("/emeter/0", HTTP_GET, [] {
     if (requireApiAccess())
-      server.send(200, "application/json", shellyEmStatus());
+      sendIntegrationJson(shellyGen1Emeter());
   });
   server.on("/rpc/EM.GetStatus", HTTP_GET, [] {
     if (requireApiAccess())
-      server.send(200, "application/json", shellyEmStatus());
+      sendIntegrationJson(shellyEmStatus());
   });
   server.on("/rpc/EMData.GetStatus", HTTP_GET, [] {
     if (requireApiAccess())
-      server.send(200, "application/json", shellyEmStatus());
+      sendIntegrationJson(shellyEmDataStatus());
+  });
+  server.on("/rpc/Shelly.GetDeviceInfo", HTTP_GET, [] {
+    if (requireApiAccess())
+      sendIntegrationJson(shellyDeviceInfo());
+  });
+  server.on("/rpc/Shelly.ListMethods", HTTP_GET, [] {
+    if (requireApiAccess())
+      sendIntegrationJson(shellyMethodList());
   });
   server.on("/rpc/Shelly.GetStatus", HTTP_GET, [] {
-    if (!requireApiAccess()) return;
-    server.send(200, "application/json",
-                "{\"sys\":{\"uptime\":" + String(millis() / 1000) +
-                    "},\"wifi\":{\"sta_ip\":\"" +
-                    primaryNetworkIp() + "\",\"rssi\":" +
-                    String(wifiConnected() ? WiFi.RSSI() : 0) + "},\"em:0\":" +
-                    shellyEmStatus() + "}");
+    if (requireApiAccess())
+      sendIntegrationJson(shellyRpcStatus());
   });
+  server.on("/rpc", HTTP_POST, handleShellyRpc);
   server.on("/api/v1/memory-info", HTTP_GET, [] {
     if (requireAdmin())
       server.send(200, "application/json", memoryJson());
   });
   server.on("/api/v1/obis", HTTP_GET, [] {
     if (requireApiAccess())
-      server.send(200, "application/json", obisJson());
+      sendIntegrationJson(obisJson());
   });
   server.on("/api/v1/raw", HTTP_GET, [] {
     if (!requireApiAccess()) return;
-    server.send(200, "application/json",
-                "{\"encoding\":\"hex\",\"length\":" + String(lastTelegram.size()) +
-                ",\"data\":\"" + bytesToHex(lastTelegram) + "\"}");
+    sendIntegrationJson(
+        "{\"encoding\":\"hex\",\"length\":" + String(lastTelegram.size()) +
+        ",\"data\":\"" + bytesToHex(lastTelegram) + "\"}");
   });
   server.on("/metrics", HTTP_GET, [] {
     if (requireApiAccess())
-      server.send(200, "text/plain; version=0.0.4", metricsText());
+      sendIntegrationResponse("text/plain; version=0.0.4", metricsText());
   });
   server.on("/openmetrics", HTTP_GET, [] {
     if (requireApiAccess())
-      server.send(200, "application/openmetrics-text; version=1.0.0; charset=utf-8", metricsText() + "# EOF\n");
+      sendIntegrationResponse(
+          "application/openmetrics-text; version=1.0.0; charset=utf-8",
+          metricsText() + "# EOF\n");
   });
   server.on("/api/v1/influx", HTTP_GET, [] {
     if (requireApiAccess())
-      server.send(200, "text/plain; charset=utf-8", influxLineProtocol());
+      sendIntegrationResponse("text/plain; charset=utf-8",
+                              influxLineProtocol());
   });
   server.on("/api/v1/values.csv", HTTP_GET, [] {
     if (!requireApiAccess()) return;
     server.sendHeader("Content-Disposition", "inline; filename=irtracker-values.csv");
-    server.send(200, "text/csv; charset=utf-8", csvValues());
+    sendIntegrationResponse("text/csv; charset=utf-8", csvValues());
   });
   server.on("/api/v1/history", HTTP_GET, handleHistoryJson);
   server.on("/api/v1/dashboard-summary", HTTP_GET, handleDashboardSummary);

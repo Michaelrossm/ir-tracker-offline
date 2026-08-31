@@ -6,20 +6,36 @@ Die Firmware ist nach Verantwortlichkeiten unter `src/app/` gegliedert:
 
 | Ordner | Inhalt |
 |---|---|
-| `core/` | Konfiguration, gemeinsame Hilfsfunktionen und Sicherheit |
-| `meter/` | SML/D0-Empfang und IR-Steuerung |
+| `core/` | Konfiguration, Ereignisprotokoll, Hilfsfunktionen und Sicherheit |
+| `hardware/` | verbindliches Hardwareprofil und reservierte GPIOs |
+| `meter/` | gemeinsames Messwertmodell, SML-/D0-Parser und IR-Steuerung |
 | `network/` | WLAN/LAN-Fallback und MQTT |
+| `storage/` | kompakte, mehrstufige lokale Historie |
 | `update/` | signierte manuelle und GitHub-Updates |
 | `web/` | Oberfläche, REST-/Messendpunkte, Historie und Shelly-Emulation |
 | `diagnostics/` | Selbsttest, GPIO-Suche und Werksprüfung |
 
-`main.cpp` enthält nur noch den gemeinsamen Zustand sowie `setup()` und
-`loop()`. Die Module werden in festgelegter Reihenfolge in
-dieselbe private C++-Übersetzungseinheit eingebunden. PlatformIO schließt ihre
-separate Kompilierung ausdrücklich aus. Dadurch bleiben Binärverhalten,
-Speicherlayout und die bestehenden internen Zustände bei dieser rein
-strukturellen Aufteilung unverändert. Neue Protokolle können anschließend in
-einem eigenen Modul ergänzt werden, ohne `main.cpp` wieder aufzublähen.
+`main.cpp` enthält nur noch gemeinsamen Anwendungszustand sowie `setup()` und
+`loop()`. Zustandsnahe Module werden in festgelegter Reihenfolge in dieselbe
+private C++-Übersetzungseinheit eingebunden. PlatformIO schließt deren separate
+Kompilierung ausdrücklich aus.
+
+Eigenständige Klassen wie `EthernetManager`, `EventLog` und `HistoryStore`
+werden als getrennte Übersetzungseinheiten kompiliert. `SmlParser` und
+`D0Parser` bleiben getrennte Quelldateien, werden für den kleinen OTA-Slot aber
+zusammen mit `main.cpp` übersetzt. Beide implementieren `MeterParser` und
+liefern das zentrale `MeterData`-Modell. Link-Time Optimization (LTO) fasst
+gemeinsamen Code über Modulgrenzen hinweg zusammen. Dadurch gelten Vorzeichen,
+Einheiten, Plausibilitätsprüfung und Aktualitätszeiten für WebUI, MQTT,
+Shelly, EcoTracker, Prometheus, Influx und Historie einheitlich. Lesende
+HTTP-Integrationen laufen zusätzlich über `web/IntegrationApi.cpp`, das
+Zugriffsschutz, Cache-Regeln und Versionsmetadaten zentral setzt. Normale
+Messwertabfragen bleiben im Eco-Takt; nur ausdrücklich rechenintensive und
+laufende Wartungsaufgaben verlängern den zeitlich begrenzten CPU-Boost.
+
+Webquellen werden ausschließlich unter `web/` gepflegt. Der reproduzierbare,
+Gzip-komprimierte C++-Header entsteht bei jedem Build im jeweiligen
+PlatformIO-Buildverzeichnis und wird nicht versioniert.
 
 ## English
 
@@ -27,16 +43,33 @@ Firmware responsibilities are organized below `src/app/`:
 
 | Directory | Responsibility |
 |---|---|
-| `core/` | configuration, shared helpers and security |
-| `meter/` | SML/D0 reception and IR control |
+| `core/` | configuration, event log, shared helpers and security |
+| `hardware/` | authoritative hardware profile and reserved GPIOs |
+| `meter/` | shared reading model, SML/D0 parsers and IR control |
 | `network/` | Wi-Fi/Ethernet fallback and MQTT |
+| `storage/` | compact multi-tier local history |
 | `update/` | signed manual and GitHub updates |
 | `web/` | UI, REST/measurement endpoints, history and Shelly emulation |
 | `diagnostics/` | self-test, GPIO scan and factory test |
 
-`main.cpp` now retains only shared state, `setup()` and `loop()`. The modules
-are included in a defined order into the same private C++
-translation unit, while PlatformIO explicitly excludes standalone compilation.
-This preserves binary behavior, memory layout and existing internal state for
-this structural-only split. Future protocols can be added as dedicated modules
-without growing `main.cpp` again.
+`main.cpp` retains only shared application state, `setup()` and `loop()`.
+State-coupled modules are included in a defined order into the same private C++
+translation unit, while PlatformIO explicitly excludes their standalone
+compilation.
+
+Self-contained classes such as `EthernetManager`, `EventLog` and `HistoryStore`
+compile as separate translation units. `SmlParser` and `D0Parser` remain
+separate source files but compile together with `main.cpp` for the small OTA
+slot. Both implement `MeterParser` and produce the central `MeterData` model.
+Link-time optimization (LTO) folds common code across module boundaries. This
+keeps signs, units, plausibility checks and freshness timestamps consistent
+across the Web UI, MQTT, Shelly, EcoTracker, Prometheus, Influx and history.
+Read-only HTTP integrations additionally pass through
+`web/IntegrationApi.cpp`, which centrally applies access control, cache rules
+and version metadata. Normal reading requests stay at the Eco clock; only
+explicitly compute-intensive, active maintenance tasks extend the temporary
+CPU boost.
+
+Browser sources are maintained exclusively below `web/`. Every build creates
+the reproducible Gzip-compressed C++ header in its own PlatformIO build
+directory; generated code is not versioned.

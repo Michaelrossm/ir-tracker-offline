@@ -1,4 +1,4 @@
-#include "LegacyMeterParser.h"
+#include "D0Parser.h"
 
 #include <algorithm>
 #include <cstring>
@@ -77,7 +77,7 @@ bool parseDecimal(const char *text, double &value, const char *&end) {
   return std::isfinite(value);
 }
 
-bool parseObisLine(char *line, LegacyMeterReading &reading,
+bool parseObisLine(char *line, MeterData &reading,
                    double &importPowerW, double &exportPowerW,
                    double importTariffs[2], double exportTariffs[2],
                    double phaseImportPowerW[3],
@@ -144,7 +144,7 @@ bool parseObisLine(char *line, LegacyMeterReading &reading,
 
 }  // namespace
 
-void LegacyMeterParser::reset() {
+void D0Parser::reset() {
   frameSize_ = 0;
   capturing_ = false;
   hasStx_ = false;
@@ -153,11 +153,11 @@ void LegacyMeterParser::reset() {
   bcc_ = 0;
 }
 
-void LegacyMeterParser::storeLastFrame() {
+void D0Parser::storeLastFrame() {
   lastFrameSize_ = std::min(frameSize_, kMaximumFrame);
 }
 
-bool LegacyMeterParser::parseFrame(LegacyMeterReading &reading,
+bool D0Parser::parseFrame(MeterData &reading,
                                    bool bccPresent, bool bccValid) {
   if (bccPresent && !bccValid) return false;
   char text[kMaximumFrame + 1];
@@ -170,9 +170,9 @@ bool LegacyMeterParser::parseFrame(LegacyMeterReading &reading,
 
   if (text[0] == '/') {
     size_t length = strcspn(text, "\r\n");
-    length = std::min(length, sizeof(reading.identification) - 1);
-    memcpy(reading.identification, text, length);
-    reading.identification[length] = '\0';
+    length = std::min(length, sizeof(identification_) - 1);
+    memcpy(identification_, text, length);
+    identification_[length] = '\0';
   }
 
   double importPowerW = NAN;
@@ -230,29 +230,37 @@ bool LegacyMeterParser::parseFrame(LegacyMeterReading &reading,
     reading.powerW = reading.phasePowerW[0] + reading.phasePowerW[1] +
                      reading.phasePowerW[2];
   }
-  reading.bccPresent = bccPresent;
-  reading.bccValid = bccPresent && bccValid;
   return found;
 }
 
-bool LegacyMeterParser::consume(uint8_t byte, LegacyMeterReading &reading) {
+MeterParseStatus D0Parser::consumeByte(uint8_t byte,
+                                      MeterParseResult &result) {
   const uint8_t value = byte & 0x7f;
   if (waitForBcc_) {
     const bool valid = value == (bcc_ & 0x7f);
     if (!valid) ++checksumErrors_;
     storeLastFrame();
-    const bool parsed = parseFrame(reading, true, valid);
+    result = {};
+    result.protocol = MeterProtocol::Iec62056;
+    result.integrityPresent = true;
+    result.integrityValid = valid;
+    result.frameData = frame_;
+    result.frameSize = lastFrameSize_;
+    const bool parsed = parseFrame(result.values, true, valid);
     reset();
-    return parsed;
+    if (!valid) return MeterParseStatus::IntegrityError;
+    // In automatic mode arbitrary binary SML bytes can resemble a D0 frame
+    // start. Preserve the former behavior and ignore incomplete/non-D0 data.
+    return parsed ? MeterParseStatus::Valid : MeterParseStatus::None;
   }
 
   if (!capturing_) {
-    if (value != '/' && value != kStx) return false;
+    if (value != '/' && value != kStx) return MeterParseStatus::None;
     capturing_ = true;
   }
   if (frameSize_ >= kMaximumFrame) {
     reset();
-    return false;
+    return MeterParseStatus::None;
   }
   frame_[frameSize_++] = value;
 
@@ -267,13 +275,28 @@ bool LegacyMeterParser::consume(uint8_t byte, LegacyMeterReading &reading) {
     identificationReady_ = true;
   if (value == kEtx && hasStx_) {
     waitForBcc_ = true;
-    return false;
+    return MeterParseStatus::None;
   }
   if (value == '\n' && sawBang_ && !hasStx_) {
     storeLastFrame();
-    const bool parsed = parseFrame(reading, false, false);
+    result = {};
+    result.protocol = MeterProtocol::Iec62056;
+    result.integrityPresent = false;
+    result.integrityValid = true;
+    result.frameData = frame_;
+    result.frameSize = lastFrameSize_;
+    const bool parsed = parseFrame(result.values, false, false);
     reset();
-    return parsed;
+    return parsed ? MeterParseStatus::Valid : MeterParseStatus::None;
   }
-  return false;
+  return MeterParseStatus::None;
+}
+
+MeterParseStatus D0Parser::feed(const uint8_t *data, size_t length,
+                                MeterParseResult &result) {
+  for (size_t i = 0; i < length; ++i) {
+    const MeterParseStatus status = consumeByte(data[i], result);
+    if (status != MeterParseStatus::None) return status;
+  }
+  return MeterParseStatus::None;
 }

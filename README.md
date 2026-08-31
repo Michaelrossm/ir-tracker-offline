@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.0
+# IR Tracker Offline — 1.3.1
 
 **Deutsch** | [English](#english)
 
@@ -12,7 +12,7 @@ Erstellt und gepflegt von **Michael Roßmann**.
 
 Der Tracker soll Messwerte nicht nur anzeigen, sondern sie möglichst einfach für bestehende lokale Systeme bereitstellen. Deshalb stehen mehrere Schnittstellen parallel zur Verfügung.
 
-Besonders praktisch ist die **Shelly-Kompatibilität**: Der Tracker stellt nur lesende Shelly-EM- und Shelly-Pro-EM-kompatible Endpunkte bereit. Systeme, die entsprechende Shelly-Energiemessgeräte abfragen können, können dadurch unter Umständen ohne eine speziell für den IR Tracker entwickelte Integration auf die Messwerte zugreifen.
+Besonders praktisch sind die **Shelly- und EcoTracker-Kompatibilität**: Der Tracker stellt nur lesende Shelly-EM-, Shelly-Pro-EM- und EcoTracker-kompatible Endpunkte bereit. Systeme, die entsprechende Energiemessgeräte abfragen können, können dadurch unter Umständen ohne eine speziell für den IR Tracker entwickelte Integration auf die Messwerte zugreifen.
 
 Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/OpenMetrics und Influx Line Protocol** zur Verfügung. Die komplette SML-/OBIS-Auswertung findet lokal auf dem ESP32-C3 statt.
 
@@ -23,6 +23,7 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 - **vollständig lokale SML-/OBIS- sowie IEC-62056-21/D0-Auswertung** ohne Cloud-Abhängigkeit
 - Livewerte für Gesamtleistung, Netzbezug, Einspeisung sowie verfügbare L1/L2/L3-Werte
 - **Shelly-EM- und Shelly-Pro-EM-kompatible Leseendpunkte** für eine möglichst einfache Einbindung in bestehende Systeme
+- **EcoTracker-kompatible lokale API** unter `/v1/json` einschließlich Messwertalter
 - **Home Assistant über MQTT Discovery**
 - lokale Schnittstellen über **JSON/HTTP, CSV, Prometheus/OpenMetrics und Influx Line Protocol**
 - lokale Historie mit Stunde, Tag, Woche, Monat, Jahr und Langzeitansicht
@@ -46,6 +47,7 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 | Schnittstelle | Verwendung |
 | --- | --- |
 | Shelly-kompatible Endpunkte | Einbindung in Systeme, die Shelly EM / Pro EM abfragen können |
+| EcoTracker-kompatible API | Einbindung über das lokale EcoTracker-Format `/v1/json` |
 | MQTT Discovery | automatische Sensoren in Home Assistant |
 | JSON/HTTP | eigene Integrationen, Automatisierung und lokale Abfragen |
 | CSV | einfache Weiterverarbeitung aktueller Werte |
@@ -104,7 +106,8 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 
 ## Projektstatus
 
-Version **1.3.0 ist die erste stabile Veröffentlichung** ohne Beta-Kennzeichnung.
+Version **1.3.1** vereinheitlicht und härtet die lokalen Integrationen, ergänzt
+EcoTracker-Kompatibilität und erweitert die Shelly-Emulation.
 Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
 
 Die Universal-Firmware enthält bereits W5500-LAN mit WLAN-Fallback. Die
@@ -128,7 +131,7 @@ Created and maintained by **Michael Roßmann**.
 
 The tracker is designed not only to display readings but also to expose them to existing local systems through several interfaces.
 
-A particularly useful feature is **Shelly compatibility**. The tracker provides read-only Shelly EM and Shelly Pro EM compatible endpoints. Systems capable of reading corresponding Shelly energy meters may therefore be able to consume IR Tracker measurements without a dedicated IR Tracker integration.
+Particularly useful are **Shelly and EcoTracker compatibility**. The tracker provides read-only Shelly EM, Shelly Pro EM and EcoTracker compatible endpoints. Systems capable of reading corresponding energy meters may therefore be able to consume IR Tracker measurements without a dedicated IR Tracker integration.
 
 It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/OpenMetrics and Influx Line Protocol**. SML/OBIS processing remains completely local on the ESP32-C3.
 
@@ -139,6 +142,7 @@ It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/Ope
 - **fully local SML/OBIS and IEC 62056-21/D0 processing** without cloud dependency
 - live total power, grid import/export and available L1/L2/L3 readings
 - **read-only Shelly EM and Shelly Pro EM compatible endpoints** for easier integration with existing systems
+- **EcoTracker-compatible local API** at `/v1/json`, including reading age
 - **Home Assistant MQTT Discovery**
 - local **JSON/HTTP, CSV, Prometheus/OpenMetrics and Influx Line Protocol** interfaces
 - local history for hour, day, week, month, year and long-term views
@@ -162,6 +166,7 @@ It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/Ope
 | Interface | Use |
 | --- | --- |
 | Shelly-compatible endpoints | integration with systems capable of reading Shelly EM / Pro EM |
+| EcoTracker-compatible API | integration through the local EcoTracker `/v1/json` format |
 | MQTT Discovery | automatic Home Assistant sensors |
 | JSON/HTTP | custom integrations, automation and local queries |
 | CSV | simple processing of current readings |
@@ -219,8 +224,9 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 
 ### Project status
 
-Version **1.3.0 is the first stable release** without a beta suffix. Feedback
-about different electricity meters and local integrations is welcome.
+Version **1.3.1** unifies and hardens local integrations, adds EcoTracker
+compatibility and extends Shelly emulation. Feedback about different meters
+and local integrations is welcome.
 
 The universal firmware already contains W5500 Ethernet with Wi-Fi fallback.
 The Ethernet/PoE board has not yet been validated on real hardware.

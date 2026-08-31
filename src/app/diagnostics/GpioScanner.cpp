@@ -30,6 +30,10 @@ void beginGpioScanCandidate() {
     return;
   }
   gpioScan.currentPin = gpioScan.pins[gpioScan.pinIndex];
+  // A full scan can exceed the normal two-minute boost window. Renew it only
+  // when advancing to a candidate, so Eco mode resumes two minutes after the
+  // scan actually finishes instead of down-clocking an active UART test.
+  requestCpuBoost("gpio_scan");
   gpioScan.currentBaud = gpioScan.bauds[gpioScan.baudIndex];
   meterSerial.end();
   resetSmlCapture();

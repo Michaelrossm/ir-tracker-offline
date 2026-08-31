@@ -1,5 +1,7 @@
 #pragma once
 
+#include "MeterParser.h"
+
 #include <Arduino.h>
 
 #include <cmath>
@@ -13,22 +15,11 @@
 // EN: Read-only IEC 62056-21/D0 parser for older ASCII meters. It accepts
 // checked STX/ETX/BCC frames and the commonly encountered passive variant
 // without BCC when a complete, plausible OBIS data set ending in "!" arrived.
-struct LegacyMeterReading {
-  double powerW = NAN;
-  double importKwh = NAN;
-  double exportKwh = NAN;
-  double phasePowerW[3] = {NAN, NAN, NAN};
-  double phaseVoltageV[3] = {NAN, NAN, NAN};
-  double phaseCurrentA[3] = {NAN, NAN, NAN};
-  bool bccPresent = false;
-  bool bccValid = false;
-  char identification[32] = {};
-};
-
-class LegacyMeterParser {
+class D0Parser final : public MeterParser {
  public:
-  bool consume(uint8_t byte, LegacyMeterReading &reading);
-  void reset();
+  MeterParseStatus feed(const uint8_t *data, size_t length,
+                        MeterParseResult &result) override;
+  void reset() override;
 
   const uint8_t *lastFrameData() const { return frame_; }
   size_t lastFrameSize() const { return lastFrameSize_; }
@@ -39,7 +30,8 @@ class LegacyMeterParser {
  private:
   static constexpr size_t kMaximumFrame = 2048;
 
-  bool parseFrame(LegacyMeterReading &reading, bool bccPresent,
+  MeterParseStatus consumeByte(uint8_t byte, MeterParseResult &result);
+  bool parseFrame(MeterData &reading, bool bccPresent,
                   bool bccValid);
   void storeLastFrame();
 
@@ -53,4 +45,5 @@ class LegacyMeterParser {
   bool identificationReady_ = false;
   uint8_t bcc_ = 0;
   uint32_t checksumErrors_ = 0;
+  char identification_[32] = {};
 };

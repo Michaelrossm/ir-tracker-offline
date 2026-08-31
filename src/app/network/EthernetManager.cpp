@@ -1,6 +1,6 @@
 #include "EthernetManager.h"
 
-#include "HardwareProfile.h"
+#include "../hardware/HardwareProfile.h"
 
 #if IR_TRACKER_LAN_PROFILE
 extern "C" {

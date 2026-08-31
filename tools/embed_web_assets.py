@@ -7,7 +7,8 @@ from pathlib import Path
 Import("env")  # type: ignore[name-defined]  # Provided by PlatformIO/SCons.
 
 ROOT = Path(env["PROJECT_DIR"])
-TARGET = ROOT / "src" / "WebAssets.h"
+GENERATED_DIR = Path(env.subst("$BUILD_DIR")) / "generated"
+TARGET = GENERATED_DIR / "WebAssets.h"
 ASSETS = (
     ("common.css", "kCommonCssGzip"),
     ("common.js", "kCommonJsGzip"),
@@ -25,6 +26,7 @@ def format_bytes(data: bytes) -> str:
 
 
 def build(*_args, **_kwargs) -> None:
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     declarations = []
     for filename, symbol in ASSETS:
         source = ROOT / "web" / filename
@@ -47,3 +49,4 @@ def build(*_args, **_kwargs) -> None:
 
 
 build()
+env.Prepend(CPPPATH=[str(GENERATED_DIR)])
