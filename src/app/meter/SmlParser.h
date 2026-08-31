@@ -24,4 +24,3 @@ class SmlParser final : public MeterParser {
   bool capturing_ = false;
   uint8_t trailerRemaining_ = 0;
 };
-

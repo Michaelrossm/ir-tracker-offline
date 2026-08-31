@@ -33,4 +33,3 @@ class MeterParser {
                                 MeterParseResult &result) = 0;
   virtual void reset() = 0;
 };
-

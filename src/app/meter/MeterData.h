@@ -50,4 +50,3 @@ struct MeterData {
   bool lastIntegrityPresent = false;
   MeterProtocol detectedProtocol = MeterProtocol::Auto;
 };
-
