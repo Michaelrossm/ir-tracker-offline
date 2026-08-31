@@ -190,32 +190,41 @@ bool HistoryStore::forEach(Tier tierId, uint32_t since, uint32_t until,
   if (!file) return false;
   const uint32_t first =
       tier.header.count < tier.capacity ? 0 : tier.header.writeIndex;
-  for (uint32_t i = 0; i < tier.header.count; ++i) {
-    const uint32_t slot = (first + i) % tier.capacity;
-    if (!file.seek(2 * sizeof(Header) +
-                       static_cast<size_t>(slot) * sizeof(Record),
-                   SeekSet)) {
-      file.close();
-      return false;
-    }
-    Record record;
-    if (file.read(reinterpret_cast<uint8_t *>(&record), sizeof(record)) !=
-        sizeof(record)) {
-      file.close();
-      return false;
-    }
-    if (!validRecord(record)) {
+  bool callbackStopped = false;
+  const auto readRange = [&](uint32_t startSlot, uint32_t recordCount) {
+    if (!recordCount) return true;
+    const size_t offset =
+        2 * sizeof(Header) +
+        static_cast<size_t>(startSlot) * sizeof(Record);
+    if (!file.seek(offset, SeekSet)) return false;
+    for (uint32_t i = 0; i < recordCount; ++i) {
+      Record record;
+      if (file.read(reinterpret_cast<uint8_t *>(&record), sizeof(record)) !=
+          sizeof(record))
+        return false;
+      if (!validRecord(record)) {
+        delay(0);
+        continue;
+      }
+      if (record.timestamp >= since && record.timestamp <= until &&
+          !callback(record)) {
+        callbackStopped = true;
+        return true;
+      }
       delay(0);
-      continue;
     }
-    if (record.timestamp >= since && record.timestamp <= until &&
-        !callback(record)) {
-      break;
-    }
-    delay(0);
-  }
+    return true;
+  };
+
+  // A ring is physically stored in at most two contiguous regions. Preserve
+  // chronological callback order while reducing count seeks to at most two.
+  const uint32_t firstRange =
+      std::min(tier.header.count, tier.capacity - first);
+  bool ok = readRange(first, firstRange);
+  if (ok && !callbackStopped && firstRange < tier.header.count)
+    ok = readRange(0, tier.header.count - firstRange);
   file.close();
-  return true;
+  return ok;
 }
 
 bool HistoryStore::clear(Tier tierId) {

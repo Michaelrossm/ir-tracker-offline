@@ -111,6 +111,26 @@ void consumeMeterBytes(const uint8_t *data, size_t length) {
   }
 }
 
+// Keep the meter's UART ahead of synchronous network work. This is the single
+// shared receive path used before and after network/Web processing; parsing and
+// validation remain in consumeMeterBytes().
+void serviceMeterInput() {
+#if IR_TRACKER_ENABLE_FACTORY_TEST
+  if (factoryTest.running) return;
+#endif
+  uint8_t incoming[128];
+  size_t count = 0;
+  while (!irPulse.active && meterSerial.available() &&
+         count < sizeof(incoming)) {
+    incoming[count++] = meterSerial.read();
+  }
+  if (!count) return;
+#if IR_TRACKER_ENABLE_DEVELOPER_IO
+  if (config.snifferEnabled) snifferSocket.broadcastBIN(incoming, count);
+#endif
+  consumeMeterBytes(incoming, count);
+}
+
 void resetMeterParsers() {
   smlParser.reset();
   d0Parser.reset();

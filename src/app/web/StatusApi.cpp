@@ -8,7 +8,12 @@
 String statusJson() {
   const bool fresh = valueFresh(meter.powerUpdatedMs);
   const bool browserSessionValid = validBrowserSession();
-  String json = "{";
+  // The complete status is currently about 2.6 kB. Reserving once avoids the
+  // allocator churn caused by growing Arduino String in 16-byte steps. Keep
+  // the payload and the shared Web/MQTT status source unchanged.
+  String json;
+  json.reserve(3000);
+  json = "{";
   json += "\"firmware\":\"offline-" + String(kFirmwareVersion) + "\",";
   json += "\"hardware_profile\":\"universal\",";
   json += "\"w5500_gpio_reserved\":" +

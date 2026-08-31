@@ -2,6 +2,40 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.2 Beta 1 — 2026-08-31
+
+### Deutsch
+
+- Der gemeinsame Status-JSON reserviert seinen Ausgabepuffer einmalig und
+  vermeidet wiederholte Heap-Vergrößerungen bei Web- und MQTT-Aufrufen.
+- Der regelmäßige MQTT-Publishpfad verwendet feste, wiederverwendete Topic- und
+  Zahlenpuffer statt zahlreicher temporärer `String`-Objekte. Home Assistant,
+  Homie und alle bisherigen Topics bleiben kompatibel.
+- Der bestehende Zähler-UART wird vor und nach möglicherweise blockierenden
+  Netzwerk-, MQTT- und Webarbeiten bedient. Parser und `MeterData` bleiben die
+  einzige gemeinsame Verarbeitungsschicht.
+- `HistoryStore::forEach()` liest den Ringpuffer in höchstens zwei
+  zusammenhängenden Bereichen. Reihenfolge, Plausibilitätsprüfung, Callback-API,
+  doppelte Header und Stromausfallsicherheit bleiben unverändert.
+- Lokaler OTA-Test auf ESP32-C3 sowie alle Projekt- und HTTP-Abnahmetests
+  erfolgreich.
+
+### English
+
+- The shared status JSON reserves its output buffer once, avoiding repeated
+  heap growth during Web and MQTT requests.
+- The recurring MQTT publish path uses fixed reusable topic and numeric buffers
+  instead of many temporary `String` objects. Home Assistant, Homie and all
+  existing topics remain compatible.
+- The existing meter UART is serviced before and after potentially blocking
+  network, MQTT and Web work. The parsers and `MeterData` remain the single
+  shared processing layer.
+- `HistoryStore::forEach()` reads the ring buffer in at most two contiguous
+  regions. Ordering, plausibility checks, callback API, duplicate headers and
+  power-loss safety remain unchanged.
+- Local OTA validation on ESP32-C3 and all project and HTTP acceptance tests
+  passed.
+
 ## 1.3.1 — 2026-08-31
 
 ### Deutsch

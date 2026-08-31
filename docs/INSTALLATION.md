@@ -13,14 +13,14 @@
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\flash-custom.ps1 `
-  -Port COM3 -Version 1.3.1 -ConfirmCustomOnly ERASE-ORIGINAL
+  -Port COM3 -Version 1.3.2-beta.1 -ConfirmCustomOnly ERASE-ORIGINAL
 ```
 
 Der Vorgang installiert die Custom-Firmware redundant. Er darf nur mit vorhandener persönlicher Originalsicherung ausgeführt werden.
 
 ### Signiertes WLAN-Update
 
-Unter **Wartung → Custom-Firmware aktualisieren** ausschließlich `ir-tracker-custom-1.3.1.irfw` laden. Signatur und ESP32-Image werden vor Aktivierung geprüft. Einstellungen, Historie und der offene Minutenblock bleiben erhalten; vorheriges Backup bleibt trotzdem empfohlen.
+Unter **Wartung → Custom-Firmware aktualisieren** ausschließlich `ir-tracker-custom-1.3.2-beta.1.irfw` laden. Signatur und ESP32-Image werden vor Aktivierung geprüft. Einstellungen, Historie und der offene Minutenblock bleiben erhalten; vorheriges Backup bleibt trotzdem empfohlen.
 
 Ein normales OTA-Update ersetzt die Partitionstabelle nicht. Geräte mit dem
 alten Label `coredump` funktionieren deshalb unverändert weiter. Das neue Label
@@ -50,14 +50,14 @@ Dies überschreibt bewusst den vollständigen Flash und entfernt Custom-Firmware
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\flash-custom.ps1 `
-  -Port COM3 -Version 1.3.1 -ConfirmCustomOnly ERASE-ORIGINAL
+  -Port COM3 -Version 1.3.2-beta.1 -ConfirmCustomOnly ERASE-ORIGINAL
 ```
 
 The operation installs the custom firmware redundantly and may only be run when a personal original backup exists.
 
 ### Signed Wi-Fi update
 
-Under **Maintenance → Update custom firmware**, upload only `ir-tracker-custom-1.3.1.irfw`. The signature and ESP32 image are verified before activation. Settings, history and the current minute block are preserved; a backup is still recommended.
+Under **Maintenance → Update custom firmware**, upload only `ir-tracker-custom-1.3.2-beta.1.irfw`. The signature and ESP32 image are verified before activation. Settings, history and the current minute block are preserved; a backup is still recommended.
 
 A normal OTA update does not replace the partition table. Devices carrying the
 legacy `coredump` label therefore continue to work unchanged. The new `debugfs`

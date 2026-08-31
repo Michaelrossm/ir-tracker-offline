@@ -119,13 +119,26 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.1"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.2-beta.1"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
         self.assertIn("URLSearchParams(location.search).get('lang')", I18N_SOURCE)
         self.assertIn('"Einstellungen":"Settings"', I18N_SOURCE)
         self.assertIn("Michael Roßmann", source)
+
+    def test_recurring_hotpaths_avoid_known_allocator_and_io_churn(self):
+        self.assertIn("json.reserve(3000);", SOURCE)
+        self.assertIn("char topic[96];", SOURCE)
+        self.assertIn("char value[40];", SOURCE)
+        self.assertIn("void serviceMeterInput()", SOURCE)
+        loop_source = SOURCE[SOURCE.index("void loop()") :]
+        self.assertLess(
+            loop_source.index("serviceMeterInput();"),
+            loop_source.index("manageMqtt();"),
+        )
+        self.assertIn("const auto readRange", HISTORY_SOURCE)
+        self.assertIn("tier.capacity - first", HISTORY_SOURCE)
 
     def test_debug_partition_is_used_for_optional_frontend_assets(self):
         source = SOURCE

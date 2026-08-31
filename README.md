@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.1
+# IR Tracker Offline — 1.3.2 Beta 1
 
 **Deutsch** | [English](#english)
 
@@ -106,8 +106,9 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 
 ## Projektstatus
 
-Version **1.3.1** vereinheitlicht und härtet die lokalen Integrationen, ergänzt
-EcoTracker-Kompatibilität und erweitert die Shelly-Emulation.
+Version **1.3.2 Beta 1** optimiert die laufzeitkritischen Pfade für Status-JSON,
+MQTT, Zählerempfang und History-Lesezugriffe, ohne Schnittstellen oder
+Messfunktionen zu entfernen.
 Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
 
 Neue USB-Installationen verwenden für den optionalen 64-kB-Debugspeicher das
@@ -229,9 +230,9 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 
 ### Project status
 
-Version **1.3.1** unifies and hardens local integrations, adds EcoTracker
-compatibility and extends Shelly emulation. Feedback about different meters
-and local integrations is welcome.
+Version **1.3.2 Beta 1** optimizes the runtime-critical status JSON, MQTT,
+meter reception and history read paths without removing interfaces or meter
+features. Feedback about different meters and local integrations is welcome.
 
 New USB installations use the `debugfs` label for optional 64-kB debug
 storage. The same firmware automatically detects the previous `coredump` label

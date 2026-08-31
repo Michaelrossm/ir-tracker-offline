@@ -74,48 +74,72 @@ void publishHomieMetadata() {
 }
 
 void publishMqttValues() {
-  const String base = mqttBaseTopic();
-  const String homie = "homie/" + deviceId;
+  // Build all recurring topics and values in reusable fixed buffers. The
+  // discovery and Homie metadata paths run only after a reconnect and remain
+  // unchanged; this removes heap churn from the five-second publish hotpath.
+  char base[48];
+  char homie[48];
+  char root[64];
+  char topic[96];
+  char value[40];
+  snprintf(base, sizeof(base), "irtracker/%s", deviceId.c_str());
+  snprintf(homie, sizeof(homie), "homie/%s", deviceId.c_str());
+  const auto publish = [&](const char *prefix, const char *suffix,
+                           const char *payload) {
+    const int length =
+        snprintf(topic, sizeof(topic), "%s%s", prefix, suffix);
+    if (length <= 0 || static_cast<size_t>(length) >= sizeof(topic))
+      return false;
+    return mqtt.publish(topic, payload, true);
+  };
   const bool fresh = meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
-  mqtt.publish((base + "/state").c_str(), statusJson().c_str(), true);
+  const String status = statusJson();
+  publish(base, "/state", status.c_str());
   if (std::isfinite(meter.powerW)) {
-    const String value = String(meter.powerW, 3);
-    mqtt.publish((base + "/power_w").c_str(), value.c_str(), true);
-    mqtt.publish((homie + "/meter/power").c_str(), value.c_str(), true);
+    snprintf(value, sizeof(value), "%.3f", meter.powerW);
+    publish(base, "/power_w", value);
+    publish(homie, "/meter/power", value);
   }
   if (std::isfinite(meter.importKwh)) {
-    const String value = String(meter.importKwh, 6);
-    mqtt.publish((base + "/import_kwh").c_str(), value.c_str(), true);
-    mqtt.publish((homie + "/meter/import").c_str(), value.c_str(), true);
+    snprintf(value, sizeof(value), "%.6f", meter.importKwh);
+    publish(base, "/import_kwh", value);
+    publish(homie, "/meter/import", value);
   }
   if (std::isfinite(meter.exportKwh)) {
-    const String value = String(meter.exportKwh, 6);
-    mqtt.publish((base + "/export_kwh").c_str(), value.c_str(), true);
-    mqtt.publish((homie + "/meter/export").c_str(), value.c_str(), true);
+    snprintf(value, sizeof(value), "%.6f", meter.exportKwh);
+    publish(base, "/export_kwh", value);
+    publish(homie, "/meter/export", value);
   }
   for (uint8_t phase = 0; phase < 3; ++phase) {
-    const String root = base + "/phase_l" + String(phase + 1);
-    if (std::isfinite(meter.phasePowerW[phase]))
-      mqtt.publish((root + "/power_w").c_str(),
-                   String(meter.phasePowerW[phase], 3).c_str(), true);
-    if (std::isfinite(meter.phaseVoltageV[phase]))
-      mqtt.publish((root + "/voltage_v").c_str(),
-                   String(meter.phaseVoltageV[phase], 3).c_str(), true);
-    if (std::isfinite(meter.phaseCurrentA[phase]))
-      mqtt.publish((root + "/current_a").c_str(),
-                   String(meter.phaseCurrentA[phase], 4).c_str(), true);
+    snprintf(root, sizeof(root), "%s/phase_l%u", base, phase + 1);
+    if (std::isfinite(meter.phasePowerW[phase])) {
+      snprintf(value, sizeof(value), "%.3f", meter.phasePowerW[phase]);
+      publish(root, "/power_w", value);
+    }
+    if (std::isfinite(meter.phaseVoltageV[phase])) {
+      snprintf(value, sizeof(value), "%.3f", meter.phaseVoltageV[phase]);
+      publish(root, "/voltage_v", value);
+    }
+    if (std::isfinite(meter.phaseCurrentA[phase])) {
+      snprintf(value, sizeof(value), "%.4f", meter.phaseCurrentA[phase]);
+      publish(root, "/current_a", value);
+    }
   }
-  mqtt.publish((homie + "/meter/fresh").c_str(), fresh ? "true" : "false", true);
-  mqtt.publish((homie + "/meter/telegrams").c_str(), String(meter.telegrams).c_str(), true);
-  mqtt.publish((homie + "/meter/crc-errors").c_str(), String(meter.crcErrors).c_str(), true);
-  mqtt.publish((homie + "/network/transport").c_str(),
-               primaryTransportName(), true);
-  mqtt.publish((homie + "/network/rssi").c_str(),
-               String(wifiConnected() ? WiFi.RSSI() : 0).c_str(), true);
-  mqtt.publish((homie + "/network/ssid").c_str(),
-               wifiConnected() ? WiFi.SSID().c_str() : "", true);
-  mqtt.publish((homie + "/network/ip").c_str(),
-               primaryNetworkIp().c_str(), true);
+  publish(homie, "/meter/fresh", fresh ? "true" : "false");
+  snprintf(value, sizeof(value), "%lu",
+           static_cast<unsigned long>(meter.telegrams));
+  publish(homie, "/meter/telegrams", value);
+  snprintf(value, sizeof(value), "%lu",
+           static_cast<unsigned long>(meter.crcErrors));
+  publish(homie, "/meter/crc-errors", value);
+  publish(homie, "/network/transport", primaryTransportName());
+  snprintf(value, sizeof(value), "%d",
+           wifiConnected() ? WiFi.RSSI() : 0);
+  publish(homie, "/network/rssi", value);
+  const String ssid = wifiConnected() ? WiFi.SSID() : String();
+  publish(homie, "/network/ssid", ssid.c_str());
+  const String ip = primaryNetworkIp();
+  publish(homie, "/network/ip", ip.c_str());
 }
 
 void manageMqtt() {

@@ -56,7 +56,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.1";
+constexpr char kFirmwareVersion[] = "1.3.2-beta.1";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -471,6 +471,8 @@ void setup() {
 
 void loop() {
   esp_task_wdt_reset();
+  // Meter input has priority over potentially blocking MQTT/Web/network work.
+  serviceMeterInput();
   ethernet.loop();
   manageWifi();
   manageAdaptiveWifiPower();
@@ -496,17 +498,7 @@ void loop() {
   updateGpioScan();
   updateMeterRecovery();
   updateActiveD0();
-  uint8_t incoming[128];
-  size_t count = 0;
-  while (!irPulse.active && meterSerial.available() && count < sizeof(incoming)) {
-    incoming[count++] = meterSerial.read();
-  }
-  if (count) {
-#if IR_TRACKER_ENABLE_DEVELOPER_IO
-    if (config.snifferEnabled) snifferSocket.broadcastBIN(incoming, count);
-#endif
-    consumeMeterBytes(incoming, count);
-  }
+  serviceMeterInput();
   updateActiveD0();
   updateGpioScan();
   const bool meterFresh = valueFresh(meter.powerUpdatedMs);
