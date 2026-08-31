@@ -2,6 +2,44 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.2 Beta 3 — 2026-08-31
+
+### Deutsch
+
+- Der SML-Parser sammelt die unterstützten OBIS-Werte in einem Durchlauf und
+  vermeidet dabei die bisherigen temporären Zahlen-Vektoren.
+- Ein Legacy-Vergleich schützt die Kompatibilität: 32 übereinstimmende
+  Telegramme qualifizieren One-Pass; danach wird jedes 512. Telegramm erneut
+  verglichen. Bei einer Abweichung bleibt der Legacy-Pfad bis zum Parser-Reset
+  aktiv.
+- Die gemeinsame Zählerdiagnose leitet aus kumulativen CRC-/Synchronisations-
+  ereignissen keine unbelegte Telegramm-Verlustquote mehr ab. Frische,
+  vollständige Messwerte werden dadurch korrekt als stabil bewertet.
+- Das vollständige Rohtelegramm unter `/api/v1/raw` ist jetzt ausschließlich
+  für angemeldete Administratoren verfügbar.
+- Speicherdiagnose und technischer Supportbericht zeigen den größten freien
+  Heapblock, die Stackreserve, die Reset-Ursache und den read-only
+  SML-Sicherheitsstatus.
+- Lokal per signiertem OTA auf echter ESP32-C3-Hardware sowie mit allen
+  Projekt-, HTTP-, Offline-, Factory- und Developer-Tests geprüft.
+
+### English
+
+- The SML parser collects all supported OBIS readings in one pass and avoids
+  the former temporary numeric vectors.
+- A legacy comparison protects compatibility: 32 matching telegrams qualify
+  one-pass operation, followed by a comparison every 512 telegrams. Any
+  mismatch latches the legacy path until the parser is reset.
+- The shared meter diagnosis no longer derives an unsupported telegram-loss
+  rate from cumulative CRC/synchronization events. Fresh, complete readings
+  are therefore correctly reported as stable.
+- The complete raw telegram at `/api/v1/raw` now requires administrator
+  authentication.
+- Memory diagnostics and the technical support report expose the largest free
+  heap block, stack reserve, reset reason and read-only SML safety state.
+- Validated locally by signed OTA on real ESP32-C3 hardware and through all
+  project, HTTP, offline, factory and developer tests.
+
 ## 1.3.2 Beta 1 — 2026-08-31
 
 ### Deutsch

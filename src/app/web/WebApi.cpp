@@ -228,7 +228,7 @@ void setupRoutes() {
       sendIntegrationJson(obisJson());
   });
   server.on("/api/v1/raw", HTTP_GET, [] {
-    if (!requireApiAccess()) return;
+    if (!requireAdmin()) return;
     sendIntegrationJson(
         "{\"encoding\":\"hex\",\"length\":" + String(lastTelegram.size()) +
         ",\"data\":\"" + bytesToHex(lastTelegram) + "\"}");

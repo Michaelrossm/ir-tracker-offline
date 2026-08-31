@@ -63,10 +63,24 @@ String obisJson() {
   return json;
 }
 
+uint32_t largestFreeHeapBlockBytes() {
+  return static_cast<uint32_t>(
+      heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+}
+
+uint32_t loopStackHighWaterMarkBytes() {
+  // ESP-IDF's FreeRTOS port reports the high-water mark in bytes.
+  return static_cast<uint32_t>(uxTaskGetStackHighWaterMark(nullptr));
+}
+
 String memoryJson() {
   String json = "{";
   json += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
   json += "\"minimum_free_heap\":" + String(ESP.getMinFreeHeap()) + ",";
+  json += "\"largest_free_heap_block\":" +
+          String(largestFreeHeapBlockBytes()) + ",";
+  json += "\"stack_high_water_mark_bytes\":" +
+          String(loopStackHighWaterMarkBytes()) + ",";
   json += "\"heap_size\":" + String(ESP.getHeapSize()) + ",";
   json += "\"flash_size\":" + String(ESP.getFlashChipSize()) + ",";
   json += "\"firmware_size\":" + String(ESP.getSketchSize()) + ",";

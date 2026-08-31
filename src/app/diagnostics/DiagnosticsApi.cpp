@@ -32,7 +32,7 @@ constexpr bool diagnosticErrorRateHigh(uint32_t errors, uint64_t attempts) {
 
 constexpr MeterDiagnosisCode evaluateMeterDiagnosisCode(
     uint32_t bytes, uint32_t telegrams, uint32_t parseErrors,
-    uint32_t crcErrors, bool fresh, bool hasPower, bool hasImport,
+    uint32_t /*crcErrors*/, bool fresh, bool hasPower, bool hasImport,
     bool hasExport) {
   return !bytes
              ? MeterDiagnosisCode::NoSignal
@@ -40,21 +40,16 @@ constexpr MeterDiagnosisCode evaluateMeterDiagnosisCode(
                    ? MeterDiagnosisCode::NoTelegram
                    : !fresh
                          ? MeterDiagnosisCode::Stale
-                         : diagnosticErrorRateHigh(
-                               parseErrors,
-                               static_cast<uint64_t>(telegrams) + parseErrors +
-                                   crcErrors)
+                         : (!hasPower &&
+                            diagnosticErrorRateHigh(
+                                parseErrors,
+                                static_cast<uint64_t>(telegrams) + parseErrors))
                                ? MeterDiagnosisCode::ParseUnstable
-                               : diagnosticErrorRateHigh(
-                                     crcErrors,
-                                     static_cast<uint64_t>(telegrams) +
-                                         parseErrors + crcErrors)
-                                     ? MeterDiagnosisCode::IntegrityUnstable
-                                     : !hasPower
-                                           ? MeterDiagnosisCode::PartialValues
-                                           : (!hasImport || !hasExport)
-                                                 ? MeterDiagnosisCode::MissingEnergy
-                                                 : MeterDiagnosisCode::Complete;
+                               : !hasPower
+                                     ? MeterDiagnosisCode::PartialValues
+                                     : (!hasImport || !hasExport)
+                                           ? MeterDiagnosisCode::MissingEnergy
+                                           : MeterDiagnosisCode::Complete;
 }
 
 // Compile-time regression cases for the user-facing diagnosis states.
@@ -78,6 +73,26 @@ static_assert(evaluateMeterDiagnosisCode(4000, 30, 0, 0, true, true, true,
                                          true) ==
                   MeterDiagnosisCode::Complete,
               "complete stable readings must report OK");
+static_assert(evaluateMeterDiagnosisCode(286026, 437, 0, 197, true, true,
+                                         true, true) ==
+                  MeterDiagnosisCode::Complete,
+              "CRC synchronization events must not imply lost telegrams");
+static_assert(evaluateMeterDiagnosisCode(29012, 45, 0, 12, true, true, true,
+                                         true) ==
+                  MeterDiagnosisCode::Complete,
+              "rising CRC events with fresh valid data stay healthy");
+static_assert(evaluateMeterDiagnosisCode(286026, 437, 0, 197, false, true,
+                                         true, true) ==
+                  MeterDiagnosisCode::Stale,
+              "stale valid data must remain a warning");
+static_assert(evaluateMeterDiagnosisCode(4096, 0, 0, 80, false, false, false,
+                                         false) ==
+                  MeterDiagnosisCode::NoTelegram,
+              "RX data without a valid telegram must be explicit");
+static_assert(evaluateMeterDiagnosisCode(4096, 10, 20, 0, true, false,
+                                         false, false) ==
+                  MeterDiagnosisCode::ParseUnstable,
+              "parse failures plus missing power must warn");
 
 MeterDiagnosis meterDiagnosis() {
   const bool fresh =
@@ -138,7 +153,7 @@ MeterDiagnosis meterDiagnosis() {
               2};
     case MeterDiagnosisCode::Complete:
     default:
-      return {code, "ok", "Zähler vollständig erkannt und Datenempfang stabil.",
+      return {code, "ok", "Zählerdaten werden stabil empfangen.",
               {"Momentanleistung, Bezug und Einspeisung sind verfügbar.",
                nullptr, nullptr},
               1};
@@ -357,6 +372,23 @@ String meterReportJson() {
   json += "],\"values\":{\"power_w\":" + numberOrNull(meter.powerW) +
           ",\"import_kwh\":" + numberOrNull(meter.importKwh, 6) +
           ",\"export_kwh\":" + numberOrNull(meter.exportKwh, 6) + "},";
+  const SmlParser::Diagnostics parserDiagnostics = smlParser.diagnostics();
+  json += "\"sml_parser\":{\"qualification_matches\":" +
+          String(parserDiagnostics.qualificationMatches) +
+          ",\"qualification_target\":" +
+          String(parserDiagnostics.qualificationTarget) +
+          ",\"sentinel_interval\":" +
+          String(parserDiagnostics.sentinelInterval) +
+          ",\"qualification_complete\":" +
+          String(parserDiagnostics.qualificationComplete ? "true" : "false") +
+          ",\"one_pass_active\":" +
+          String(parserDiagnostics.onePassActive ? "true" : "false") +
+          ",\"legacy_fallback_latched\":" +
+          String(parserDiagnostics.legacyFallbackLatched ? "true" : "false") +
+          ",\"comparison_mismatches\":" +
+          String(parserDiagnostics.comparisonMismatches) +
+          ",\"sentinel_comparisons\":" +
+          String(parserDiagnostics.sentinelComparisons) + "},";
   json += "\"system\":{\"transport\":\"" +
           String(primaryTransportName()) + "\",\"wifi_rssi\":";
   json += (wifiConnected() ? String(WiFi.RSSI()) : "null");
@@ -401,7 +433,7 @@ void appendDiagnosticPhase(String &report, uint8_t phase) {
 String supportReportText(bool technical) {
   const MeterDiagnosis diagnosis = meterDiagnosis();
   String report;
-  report.reserve(technical ? 2600 : 1800);
+  report.reserve(technical ? 3200 : 1800);
   report = "IR Tracker Offline – Diagnosebericht\n";
   report += "Firmware: " + String(kFirmwareVersion) + "\n";
   report += "Laufzeit: " + diagnosticDuration(millis() / 1000U) + "\n\n";
@@ -453,6 +485,12 @@ String supportReportText(bool technical) {
     report += "- " + String(diagnosis.hints[i]) + "\n";
 
   if (technical) {
+    const SmlParser::Diagnostics parserDiagnostics = smlParser.diagnostics();
+    const char *parserMode = parserDiagnostics.legacyFallbackLatched
+                                 ? "legacy-fallback"
+                                 : (parserDiagnostics.onePassActive
+                                        ? "one-pass"
+                                        : "legacy-qualifikation");
     report += "\n=== TECHNISCHE DETAILS ===\n";
     report += "RX-GPIO: " + String(config.rxPin) + "\n";
     report += "TX-GPIO: " + String(config.txPin) + "\n";
@@ -467,6 +505,27 @@ String supportReportText(bool technical) {
     report += "OBIS 16.7.0 Leistung: " +
               String(std::isfinite(meter.powerW) ? "vorhanden" : "fehlt") +
               "\n";
+    report += "Reset-Ursache: " + bootResetReason + "\n";
+    report += "Largest Free Heap Block: " +
+              String(largestFreeHeapBlockBytes()) + " Bytes\n";
+    report += "Stack Reserve (High Water Mark): " +
+              String(loopStackHighWaterMarkBytes()) + " Bytes\n";
+    report += "SML-Parser-Modus: " + String(parserMode) + "\n";
+    report += "Qualifikation: " +
+              String(parserDiagnostics.qualificationMatches) + "/" +
+              String(parserDiagnostics.qualificationTarget) + "\n";
+    report += "One-Pass aktiv: " +
+              String(parserDiagnostics.onePassActive ? "ja" : "nein") +
+              "\n";
+    report += "Legacy-Fallback: " +
+              String(parserDiagnostics.legacyFallbackLatched ? "ja" : "nein") +
+              "\n";
+    report += "Vergleichsabweichungen: " +
+              String(parserDiagnostics.comparisonMismatches) + "\n";
+    report += "Kontrollvergleiche: " +
+              String(parserDiagnostics.sentinelComparisons) + "\n";
+    if (meter.crcErrors && !strcmp(diagnosis.state, "ok"))
+      report += "CRC-/Synchronisationsereignisse erkannt; gültiger Datenstrom stabil.\n";
     report += "Bewertungscode: " +
               String(meterDiagnosisCodeName(diagnosis.code)) + "\n";
   }

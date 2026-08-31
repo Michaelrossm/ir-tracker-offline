@@ -119,7 +119,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.2-beta.2"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.2-beta.3"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -152,10 +152,19 @@ class ProjectSecurityTests(unittest.TestCase):
             "power with missing energy values is a partial result",
             "one missing energy counter must not be a communication error",
             "complete stable readings must report OK",
+            "CRC synchronization events must not imply lost telegrams",
+            "rising CRC events with fresh valid data stay healthy",
+            "stale valid data must remain a warning",
+            "RX data without a valid telegram must be explicit",
+            "parse failures plus missing power must warn",
         ):
             self.assertIn(case, diagnostics)
         self.assertIn("attempts >= 20U", diagnostics)
         self.assertIn("attempts) * 15U", diagnostics)
+        self.assertNotIn(
+            "static_cast<uint64_t>(telegrams) +\n                                         parseErrors + crcErrors",
+            diagnostics,
+        )
 
     def test_support_report_is_on_demand_and_excludes_known_secrets(self):
         diagnostics = (ROOT / "src/app/diagnostics/DiagnosticsApi.cpp").read_text(
@@ -176,12 +185,43 @@ class ProjectSecurityTests(unittest.TestCase):
             "lastTelegram.data",
         ):
             self.assertNotIn(forbidden, report)
-        self.assertIn('report.reserve(technical ? 2600 : 1800);', report)
+        self.assertIn('report.reserve(technical ? 3200 : 1800);', report)
+        normal_report = report[: report.index("if (technical)")]
+        for technical_only in (
+            "SML-Parser-Modus", "Vergleichsabweichungen", "Kontrollvergleiche",
+            "Largest Free Heap Block", "Stack Reserve (High Water Mark)",
+        ):
+            self.assertNotIn(technical_only, normal_report)
+            self.assertIn(technical_only, report)
+        self.assertIn('report += "Reset-Ursache: " + bootResetReason', report)
         self.assertIn('/api/v1/support-report', SOURCE)
         self.assertIn("copyReport(false)", SOURCE)
         self.assertIn("copyReport(true)", SOURCE)
         for heading in ("IR-Verbindung", "Protokoll", "Messwerte", "System"):
             self.assertIn(heading, SOURCE)
+
+    def test_sensitive_raw_and_runtime_diagnostics_are_hardened(self):
+        web_api = (ROOT / "src/app/web/WebApi.cpp").read_text(encoding="utf-8")
+        raw_route = web_api[web_api.index('server.on("/api/v1/raw"') :]
+        raw_route = raw_route[: raw_route.index("});") + 3]
+        self.assertIn("requireAdmin()", raw_route)
+        self.assertNotIn("requireApiAccess()", raw_route)
+
+        telemetry = (ROOT / "src/app/web/TelemetryApi.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)", telemetry)
+        self.assertIn("uxTaskGetStackHighWaterMark(nullptr)", telemetry)
+        self.assertIn("largest_free_heap_block", telemetry)
+        self.assertIn("stack_high_water_mark_bytes", telemetry)
+
+        sml_header = (METER_DIR / "SmlParser.h").read_text(encoding="utf-8")
+        sml_source = (METER_DIR / "SmlParser.cpp").read_text(encoding="utf-8")
+        self.assertIn("kQualificationFrames = 32", sml_header)
+        self.assertIn("kSentinelInterval = 512", sml_header)
+        self.assertIn("Diagnostics diagnostics() const", sml_header)
+        self.assertIn("++comparisonMismatches_", sml_source)
+        self.assertIn("++sentinelComparisons_", sml_source)
 
     def test_debug_partition_is_used_for_optional_frontend_assets(self):
         source = SOURCE

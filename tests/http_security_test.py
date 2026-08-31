@@ -42,6 +42,14 @@ def main() -> None:
     status, _ = request(base + "/setup", args.user, args.password)
     assert status == 200, f"/setup with auth returned {status}"
 
+    status, _ = request(base + "/api/v1/raw")
+    assert status == 401, f"/api/v1/raw without admin returned {status}"
+
+    status, payload = request(base + "/api/v1/raw", args.user, args.password)
+    assert status == 200, f"/api/v1/raw with admin returned {status}"
+    raw = json.loads(payload)
+    assert raw.get("encoding") == "hex" and "data" in raw
+
     status, payload = request(
         base + "/api/v1/admin-session", args.user, args.password
     )
@@ -59,6 +67,8 @@ def main() -> None:
     assert status == 200
     info = json.loads(payload)
     assert "restart_reason" in info and "heap_warning" in info
+    assert info.get("largest_free_heap_block", 0) > 0
+    assert info.get("stack_high_water_mark_bytes", 0) > 0
     print("HTTP security smoke tests: PASS")
 
 
