@@ -25,6 +25,7 @@
   zentrale `MeterData`-Messwertmodell.
 - Gzip-komprimierte Browserassets werden reproduzierbar im Buildverzeichnis
   erzeugt und nicht mehr als generierter C++-Quellcode versioniert.
+- Die GitHub-CI verwendet die aktuellen Node-24-basierten offiziellen Actions.
 
 ### English
 
@@ -47,6 +48,7 @@
   central `MeterData` reading model.
 - Gzip-compressed browser assets are generated only in the build directory;
   `src/WebAssets.h` is no longer versioned source.
+- GitHub CI now uses the current official Node 24 based actions.
 
 ## 1.3.0 — 2026-08-30
 
