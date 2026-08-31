@@ -1,48 +1,91 @@
-# Kompatibilität – Speicher / Energiemanagement
+# Kompatibilität – Batteriespeicher & Energiemanagement
 
-Stand: 2026-08-31
+**Stand: 31.08.2026 · Firmware 1.3.1**
 
-Diese Liste enthält relevante Speicher- und Energiemanagementsysteme, bei denen ein Einsatz mit dem IR Tracker technisch sinnvoll ist. Systeme bleiben auch dann als Kandidat enthalten, wenn für die aktuelle Firmware noch einzelne Discovery-, Authentifizierungs- oder Push-Funktionen ergänzt werden müssten.
+Diese Übersicht zeigt Batteriespeicher und Energiemanagementsysteme, die grundsätzlich mit **IR Tracker Offline** als externe Netzmessquelle verwendet werden können.
 
-## Bedeutung der Spalten
+Die Bewertung basiert auf den aktuell implementierten lokalen Schnittstellen des IR Trackers sowie auf öffentlich dokumentierten Integrationsmöglichkeiten der jeweiligen Hersteller.
 
-- **Kompatibel**: Bewertung gegen die aktuell vorhandenen IR-Tracker-Schnittstellen.
-- **Schnittstelle / Hinweis**: Erwartete Smart-Meter-Anbindung und aktueller Kenntnisstand.
-- **Getestet**: Das konkrete System wurde mit IR Tracker Offline auf echter Hardware erfolgreich geprüft.
+## Statusdefinition
 
-Status:
-- 🟢 **Ja** – lokale Fremdzähler-Anbindung ist dokumentiert und passt grundsätzlich zu den aktuellen IR-Tracker-Funktionen.
-- 🟡 **Kandidat** – das System unterstützt relevante Smart Meter wie Shelly/EcoTracker, aber Discovery, Account-Bindung oder Zusatzfunktionen müssen noch praktisch bzw. protokollseitig geklärt werden.
+| Status | Bedeutung |
+|---|---|
+| 🟢 **Kompatibel** | Die vom System benötigte lokale Zähler-Schnittstelle wird vom IR Tracker grundsätzlich bereitgestellt. Ein abschließender Hardware-Feldtest kann trotzdem noch ausstehen. |
+| 🟡 **Kandidat** | Eine grundsätzlich passende Fremdzähler-Unterstützung ist vorhanden, jedoch bestehen noch offene Punkte bei Cloud-Bindung, Discovery, Authentifizierung oder dem verwendeten Protokoll. |
+| ✅ **Getestet** | Das konkrete Speicher-/EMS-System wurde mit IR Tracker Offline auf realer Hardware erfolgreich geprüft. |
+| ⬜ **Nicht getestet** | Technische Kompatibilität ist gegeben oder wahrscheinlich, ein realer Feldtest steht jedoch noch aus. |
 
-> Der IR Tracker stellt aktuell HTTP/JSON, MQTT sowie lokale Shelly-EM-/Shelly-Pro-EM-kompatible Leseendpunkte bereit. Eine EcoTracker-spezifische Emulation ist derzeit noch nicht implementiert.
+## Vom IR Tracker bereitgestellte Schnittstellen
 
-## Speicherliste
+Firmware **1.3.1** stellt unter anderem folgende lokale Integrationen bereit:
 
-| # | Hersteller | Modell/Familie | Kompatibel | Schnittstelle / Hinweis | Getestet |
-|---:|---|---|---|---|---|
-| 1 | Solakon | ONE | 🟢 Ja | Shelly 3EM / Shelly Pro 3EM; lokale Kommunikation im Heimnetz ist vorgesehen. Sehr guter Kandidat für die aktuelle Shelly-Emulation. | ☐ |
-| 2 | Growatt | NOAH 2000 | 🟢 Ja | Shelly 3EM / Shelly Pro 3EM werden für intelligenten Eigenverbrauch unterstützt. Praktischer IR-Tracker-Test steht noch aus. | ☐ |
-| 3 | Growatt | NEXA 2000 | 🟢 Ja | Shelly 3EM / Shelly Pro 3EM als Lastmessung. Direkte lokale Nutzung im selben WLAN ist realistisch. | ☐ |
-| 4 | Hoymiles | HiBattery 4020 AC | 🟢 Ja | Hoymiles dokumentiert ausdrücklich Shelly, EcoTracker und Linky **über lokales LAN** für die Null-Einspeisungsregelung. Zusätzlich Open MQTT; Cloud kann nach der Einrichtung deaktiviert werden. | ☐ |
-| 5 | Hoymiles | HiBattery 4020 X | 🟢 Ja | Wie 4020 AC: Drittanbieter-Zähler wie Shelly, EcoTracker und Linky über **lokales LAN**, plus Open MQTT. Sehr starker Kandidat für den IR Tracker. | ☐ |
-| 6 | Hoymiles | MS-A2 | 🟢 Ja | Shelly Pro 3EM wird offiziell unterstützt; Hoymiles fordert ausdrücklich denselben WLAN-Router und bietet in der Hoymiles-Home-App „Link Shelly“. Das spricht klar für lokale Shelly-Kommunikation. Discovery/Pairing bleibt noch ungetestet, deshalb kein Haken in „Getestet“. | ☐ |
-| 7 | Hoymiles | HiBattery 1920 AC | 🟡 Kandidat | Shelly Pro 3EM und EcoTracker werden offiziell unterstützt. Reale Feldberichte zeigen: EcoTracker-Emulation funktioniert stabil; eine einfache Shelly-Pro-3EM-Emulation benötigte zusätzliche Anpassungen. Mit EcoTracker-Profil wäre eine grüne Freigabe sehr wahrscheinlich. | ☐ |
-| 8 | Anker SOLIX | Solarbank 2 E1600 Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt. Ankers dokumentierter Setup-Weg wählt ausdrücklich **Shelly Cloud**, verlangt Shelly-Login und Gerätefreigabe. Daher nicht so einfach lokal wie bei Growatt/Hoymiles. | ☐ |
-| 9 | Anker SOLIX | Solarbank 2 E1600 Plus | 🟡 Kandidat | Shelly 3EM / Pro 3EM offiziell unterstützt; dokumentierte Kopplung über **Shelly Cloud + Shelly-Konto**. Eine reine lokale Clone-Emulation ist damit nicht bestätigt. | ☐ |
-| 10 | Anker SOLIX | Solarbank 2 E1600 AC | 🟡 Kandidat | Relevantes Solarbank-2-System; Shelly-Unterstützung ist produkt-/firmwareabhängig. Für dieses Modell fehlt noch ein belastbarer Nachweis einer rein lokalen Shelly-Kopplung. | ☐ |
-| 11 | Anker SOLIX | Solarbank 3 E2700 Pro | 🟡 Kandidat | Anker bestätigt Shelly 3EM und Shelly Pro 3EM als kompatible Smart Meter. Da Anker die Shelly-Integration weiterhin über die Anker-App/Plattform verwaltet, ist lokale Clone-Kompatibilität noch nicht sicher. | ☐ |
-| 12 | Anker SOLIX | Solarbank 4 Pro / E5000 Pro | 🟡 Kandidat | Relevante neue Solarbank-Familie. Shelly-Kompatibilität ist für die Produktfamilie relevant, aber es gibt noch keinen belastbaren Nachweis, dass ein lokaler Shelly-Klon ohne Anker-/Shelly-Cloud-Bindung akzeptiert wird. | ☐ |
-| 13 | EcoFlow | STREAM Ultra | 🟢 Ja | Shelly 3EM / Pro 3EM offiziell unterstützt. STREAM unterstützt einen Local Mode, in dem System, Zubehör und lokal angebundene Messgeräte ausschließlich über das Heimnetz kommunizieren und keine Messdaten in die Cloud hochladen. Ersteinrichtung/Bindung bleibt erforderlich; IR-Tracker-Feldtest steht aus. | ☐ |
-| 14 | EcoFlow | STREAM Pro | 🟢 Ja | Shelly 3EM / Pro 3EM offiziell unterstützt. Die STREAM-Serie unterstützt lokale Smart-Meter-Kommunikation und einen Offline-/Local-Mode. Die technische Grundkompatibilität zur lokalen Shelly-Emulation ist damit gegeben; Feldtest steht aus. | ☐ |
-| 15 | EcoFlow | STREAM Max | 🟢 Ja | Shelly 3EM / Pro 3EM offiziell unterstützt. STREAM kann kompatible Messgeräte lokal im Heimnetz nutzen; die Account-Bindung bei der Einrichtung bedeutet nicht, dass die laufende Messwertübertragung zwingend über die Cloud erfolgt. | ☐ |
-| 16 | EcoFlow | STREAM AC Pro | 🟢 Ja | Shelly 3EM / Pro 3EM offiziell unterstützt. EcoFlow dokumentiert für STREAM einen Local Mode mit ausschließlich lokaler LAN-Kommunikation zu unterstütztem Zubehör und Messgeräten. Damit technisch passend zur IR-Tracker-Shelly-Emulation; Feldtest steht aus. | ☐ |
-| 17 | Zendure | SolarFlow Hyper 2000 | 🟢 Ja | Shelly Pro 3EM kann im **CT-Modus direkt lokal** mit dem Hyper kommunizieren, ohne HEMS und auch bei Internetausfall weiterregeln. Für Problemfälle ist aus der Praxis Shelly `RPC over UDP` zur Hyper-IP auf Port 8006 dokumentiert. Wichtig: In HEMS selbst bleibt der Hyper cloudgebunden; für die lokale Nutzung daher Hyper direkt im CT-Modus betreiben. | ☐ |
-| 18 | Zendure | SolarFlow 800 Pro | 🟡 Kandidat | Shelly-Unterstützung vorhanden, aber die lokale Shelly-Regelung über Zendure-App/HEMS ist nicht so eindeutig und konsistent dokumentiert wie beim Hyper. Lokaler Betrieb über EcoTracker bzw. Home Assistant/ZenSDK ist aus der Praxis belegt; für die aktuelle IR-Tracker-Shelly-Emulation bleibt ein Feldtest nötig. | ☐ |
-| 19 | Zendure | SolarFlow 1600 AC+ | 🟢 Ja | Offiziell unterstützt: Shelly 3EM, Shelly Pro 3EM und Everhome EcoTracker IR. Zendure bestätigt, dass bei einem unterstützten einzelnen SolarFlow-Gerät in HEMS die lokale Kommunikation mit CT/Zählerleser automatisch hergestellt werden kann; bei Internetausfall funktioniert die lokale Kommunikation im gemeinsamen WLAN weiter. | ☐ |
-| 20 | Zendure | SolarFlow 2400 AC+ | 🟢 Ja | Offiziell unterstützt: Shelly 3EM, Shelly Pro 3EM und Everhome EcoTracker IR. Praxisberichte bestätigen lokale Shelly-Kommunikation und lokale Regelung im HEMS; Zendures neuere HEMS-Funktion stellt bei einem einzelnen unterstützten SolarFlow-Gerät die lokale Zählerkommunikation automatisch her. | ☐ |
-| 21 | Zendure | SolarFlow 2400 Pro | 🟢 Ja | Offiziell unterstützt: Shelly 3EM, Shelly Pro 3EM und Everhome EcoTracker IR. Gehört zur aktuellen HEMS-2.0-Produktfamilie; lokale Zählerkommunikation für unterstützte Einzelgeräte ist vorgesehen. Die exakte lokale Regelung über alle Lade-/Entladezustände sollte im Feldtest noch bestätigt werden. | ☐ |
-| 22 | Jackery | Navi 2000 | 🟢 Ja | Shelly Pro 3EM / Pro EM-50 werden offiziell unterstützt. Die Jackery-Dokumentation zeigt eine **direkte lokale Kopplung**: Smart Meter können über die Jackery Home App direkt mit dem Navi 2000 verbunden werden; das Navi stellt dafür ein eigenes WLAN bereit, mit dem sich Smart-CT/Smart-Meter verbinden. Ein Jackery-/Shelly-Cloud-Pfad ist damit für die laufende Messwertübertragung nicht zwingend. Die genaue Shelly-Discovery/Identität bleibt noch praktisch zu testen. | ☐ |
+- Shelly-EM-kompatible Endpunkte
+- Shelly-Pro-EM-/Pro-3EM-kompatible Endpunkte
+- Shelly-Geräteerkennung und nur lesende JSON-RPC-Zugriffe
+- EcoTracker-kompatible API unter `/v1/json`
+- HTTP / JSON
+- MQTT
+- Home Assistant MQTT Discovery
+- Prometheus / OpenMetrics
+- Influx Line Protocol
 
-## Feldtest
+> **Wichtig:** „Kompatibel“ bedeutet nicht automatisch „auf realer Hardware getestet“. Erst ein erfolgreicher Feldtest erhält den Status ✅.
 
-Ein Haken in **Getestet** wird erst gesetzt, wenn das konkrete Speicher-/EMS-System den IR Tracker tatsächlich als Netzmessquelle übernimmt und Bezug, Einspeisung, Vorzeichen, Lastsprünge, Verbindungsverlust und Wiederanlauf korrekt verarbeitet.
+## Kompatibilitätsübersicht
+
+| # | Hersteller | Modell / Familie | Status | Bevorzugte Schnittstelle | Bewertung | Feldtest |
+|---:|---|---|---|---|---|:---:|
+| 1 | Solakon | ONE | 🟢 Kompatibel | Shelly 3EM / Pro 3EM | Lokale Shelly-Anbindung passt grundsätzlich zur aktuellen IR-Tracker-Emulation. | ⬜ |
+| 2 | Growatt | NOAH 2000 | 🟢 Kompatibel | Shelly 3EM / Pro 3EM | Unterstützt externe Shelly-Zähler für die Eigenverbrauchsregelung. | ⬜ |
+| 3 | Growatt | NEXA 2000 | 🟢 Kompatibel | Shelly 3EM / Pro 3EM | Lokale Fremdzähler-Anbindung technisch passend. | ⬜ |
+| 4 | Hoymiles | HiBattery 4020 AC | 🟢 Kompatibel | Shelly / EcoTracker | Drittanbieter-Zähler werden ausdrücklich über lokales LAN unterstützt. | ⬜ |
+| 5 | Hoymiles | HiBattery 4020 X | 🟢 Kompatibel | Shelly / EcoTracker | Lokale LAN-Anbindung von Drittanbieter-Zählern offiziell vorgesehen. | ⬜ |
+| 6 | Hoymiles | MS-A2 | 🟢 Kompatibel | Shelly Pro 3EM | Shelly Pro 3EM wird offiziell unterstützt; praktische Kopplung mit IR Tracker noch nicht getestet. | ⬜ |
+| 7 | Hoymiles | HiBattery 1920 AC | 🟢 Kompatibel | **EcoTracker / Shelly Pro 3EM** | EcoTracker und Shelly Pro 3EM werden unterstützt. Durch die EcoTracker-API von Firmware 1.3.1 ist die technische Voraussetzung nun vorhanden. | ⬜ |
+| 8 | Anker SOLIX | Solarbank 2 E1600 Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Shelly wird unterstützt, die offizielle Kopplung verwendet jedoch Shelly Cloud und ein Shelly-Konto. | ⬜ |
+| 9 | Anker SOLIX | Solarbank 2 E1600 Plus | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Gleiche Einschränkung wie bei Solarbank 2 Pro: Cloud-/Account-Bindung muss noch geklärt werden. | ⬜ |
+| 10 | Anker SOLIX | Solarbank 2 E1600 AC | 🟡 Kandidat | Shelly / Smart Meter | Fremdzähler-Unterstützung ist produkt- und firmwareabhängig; lokale Clone-Kompatibilität nicht ausreichend bestätigt. | ⬜ |
+| 11 | Anker SOLIX | Solarbank 3 E2700 Pro | 🟡 Kandidat | Smart Meter / Shelly | Externe Messung vorhanden, aber keine ausreichend belegte lokale Shelly-Clone-Anbindung. | ⬜ |
+| 12 | Anker SOLIX | Solarbank 4 Pro / E5000 Pro | 🟡 Kandidat | Smart Meter | Aktuelles System mit Smart-Meter-Regelung; Fremdzähler- und lokale Clone-Unterstützung müssen noch eindeutig bestätigt werden. | ⬜ |
+| 13 | EcoFlow | STREAM Ultra | 🟢 Kompatibel | Shelly 3EM / Pro 3EM | Lokaler Smart-Meter-Betrieb und Local Mode grundsätzlich passend. | ⬜ |
+| 14 | EcoFlow | STREAM Pro | 🟢 Kompatibel | Shelly 3EM / Pro 3EM | Lokale Smart-Meter-Kommunikation technisch passend. | ⬜ |
+| 15 | EcoFlow | STREAM Max | 🟢 Kompatibel | Shelly 3EM / Pro 3EM | Unterstützte lokale Messgeräte können im Heimnetz verwendet werden. | ⬜ |
+| 16 | EcoFlow | STREAM AC Pro | 🟢 Kompatibel | Shelly 3EM / Pro 3EM | Local Mode und lokale Smart-Meter-Kommunikation passen zur IR-Tracker-Emulation. | ⬜ |
+| 17 | Zendure | SolarFlow Hyper 2000 | 🟢 Kompatibel | Shelly Pro 3EM | Direkte lokale CT-Kommunikation ist möglich. | ⬜ |
+| 18 | Zendure | SolarFlow 800 Pro | 🟢 Kompatibel | **EcoTracker / Shelly** | EcoTracker, Shelly 3EM und Shelly Pro 3EM werden unterstützt. Durch die neue EcoTracker-API ist die technische Kompatibilität deutlich besser als bei älteren Firmwareständen. | ⬜ |
+| 19 | Zendure | SolarFlow 1600 AC+ | 🟢 Kompatibel | EcoTracker / Shelly | EcoTracker und Shelly werden offiziell unterstützt; lokale Zählerkommunikation ist vorgesehen. | ⬜ |
+| 20 | Zendure | SolarFlow 2400 AC+ | 🟢 Kompatibel | EcoTracker / Shelly | Offizielle Unterstützung für EcoTracker, Shelly 3EM und Shelly Pro 3EM. | ⬜ |
+| 21 | Zendure | SolarFlow 2400 Pro | 🟢 Kompatibel | EcoTracker / Shelly | Gehört zur aktuellen HEMS-Familie mit Unterstützung entsprechender Fremdzähler. | ⬜ |
+| 22 | Jackery | Navi 2000 | 🟢 Kompatibel | Shelly Pro 3EM / Pro EM-50 | Direkte Smart-Meter-Kopplung vorgesehen; Discovery/Identität mit IR Tracker muss noch real getestet werden. | ⬜ |
+
+## Aktueller Gesamtstand
+
+**22 relevante Speicher-/EMS-Systeme**
+
+- 🟢 **Kompatibel:** 17
+- 🟡 **Kandidaten:** 5
+- ✅ **Auf realer Speicher-Hardware getestet:** 0
+
+### Änderungen mit Firmware 1.3.1
+
+**Neu auf 🟢 Kompatibel gesetzt:**
+
+- Hoymiles HiBattery 1920 AC
+- Zendure SolarFlow 800 Pro
+
+Grund dafür ist insbesondere die neue **EcoTracker-kompatible `/v1/json`-Schnittstelle** sowie die erweiterte Shelly-Kompatibilität des IR Trackers.
+
+## Anforderungen für einen erfolgreichen Feldtest
+
+Ein Modell erhält erst den Status ✅ **Getestet**, wenn auf echter Hardware mindestens folgende Punkte erfolgreich geprüft wurden:
+
+1. IR Tracker wird vom Speicher/EMS als Netzmessgerät erkannt.
+2. Netzbezug wird mit korrektem Vorzeichen übertragen.
+3. Einspeisung wird korrekt erkannt.
+4. Schnelle Laständerungen werden plausibel nachgeregelt.
+5. Lade- und Entladeleistung reagieren korrekt auf die Messwerte.
+6. Verbindungsverlust wird sicher behandelt.
+7. Nach Wiederherstellung der Verbindung startet die Regelung automatisch erneut.
+8. Dauerbetrieb über mehrere Stunden verursacht keine Kommunikationsabbrüche.
+
+Damit wird klar zwischen **technischer Protokollkompatibilität** und **praktisch bestätigter Produktkompatibilität** unterschieden.
