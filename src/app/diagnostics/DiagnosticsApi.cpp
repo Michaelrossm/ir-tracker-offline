@@ -205,6 +205,27 @@ String diagnosticIntegrityText() {
   return meter.lastCrcValid ? "gültig" : "fehlerhaft";
 }
 
+MeterProtocol activeDiagnosisProtocol() {
+  return meter.detectedProtocol != MeterProtocol::Auto
+             ? meter.detectedProtocol
+             : config.meterProtocol;
+}
+
+uint32_t activeIntegrityErrors() {
+  return activeDiagnosisProtocol() == MeterProtocol::Sml
+             ? meter.smlCrcErrors
+             : (isD0Protocol(activeDiagnosisProtocol()) ? d0BccErrors()
+                                                        : meter.crcErrors);
+}
+
+const char *activeIntegrityLabel() {
+  return activeDiagnosisProtocol() == MeterProtocol::Sml
+             ? "SML CRC-Fehler"
+             : (isD0Protocol(activeDiagnosisProtocol())
+                    ? "D0 BCC-Fehler"
+                    : "Integritätsereignisse gesamt");
+}
+
 String selfTestJson() {
   const bool meterFresh =
       meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
@@ -327,6 +348,8 @@ String meterReportJson() {
   json += "\"rx_bytes\":" + String(meter.bytes) + ",";
   json += "\"parse_errors\":" + String(meter.parseErrors) + ",";
   json += "\"crc_errors\":" + String(meter.crcErrors) + ",";
+  json += "\"sml_crc_errors\":" + String(meter.smlCrcErrors) + ",";
+  json += "\"d0_bcc_errors\":" + String(d0BccErrors()) + ",";
   json += "\"integrity_present\":" +
           String(meter.lastIntegrityPresent ? "true" : "false") + ",";
   json += "\"last_crc_valid\":" +
@@ -451,7 +474,8 @@ String supportReportText(bool technical) {
                                       " Sekunden"
                                 : "nicht verfügbar";
   report += "\nParserfehler: " + String(meter.parseErrors) + "\n";
-  report += "CRC-Fehler: " + String(meter.crcErrors) + "\n";
+  report += String(activeIntegrityLabel()) + ": " +
+            String(activeIntegrityErrors()) + "\n";
   report += "Letzte Integritätsprüfung: " + diagnosticIntegrityText() +
             "\n\n";
 
@@ -524,8 +548,14 @@ String supportReportText(bool technical) {
               String(parserDiagnostics.comparisonMismatches) + "\n";
     report += "Kontrollvergleiche: " +
               String(parserDiagnostics.sentinelComparisons) + "\n";
-    if (meter.crcErrors && !strcmp(diagnosis.state, "ok"))
-      report += "CRC-/Synchronisationsereignisse erkannt; gültiger Datenstrom stabil.\n";
+    report += "SML CRC-Fehler: " + String(meter.smlCrcErrors) + "\n";
+    report += "D0 BCC-Fehler: " + String(d0BccErrors()) + "\n";
+    report += "Integritätsereignisse gesamt (Legacy): " +
+              String(meter.crcErrors) + "\n";
+    if (activeDiagnosisProtocol() == MeterProtocol::Sml && d0BccErrors())
+      report += "D0-BCC-Ereignisse stammen aus der parallelen Auto-Erkennung und werden nicht als SML-Übertragungsfehler bewertet.\n";
+    if (activeIntegrityErrors() && !strcmp(diagnosis.state, "ok"))
+      report += "Integritätsereignisse erkannt; gültiger Datenstrom stabil.\n";
     report += "Bewertungscode: " +
               String(meterDiagnosisCodeName(diagnosis.code)) + "\n";
   }

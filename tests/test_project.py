@@ -115,11 +115,12 @@ class ProjectSecurityTests(unittest.TestCase):
         ):
             self.assertEqual(PLATFORMIO.count(f"+<{compiled}>"), 3)
         self.assertEqual(PLATFORMIO.count("-flto"), 3)
+        self.assertEqual(PLATFORMIO.count("-fno-exceptions"), 3)
         self.assertEqual(PLATFORMIO.count("post:tools/enable_lto.py"), 3)
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.2-beta.3"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.2"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -165,6 +166,43 @@ class ProjectSecurityTests(unittest.TestCase):
             "static_cast<uint64_t>(telegrams) +\n                                         parseErrors + crcErrors",
             diagnostics,
         )
+
+    def test_sml_crc_and_d0_bcc_events_are_separated_with_recoverable_auto_lock(self):
+        meter_data = (METER_DIR / "MeterData.h").read_text(encoding="utf-8")
+        manager = (METER_DIR / "MeterManager.cpp").read_text(encoding="utf-8")
+        diagnostics = (ROOT / "src/app/diagnostics/DiagnosticsApi.cpp").read_text(
+            encoding="utf-8"
+        )
+        telemetry = (ROOT / "src/app/web/TelemetryApi.cpp").read_text(
+            encoding="utf-8"
+        )
+        status_api = (ROOT / "src/app/web/StatusApi.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("uint32_t smlCrcErrors", meter_data)
+        self.assertNotIn("uint32_t d0BccErrors", meter_data)
+        self.assertIn("d0Parser.checksumErrors()", manager)
+        self.assertIn("++meter.smlCrcErrors", manager)
+        self.assertIn("++meter.crcErrors", manager)
+        self.assertIn("parserIntegrityIsActive(result.protocol)", manager)
+        self.assertIn("meter.detectedProtocol != MeterProtocol::Auto", manager)
+        self.assertIn("bool autoProtocolFresh(MeterProtocol protocol)", manager)
+        self.assertIn("millis() - meter.lastTelegramMs < kReadingStaleMs", manager)
+        self.assertIn("constexpr bool shouldFeedD0ParserFor(", manager)
+        self.assertIn("constexpr bool shouldFeedSmlParserFor(", manager)
+        self.assertIn('"stale Auto lock must release both parsers"', manager)
+        self.assertIn('"fresh Auto/SML must pause only D0"', manager)
+        self.assertIn('"fresh Auto/D0 must pause only SML"', manager)
+        self.assertIn("if (shouldFeedD0Parser())", manager)
+        self.assertIn("if (shouldFeedSmlParser())", manager)
+        self.assertIn("smlParser.feed(&value, 1, result)", manager)
+        self.assertIn("D0-BCC-Ereignisse stammen aus der parallelen Auto-Erkennung", diagnostics)
+        for field in ("sml_crc_errors", "d0_bcc_errors"):
+            self.assertIn(field, diagnostics)
+            self.assertIn(field, telemetry)
+            self.assertIn(field, status_api)
+        self.assertIn("irtracker_sml_crc_errors_total", telemetry)
+        self.assertIn("irtracker_d0_bcc_errors_total", telemetry)
 
     def test_support_report_is_on_demand_and_excludes_known_secrets(self):
         diagnostics = (ROOT / "src/app/diagnostics/DiagnosticsApi.cpp").read_text(

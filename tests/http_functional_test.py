@@ -53,6 +53,7 @@ def main() -> None:
     for field in (
         "firmware", "author", "license", "power_w", "import_kwh",
         "export_kwh", "phases", "meter_fresh", "uptime_s", "restart_reason",
+        "sml_crc_errors", "d0_bcc_errors",
     ):
         assert field in status, f"status field missing: {field}"
     assert len(status["phases"]) == 3
@@ -69,6 +70,19 @@ def main() -> None:
 
     code, body, _ = get(args.base, "/metrics", auth)
     assert code == 200 and b"irtracker_power_w" in body
+    assert b"irtracker_crc_errors_total" in body
+    assert b"irtracker_sml_crc_errors_total" in body
+    assert b"irtracker_d0_bcc_errors_total" in body
+
+    code, body, _ = get(args.base, "/api/v1/influx", auth)
+    assert code == 200 and b"crc_errors=" in body
+    assert b"sml_crc_errors=" in body and b"d0_bcc_errors=" in body
+
+    code, body, _ = get(args.base, "/api/v1/meter-report", auth)
+    assert code == 200
+    meter_report = json.loads(body)
+    for field in ("crc_errors", "sml_crc_errors", "d0_bcc_errors"):
+        assert field in meter_report, f"meter report field missing: {field}"
 
     code, body, _ = get(args.base, "/v1/json", auth)
     assert code == 200

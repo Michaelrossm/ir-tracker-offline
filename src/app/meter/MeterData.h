@@ -38,7 +38,8 @@ struct MeterData {
   uint32_t telegrams = 0;
   uint32_t bytes = 0;
   uint32_t parseErrors = 0;
-  uint32_t crcErrors = 0;
+  uint32_t crcErrors = 0;     // Legacy-compatible sum of all integrity events.
+  uint32_t smlCrcErrors = 0;  // CRC failures from complete SML frame candidates.
   uint32_t lastTelegramMs = 0;
   uint32_t powerUpdatedMs = 0;
   uint32_t importUpdatedMs = 0;

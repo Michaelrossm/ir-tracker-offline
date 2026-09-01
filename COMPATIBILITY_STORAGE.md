@@ -1,6 +1,6 @@
 # Kompatibilität – Batteriespeicher & Energiemanagement
 
-**Stand: 31.08.2026 · Firmware 1.3.1**
+**Stand: 01.09.2026 · Firmware 1.3.2**
 
 Diese Übersicht zeigt Batteriespeicher und Energiemanagementsysteme, die grundsätzlich mit **IR Tracker Offline** als externe Netzmessquelle verwendet werden können.
 

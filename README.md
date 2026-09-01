@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.2 Beta 3
+# IR Tracker Offline — 1.3.2
 
 **Deutsch** | [English](#english)
 
@@ -106,9 +106,12 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 
 ## Projektstatus
 
-Version **1.3.2 Beta 1** optimiert die laufzeitkritischen Pfade für Status-JSON,
-MQTT, Zählerempfang und History-Lesezugriffe, ohne Schnittstellen oder
-Messfunktionen zu entfernen.
+Version **1.3.2** optimiert die laufzeitkritischen Pfade für Status-JSON, MQTT,
+Zählerempfang und History-Lesezugriffe. Der SML-One-Pass-Parser besitzt einen
+Legacy-Sicherheitsvergleich; getrennte SML-CRC-/D0-BCC-Zähler und ein
+automatisch lösender Protokoll-Lock verhindern irreführende D0-Fehler bei
+stabilem SML-Empfang. Schnittstellen, Messfunktionen und Historienkapazitäten
+bleiben erhalten.
 Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
 
 Neue USB-Installationen verwenden für den optionalen 64-kB-Debugspeicher das
@@ -230,9 +233,12 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 
 ### Project status
 
-Version **1.3.2 Beta 1** optimizes the runtime-critical status JSON, MQTT,
-meter reception and history read paths without removing interfaces or meter
-features. Feedback about different meters and local integrations is welcome.
+Version **1.3.2** optimizes the runtime-critical status JSON, MQTT, meter
+reception and history read paths. The SML one-pass parser retains a legacy
+safety comparison; separate SML CRC/D0 BCC counters and an automatically
+released protocol lock prevent misleading D0 errors during stable SML
+reception. Interfaces, metering features and history capacities remain
+unchanged. Feedback about different meters and local integrations is welcome.
 
 New USB installations use the `debugfs` label for optional 64-kB debug
 storage. The same firmware automatically detects the previous `coredump` label

@@ -103,6 +103,8 @@ String statusJson() {
   json += "\"received_bytes\":" + String(meter.bytes) + ",";
   json += "\"parse_errors\":" + String(meter.parseErrors) + ",";
   json += "\"crc_errors\":" + String(meter.crcErrors) + ",";
+  json += "\"sml_crc_errors\":" + String(meter.smlCrcErrors) + ",";
+  json += "\"d0_bcc_errors\":" + String(d0BccErrors()) + ",";
   json += "\"meter_reinitializations\":" +
           String(meterReinitializations) + ",";
   json += "\"last_crc_valid\":" + String(meter.lastCrcValid ? "true" : "false") + ",";

@@ -2,77 +2,71 @@
 
 ## Unveröffentlicht / Unreleased
 
-## 1.3.2 Beta 3 — 2026-08-31
+## 1.3.2 — 2026-09-01
 
 ### Deutsch
 
-- Der SML-Parser sammelt die unterstützten OBIS-Werte in einem Durchlauf und
-  vermeidet dabei die bisherigen temporären Zahlen-Vektoren.
-- Ein Legacy-Vergleich schützt die Kompatibilität: 32 übereinstimmende
+- `statusJson()` reserviert seinen Ausgabepuffer einmalig; der regelmäßige
+  MQTT-Publishpfad verwendet feste Topic- und Zahlenpuffer. Home Assistant,
+  Homie und bestehende MQTT-Topics bleiben kompatibel.
+- Der Zähler-UART wird vor und nach synchronen Netzwerk-, MQTT- und Webarbeiten
+  bedient. `HistoryStore::forEach()` liest den Ringpuffer in höchstens zwei
+  zusammenhängenden Bereichen statt mit einem `seek()` je Datensatz.
+- Der SML-Parser sammelt alle unterstützten OBIS-Werte in einem Durchlauf und
+  vermeidet temporäre Zahlen-Vektoren im Hotpath.
+- Ein Legacy-Vergleich schützt die Parserkompatibilität: 32 übereinstimmende
   Telegramme qualifizieren One-Pass; danach wird jedes 512. Telegramm erneut
   verglichen. Bei einer Abweichung bleibt der Legacy-Pfad bis zum Parser-Reset
   aktiv.
-- Die gemeinsame Zählerdiagnose leitet aus kumulativen CRC-/Synchronisations-
-  ereignissen keine unbelegte Telegramm-Verlustquote mehr ab. Frische,
-  vollständige Messwerte werden dadurch korrekt als stabil bewertet.
-- Das vollständige Rohtelegramm unter `/api/v1/raw` ist jetzt ausschließlich
-  für angemeldete Administratoren verfügbar.
-- Speicherdiagnose und technischer Supportbericht zeigen den größten freien
-  Heapblock, die Stackreserve, die Reset-Ursache und den read-only
-  SML-Sicherheitsstatus.
-- Lokal per signiertem OTA auf echter ESP32-C3-Hardware sowie mit allen
-  Projekt-, HTTP-, Offline-, Factory- und Developer-Tests geprüft.
+- SML-CRC- und D0-BCC-Ereignisse werden getrennt ausgewiesen. Der bisherige
+  `crc_errors`-Wert bleibt als kompatibler Gesamtzähler erhalten.
+- Der Auto-Modus pausiert nach einem frischen gültigen SML-Telegramm den
+  D0-Parser beziehungsweise nach passivem D0 den SML-Parser. Nach dem
+  vorhandenen 15-Sekunden-Stale-Timeout werden beide Parser automatisch wieder
+  zur Erkennung freigegeben; aktive D0-Abfrage und UART-Recovery bleiben aktiv.
+- Gemeinsame Zählerdiagnosen und normale/technische Supportberichte bewerten
+  nur die Fehler des aktiven Protokolls. Frische vollständige Werte bleiben
+  trotz alter kumulativer Ereignisse korrekt als stabil markiert.
+- `/api/v1/raw` ist ausschließlich für angemeldete Administratoren verfügbar.
+  Speicherdiagnose und technischer Bericht enthalten zusätzlich größten freien
+  Heapblock, Stackreserve, Reset-Ursache und SML-Sicherheitsstatus.
+- Release-Builds ohne ungenutzte C++-Exception-Pfade sparen gegenüber der
+  lokalen Beta-3-Basis 20.616 Byte Flash, ohne RAM-, History-, EventLog- oder
+  Pufferkapazitäten zu reduzieren.
+- Auf echter ESP32-C3-Hardware per signiertem OTA geprüft: 104 aufeinander-
+  folgende SML-Telegramme ohne CRC-, BCC- oder Parserfehler. Projekt-, HTTP-,
+  Offline-, Factory- und Developer-Tests waren erfolgreich.
 
 ### English
 
-- The SML parser collects all supported OBIS readings in one pass and avoids
-  the former temporary numeric vectors.
-- A legacy comparison protects compatibility: 32 matching telegrams qualify
-  one-pass operation, followed by a comparison every 512 telegrams. Any
-  mismatch latches the legacy path until the parser is reset.
-- The shared meter diagnosis no longer derives an unsupported telegram-loss
-  rate from cumulative CRC/synchronization events. Fresh, complete readings
-  are therefore correctly reported as stable.
-- The complete raw telegram at `/api/v1/raw` now requires administrator
-  authentication.
-- Memory diagnostics and the technical support report expose the largest free
-  heap block, stack reserve, reset reason and read-only SML safety state.
-- Validated locally by signed OTA on real ESP32-C3 hardware and through all
-  project, HTTP, offline, factory and developer tests.
-
-## 1.3.2 Beta 1 — 2026-08-31
-
-### Deutsch
-
-- Der gemeinsame Status-JSON reserviert seinen Ausgabepuffer einmalig und
-  vermeidet wiederholte Heap-Vergrößerungen bei Web- und MQTT-Aufrufen.
-- Der regelmäßige MQTT-Publishpfad verwendet feste, wiederverwendete Topic- und
-  Zahlenpuffer statt zahlreicher temporärer `String`-Objekte. Home Assistant,
-  Homie und alle bisherigen Topics bleiben kompatibel.
-- Der bestehende Zähler-UART wird vor und nach möglicherweise blockierenden
-  Netzwerk-, MQTT- und Webarbeiten bedient. Parser und `MeterData` bleiben die
-  einzige gemeinsame Verarbeitungsschicht.
-- `HistoryStore::forEach()` liest den Ringpuffer in höchstens zwei
-  zusammenhängenden Bereichen. Reihenfolge, Plausibilitätsprüfung, Callback-API,
-  doppelte Header und Stromausfallsicherheit bleiben unverändert.
-- Lokaler OTA-Test auf ESP32-C3 sowie alle Projekt- und HTTP-Abnahmetests
-  erfolgreich.
-
-### English
-
-- The shared status JSON reserves its output buffer once, avoiding repeated
-  heap growth during Web and MQTT requests.
-- The recurring MQTT publish path uses fixed reusable topic and numeric buffers
-  instead of many temporary `String` objects. Home Assistant, Homie and all
-  existing topics remain compatible.
-- The existing meter UART is serviced before and after potentially blocking
-  network, MQTT and Web work. The parsers and `MeterData` remain the single
-  shared processing layer.
-- `HistoryStore::forEach()` reads the ring buffer in at most two contiguous
-  regions. Ordering, plausibility checks, callback API, duplicate headers and
-  power-loss safety remain unchanged.
-- Local OTA validation on ESP32-C3 and all project and HTTP acceptance tests
-  passed.
+- `statusJson()` reserves its output buffer once, while the recurring MQTT
+  publish path uses fixed topic and numeric buffers. Home Assistant, Homie and
+  existing MQTT topics remain compatible.
+- The meter UART is serviced before and after synchronous network, MQTT and Web
+  work. `HistoryStore::forEach()` reads the ring buffer in at most two
+  contiguous ranges instead of performing one `seek()` per record.
+- The SML parser collects all supported OBIS readings in one pass without
+  temporary numeric vectors in the hot path.
+- A legacy comparison protects parser compatibility: 32 matching telegrams
+  qualify one-pass operation, followed by a comparison every 512 telegrams.
+  Any mismatch latches the legacy path until the parser is reset.
+- SML CRC and D0 BCC events are exposed separately. The existing `crc_errors`
+  value remains available as a backward-compatible aggregate counter.
+- In Auto mode, a fresh valid SML telegram pauses D0 parsing, while fresh
+  passive D0 pauses SML parsing. The existing 15-second stale timeout releases
+  both parsers for discovery; active D0 polling and UART recovery remain intact.
+- Shared meter diagnostics and normal/technical support reports assess only
+  errors belonging to the active protocol. Fresh complete readings remain
+  correctly marked stable despite older cumulative events.
+- `/api/v1/raw` is restricted to authenticated administrators. Memory
+  diagnostics and the technical report additionally include largest free heap
+  block, stack reserve, reset reason and SML safety state.
+- Removing unused C++ exception paths saves 20,616 bytes of flash compared with
+  the local Beta 3 baseline without reducing RAM, history, EventLog or buffer
+  capacities.
+- Validated by signed OTA on real ESP32-C3 hardware: 104 consecutive SML
+  telegrams without CRC, BCC or parser errors. Project, HTTP, offline, factory
+  and developer tests passed.
 
 ## 1.3.1 — 2026-08-31
 

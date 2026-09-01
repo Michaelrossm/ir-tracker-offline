@@ -125,6 +125,9 @@ String metricsText() {
   text += "irtracker_telegrams_total " + String(meter.telegrams) + "\n";
   text += "irtracker_parse_errors_total " + String(meter.parseErrors) + "\n";
   text += "irtracker_crc_errors_total " + String(meter.crcErrors) + "\n";
+  text += "irtracker_sml_crc_errors_total " +
+          String(meter.smlCrcErrors) + "\n";
+  text += "irtracker_d0_bcc_errors_total " + String(d0BccErrors()) + "\n";
   text += "irtracker_wifi_rssi_dbm " + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + "\n";
   text += "irtracker_network_connected " +
           String(networkConnected() ? 1 : 0) + "\n";
@@ -181,6 +184,8 @@ String influxLineProtocol() {
   fields += ",telegrams=" + String(meter.telegrams) + "i";
   fields += ",parse_errors=" + String(meter.parseErrors) + "i";
   fields += ",crc_errors=" + String(meter.crcErrors) + "i";
+  fields += ",sml_crc_errors=" + String(meter.smlCrcErrors) + "i";
+  fields += ",d0_bcc_errors=" + String(d0BccErrors()) + "i";
   if (meter.lastTelegramMs)
     fields += ",meter_age_s=" + ageOrNull(meter.lastTelegramMs) + "i";
   if (meter.powerUpdatedMs)
@@ -223,5 +228,7 @@ String csvValues() {
   csv += "telegrams," + String(meter.telegrams) + ",count,\n";
   csv += "parse_errors," + String(meter.parseErrors) + ",count,\n";
   csv += "crc_errors," + String(meter.crcErrors) + ",count,\n";
+  csv += "sml_crc_errors," + String(meter.smlCrcErrors) + ",count,\n";
+  csv += "d0_bcc_errors," + String(d0BccErrors()) + ",count,\n";
   return csv;
 }
