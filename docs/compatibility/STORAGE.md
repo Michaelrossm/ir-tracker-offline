@@ -4,16 +4,16 @@
 
 Diese Übersicht zeigt Batteriespeicher und Energiemanagementsysteme, die grundsätzlich mit **IR Tracker Offline** als externe Netzmessquelle verwendet werden können.
 
-Die Bewertung basiert auf den aktuell implementierten lokalen Schnittstellen des IR Trackers sowie auf öffentlich dokumentierten Integrationsmöglichkeiten der jeweiligen Hersteller und etablierten Smart-Meter-Anbieter.
+Die Bewertung basiert auf den aktuell implementierten lokalen Schnittstellen des IR Trackers sowie auf öffentlich dokumentierten Integrationsmöglichkeiten, Herstellerangaben und praktischen Tests mit Shelly-/EcoTracker-Emulationen auf ESP32/Tasmota/uni-meter bzw. kompatiblen Drittanbieter-Zählern.
 
 ## Statusdefinition
 
 | Status | Bedeutung |
 |---|---|
-| 🟢 **Kompatibel** | Die benötigte lokale Zähler-Schnittstelle wird vom IR Tracker bereitgestellt und es ist keine relevante Originalmodell-, Cloud- oder Account-Prüfung erkennbar. Ein abschließender Hardware-Feldtest kann trotzdem noch ausstehen. |
-| 🟡 **Kandidat** | Shelly, EcoTracker oder eine andere grundsätzlich passende Fremdzähler-Schnittstelle wird unterstützt, aber Originalmodell-, Discovery-, Cloud-, Account- oder Onboarding-Prüfung ist noch nicht sicher ausgeschlossen. |
+| 🟢 **Kompatibel** | Die benötigte lokale Zähler-Schnittstelle wird vom IR Tracker bereitgestellt und es gibt belastbare Hinweise bzw. Praxistests, dass keine relevante Originalmodell-, Cloud- oder Account-Prüfung die Nutzung einer Emulation verhindert. Ein abschließender Feldtest mit IR Tracker kann trotzdem noch ausstehen. |
+| 🟡 **Kandidat** | Shelly, EcoTracker oder eine andere grundsätzlich passende Fremdzähler-Schnittstelle wird unterstützt, aber Originalmodell-, Discovery-, Cloud-, Account-, Onboarding- oder Stabilitätsprobleme sind noch nicht sicher ausgeschlossen. |
 | ✅ **Getestet** | Das konkrete Speicher-/EMS-System wurde mit IR Tracker Offline auf realer Hardware erfolgreich geprüft. |
-| ⬜ **Nicht getestet** | Technische Kompatibilität ist gegeben oder wahrscheinlich, ein realer Feldtest steht jedoch noch aus. |
+| ⬜ **Nicht getestet** | Technische Kompatibilität ist gegeben oder wahrscheinlich, ein realer Feldtest mit IR Tracker steht jedoch noch aus. |
 
 ## Vom IR Tracker bereitgestellte Schnittstellen
 
@@ -29,80 +29,82 @@ Firmware **1.3.2** stellt unter anderem folgende lokale Integrationen bereit:
 - Prometheus / OpenMetrics
 - Influx Line Protocol
 
-> **Wichtig:** „Kompatibel“ bedeutet nicht automatisch „auf realer Hardware getestet“. Erst ein erfolgreicher Feldtest erhält den Status ✅. Grün wird nur vergeben, wenn zusätzlich keine relevante Originalgeräte-/Modellprüfung erkennbar ist.
+> **Wichtig:** „Kompatibel“ bedeutet nicht automatisch „auf realer Hardware mit IR Tracker getestet“. Grün wird nur vergeben, wenn zusätzlich keine relevante Originalgeräte-/Modellprüfung erkennbar ist oder eine Fremdgeräte-/Emulationslösung praktisch nachgewiesen wurde.
 
 ## Kompatibilitätsübersicht
 
 | # | Hersteller | Modell / Familie | Status | Bevorzugte Schnittstelle | Bewertung | Feldtest |
 |---:|---|---|---|---|---|:---:|
-| 1 | Solakon | ONE | 🟢 Kompatibel | Shelly 3EM / Pro 3EM | Lokale Shelly-Abfrage; ESP32-/Tasmota-Shelly-Emulation wurde am ONE bereits praktisch verwendet. Eine harte Originalmodellprüfung ist nicht erkennbar. | ⬜ |
-| 2 | Growatt | NOAH 2000 | 🟡 Kandidat | Shelly / EcoTracker | Fremdzähler-Unterstützung ist vorhanden, aber noch nicht ausreichend bestätigt, ob ein reiner IR-Tracker-Clone ohne zusätzliche Geräte-/App-Zuordnung akzeptiert wird. | ⬜ |
-| 3 | Growatt | NEXA 2000 | 🟡 Kandidat | Shelly / EcoTracker | Lokale Fremdzähler-Anbindung ist grundsätzlich passend; Originalmodell-/Onboarding-Prüfung mit einer Emulation ist noch nicht ausgeschlossen. | ⬜ |
-| 4 | Growatt | Aura 5000 | 🟡 Kandidat | EcoTracker | Als EcoTracker-kompatibles Energiesystem geführt; ob ausschließlich `/v1/json` genügt oder zusätzliche Geräteidentität genutzt wird, ist noch nicht bestätigt. | ⬜ |
-| 5 | Hoymiles | HiBattery 4020 AC | 🟢 Kompatibel | Shelly / EcoTracker | Drittanbieter-Zähler werden ausdrücklich lokal im LAN unterstützt; keine harte Originalmodellbindung ist erkennbar. | ⬜ |
-| 6 | Hoymiles | HiBattery 4020 X | 🟢 Kompatibel | Shelly / EcoTracker | Lokale LAN-Anbindung von Drittanbieter-Zählern ist vorgesehen; keine relevante Originalmodellprüfung ist erkennbar. | ⬜ |
-| 7 | Hoymiles | MS-A2 | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | Lokale EcoTracker-/Shelly-Anbindung; die EcoTracker-Messwert-API selbst enthält keine Modellkennung. Gute Voraussetzungen für IR-Tracker-Emulation. | ⬜ |
-| 8 | Hoymiles | HiBattery 1920 AC | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | EcoTracker und Shelly Pro 3EM werden unterstützt; lokale Messwertabfrage ohne erkennbare harte Modellprüfung. | ⬜ |
-| 9 | Anker SOLIX | Solarbank 2 E1600 Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Die laufende Shelly-Abfrage erfolgt lokal im LAN; die erstmalige Gerätezuordnung über Shelly Cloud/Anker-App ist für einen Clone jedoch noch nicht vollständig geklärt. | ⬜ |
-| 10 | Anker SOLIX | Solarbank 2 E1600 Plus | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Lokale Messwertabfrage ist technisch plausibel, die initiale Cloud-/Account-Zuordnung bleibt der offene Punkt. | ⬜ |
-| 11 | Anker SOLIX | Solarbank 2 E1600 AC | 🟡 Kandidat | Shelly / Smart Meter | Fremdzähler-Unterstützung ist produkt- und firmwareabhängig; lokale Clone-Kompatibilität noch nicht ausreichend bestätigt. | ⬜ |
-| 12 | Anker SOLIX | Solarbank 3 E2700 Pro | 🟡 Kandidat | Shelly Pro 3EM | Lokale Shelly-Kommunikation ist möglich, die initiale Gerätezuordnung mit einem IR-Tracker-Clone ist aber noch nicht praktisch bestätigt. | ⬜ |
-| 13 | Anker SOLIX | Solarbank 4 Pro / E5000 Pro | 🟡 Kandidat | EcoTracker / Smart Meter / Modbus | EcoTracker bzw. weitere Smart-Meter-Wege sind interessant, aber eine reine lokale IR-Tracker-Emulation ohne zusätzliche Geräteidentität ist noch nicht bestätigt. | ⬜ |
-| 14 | EcoFlow | STREAM AC | 🟡 Kandidat | EcoTracker / Shelly | Externe Smart Meter werden unterstützt, jedoch sind Modell-/App-/Account-Bindungen innerhalb der STREAM-Familie noch nicht sicher ausgeschlossen. | ⬜ |
-| 15 | EcoFlow | STREAM AC Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM | EcoFlow nennt konkrete Shelly-Modelle; daher ist noch offen, ob eine reine Shelly-API-Emulation ohne Originalidentität akzeptiert wird. | ⬜ |
-| 16 | EcoFlow | STREAM Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Lokale Smart-Meter-Kommunikation ist grundsätzlich passend, eine Modell-/Account-Prüfung ist aber noch nicht ausgeschlossen. | ⬜ |
-| 17 | EcoFlow | STREAM Max | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Unterstützt externe Smart Meter, aber die Akzeptanz eines nicht originalen Shelly-Geräts ist noch nicht sicher bestätigt. | ⬜ |
-| 18 | EcoFlow | STREAM Ultra | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Local Mode ist vorhanden; konkrete Shelly-Modellunterstützung lässt eine zusätzliche Geräteprüfung möglich erscheinen. | ⬜ |
-| 19 | EcoFlow | STREAM Ultra X | 🟡 Kandidat | EcoTracker / Shelly | EcoTracker/Shelly sind grundsätzlich passend, aber das Onboarding einer reinen Emulation ohne Originalgerät ist noch nicht bestätigt. | ⬜ |
-| 20 | Zendure | SolarFlow Hyper 2000 | 🟡 Kandidat | Shelly Pro 3EM / EcoTracker | Die spätere Shelly-Kommunikation läuft lokal, das erstmalige Onboarding kann jedoch Shelly-Konto/Cloud bzw. Gerätezuordnung voraussetzen. | ⬜ |
-| 21 | Zendure | SolarFlow 800 | 🟡 Kandidat | EcoTracker | EcoTracker wird unterstützt; ob beim Hinzufügen zusätzlich Geräte-Discovery oder Everhome-Identität geprüft wird, ist noch nicht ausreichend bestätigt. | ⬜ |
-| 22 | Zendure | SolarFlow 800 Pro | 🟡 Kandidat | EcoTracker / Shelly | EcoTracker und Shelly werden unterstützt, aber eine zusätzliche Geräte-/Onboarding-Prüfung ist noch nicht ausgeschlossen. | ⬜ |
-| 23 | Zendure | SolarFlow 1600 AC+ | 🟡 Kandidat | EcoTracker / Shelly | Lokale Zählerkommunikation ist vorgesehen; die Akzeptanz eines IR-Tracker-Clones ohne Originalgerätekennung ist noch nicht bestätigt. | ⬜ |
-| 24 | Zendure | SolarFlow 2400 AC+ | 🟡 Kandidat | EcoTracker / Shelly | Offizielle EcoTracker-/Shelly-Unterstützung ist vorhanden, aber Discovery/Onboarding mit einer reinen Emulation bleibt noch offen. | ⬜ |
-| 25 | Zendure | SolarFlow 2400 Pro | 🟡 Kandidat | EcoTracker / Shelly | Fremdzähler-Unterstützung passt technisch, eine zusätzliche Modell-/Accountprüfung ist jedoch noch nicht sicher ausgeschlossen. | ⬜ |
-| 26 | Jackery | Navi 2000 | 🟡 Kandidat | Shelly Pro 3EM / Pro EM-50 | Direkte Smart-Meter-Kopplung ist vorgesehen; Discovery/Identität mit IR Tracker muss noch real bestätigt werden. | ⬜ |
-| 27 | Jackery | HomePower 2000 Ultra | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Unterstützt passende Drittanbieter-Zähler, aber eine reine API-Emulation ohne Originalgeräteidentität ist noch nicht bestätigt. | ⬜ |
-| 28 | Jackery | SolarVault 3 Pro | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Drittanbieter-Smart-Meter werden unterstützt; Originalmodell-/Discovery-Prüfung mit IR Tracker ist noch nicht ausgeschlossen. | ⬜ |
-| 29 | Jackery | SolarVault 3 Pro Max | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Gleiche Drittanbieter-Smart-Meter-Familie; Clone-Onboarding ohne Originalidentität noch nicht praktisch bestätigt. | ⬜ |
-| 30 | Jackery | SolarVault 3 Pro Max AC | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Technisch passende Schnittstellen vorhanden, aber Geräte-/Onboarding-Prüfung mit einer Emulation noch offen. | ⬜ |
-| 31 | Maxxisun | Maxxicharge V1 / CCU V1 1800 W | 🟢 Kompatibel | EcoTracker | EcoTracker wird lokal von der CCU V1 unterstützt; Maxxisun ist nicht auf einen einzigen Zählerhersteller festgelegt. | ⬜ |
-| 32 | Maxxisun | Maxxicharge V2 / CCU V2 1200 W | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | CCU V2 unterstützt verschiedene Smart Meter im Heimnetz; keine harte Bindung an ein einzelnes Originalmodell ist erkennbar. | ⬜ |
-| 33 | Maxxisun | Maxxicharge V2 / CCU V2 2300 W | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | Lokale Smart-Meter-Anbindung mit mehreren unterstützten Fremdzählern; keine relevante Originalmodellbindung erkennbar. | ⬜ |
-| 34 | Maxxisun | Maxxicharge V2+ / CCU V2+ 2300 W (M3.0 / M5.0) | 🟢 Kompatibel | EcoTracker / Shelly 3EM / Shelly Pro 3EM | Maxxisun unterstützt mehrere unterschiedliche Fremdzähler und ist ausdrücklich nicht auf einen einzelnen Zählertyp festgelegt. | ⬜ |
-| 35 | Marstek | Jupiter-C | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM | Unterstützt passende Fremdzähler; ob eine reine IR-Tracker-Emulation ohne Originalmodellkennung akzeptiert wird, ist noch nicht bestätigt. | ⬜ |
-| 36 | Marstek | Jupiter-C Plus | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität ist dokumentiert, das konkrete Discovery-/Onboarding-Verhalten mit einer Emulation ist jedoch noch offen. | ⬜ |
-| 37 | Marstek | Jupiter-E | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM | Passende Schnittstellen vorhanden; Originalmodell-/Discovery-Prüfung mit IR Tracker noch nicht ausgeschlossen. | ⬜ |
-| 38 | Marstek | Saturn B2500 | 🟡 Kandidat | EcoTracker | EcoTracker wird unterstützt; ob ausschließlich die lokale `/v1/json`-API genügt, ist noch nicht bestätigt. | ⬜ |
-| 39 | Marstek | Venus-A | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität vorhanden; Geräteerkennung/Onboarding einer Emulation noch nicht ausreichend geklärt. | ⬜ |
-| 40 | Marstek | Venus-C | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität vorhanden; Geräteerkennung/Onboarding einer Emulation noch nicht ausreichend geklärt. | ⬜ |
-| 41 | Marstek | Venus-D | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität vorhanden; Geräteerkennung/Onboarding einer Emulation noch nicht ausreichend geklärt. | ⬜ |
-| 42 | Marstek | Venus-E | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität vorhanden; Geräteerkennung/Onboarding einer Emulation noch nicht ausreichend geklärt. | ⬜ |
-| 43 | sunpura | S2400 | 🟡 Kandidat | EcoTracker | Als EcoTracker-kompatibel geführt; ob der Speicher ausschließlich lokale Messwerte nutzt oder zusätzliche Identität prüft, ist noch offen. | ⬜ |
-| 44 | APsystems | EZHI | 🟡 Kandidat | EcoTracker / Shelly 3EM / Pro 3EM | APsystems unterstützt mehrere passende Fremdzähler, die Akzeptanz einer reinen IR-Tracker-Emulation ist jedoch noch nicht praktisch bestätigt. | ⬜ |
-| 45 | Fox ESS | Avocado 22 Pro | 🟡 Kandidat | EcoTracker | EcoTracker-Kopplung ist belegt; ein Feldtest mit einem emulierten EcoTracker statt Originalhardware fehlt noch. | ⬜ |
-| 46 | GoodWe | ESA Athena | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität ist gelistet, aber Geräteidentitäts-/Onboarding-Verhalten mit IR Tracker ist noch nicht bestätigt. | ⬜ |
-| 47 | Indevolt | BK1600 | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität vorhanden; reine lokale Clone-Kompatibilität ohne Originalgeräteprüfung noch nicht bestätigt. | ⬜ |
-| 48 | Indevolt | BK1600 Ultra | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität vorhanden; reine lokale Clone-Kompatibilität ohne Originalgeräteprüfung noch nicht bestätigt. | ⬜ |
-| 49 | Indevolt | PowerFlex 2000 | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität vorhanden; reine lokale Clone-Kompatibilität ohne Originalgeräteprüfung noch nicht bestätigt. | ⬜ |
-| 50 | Indevolt | SolidFlex 2000 | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität vorhanden; reine lokale Clone-Kompatibilität ohne Originalgeräteprüfung noch nicht bestätigt. | ⬜ |
-| 51 | Spaun | Energy Master 1600 | 🟡 Kandidat | EcoTracker | Als EcoTracker-kompatibel geführt; Geräteerkennung/Onboarding einer Emulation ist noch nicht ausreichend geklärt. | ⬜ |
-| 52 | YOULIQ | one | 🟡 Kandidat | EcoTracker | Der Speicher nutzt EcoTracker, aber die dokumentierte Lösung basiert auf Original-Everhome-Hardware; IR-Tracker-Clone noch nicht bestätigt. | ⬜ |
+| 1 | Solakon | ONE | 🟢 Kompatibel | Shelly 3EM / Pro 3EM | ESP32-/Tasmota-Shelly-Emulation wurde am ONE bereits praktisch verwendet; keine harte Originalmodellprüfung erkennbar. | ⬜ |
+| 2 | Growatt | NOAH 2000 | 🟢 Kompatibel | Shelly Pro 3EM | Shelly-Emulation auf Tasmota/IR-Lesekopf wird erkannt und regelt praktisch; Fremdgerät wird akzeptiert. EcoTracker-Emulation ist weniger stabil, daher Shelly bevorzugen. | ⬜ |
+| 3 | Growatt | NEXA 2000 | 🟡 Kandidat | EcoTracker / Shelly | EcoTracker-Emulation wird erkannt und regelt, kann nach WLAN-/Speicherneustarts jedoch aus der App gelöscht werden. Stabilität noch nicht ausreichend. | ⬜ |
+| 4 | Growatt | Aura 5000 | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität ist dokumentiert; Emulations-Onboarding und Stabilität noch nicht ausreichend bestätigt. | ⬜ |
+| 5 | Hoymiles | HiBattery 4020 AC | 🟢 Kompatibel | Shelly / EcoTracker | Drittanbieter-Zähler werden ausdrücklich lokal im LAN unterstützt; keine harte Originalmodellbindung erkennbar. | ⬜ |
+| 6 | Hoymiles | HiBattery 4020 X | 🟢 Kompatibel | Shelly / EcoTracker | Lokale LAN-Anbindung von Drittanbieter-Zählern ist vorgesehen; keine relevante Originalmodellprüfung erkennbar. | ⬜ |
+| 7 | Hoymiles | MS-A2 | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | Tasmota-/EcoTracker-/Shelly-Emulationen werden praktisch verwendet; lokale API-Abfrage ohne Originalgerätezwang bestätigt. | ⬜ |
+| 8 | Hoymiles | HiBattery 1920 AC | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | Praktische Tests mit Tasmota-EcoTracker-Emulation liegen vor; Fremdgerät wird akzeptiert. | ⬜ |
+| 9 | Anker SOLIX | Solarbank 2 E1600 Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Laufende Shelly-Abfrage lokal möglich, die erstmalige Zuordnung über Shelly Cloud/Anker-App bleibt für Emulationen problematisch. | ⬜ |
+| 10 | Anker SOLIX | Solarbank 2 E1600 Plus | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Lokale Messwertabfrage technisch plausibel, initiale Cloud-/Account-Zuordnung bleibt offen. | ⬜ |
+| 11 | Anker SOLIX | Solarbank 2 E1600 AC | 🟡 Kandidat | Shelly / Smart Meter | Fremdzähler-Unterstützung ist produkt- und firmwareabhängig; lokale Emulations-Kompatibilität nicht ausreichend bestätigt. | ⬜ |
+| 12 | Anker SOLIX | Solarbank 3 E2700 Pro | 🟡 Kandidat | Shelly Pro 3EM | Lokale Shelly-Kommunikation möglich, initiale Gerätezuordnung mit Emulation aber nicht zuverlässig bestätigt. | ⬜ |
+| 13 | Anker SOLIX | Solarbank 4 Pro / E5000 Pro | 🟡 Kandidat | EcoTracker / Smart Meter / Modbus | Passende Wege vorhanden, aber Drittanbieter-Tests zeigen weiterhin Einschränkungen bei lokaler Kompatibilitäts-Emulation. | ⬜ |
+| 14 | EcoFlow | STREAM AC | 🟡 Kandidat | EcoTracker / Shelly | Externe Smart Meter werden unterstützt; ein belastbarer Emulationsnachweis speziell für STREAM AC fehlt noch. | ⬜ |
+| 15 | EcoFlow | STREAM AC Pro | 🟢 Kompatibel | EcoTracker | uni-meter-EcoTracker-Emulation wurde von der EcoFlow-App erkannt und praktisch mit STREAM AC Pro betrieben. | ⬜ |
+| 16 | EcoFlow | STREAM Pro | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Lokale Smart-Meter-Kommunikation ist passend, ein konkreter Emulations-Praxistest für dieses Modell fehlt. | ⬜ |
+| 17 | EcoFlow | STREAM Max | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Unterstützt externe Smart Meter, Akzeptanz einer Emulation speziell für dieses Modell noch nicht bestätigt. | ⬜ |
+| 18 | EcoFlow | STREAM Ultra | 🟡 Kandidat | Shelly 3EM / Pro 3EM | Local Mode vorhanden; modellbezogener Emulationsnachweis fehlt noch. | ⬜ |
+| 19 | EcoFlow | STREAM Ultra X | 🟡 Kandidat | EcoTracker / Shelly | Schnittstellen passen, ein konkreter Fremdgeräte-/Emulations-Feldtest für Ultra X fehlt. | ⬜ |
+| 20 | Zendure | SolarFlow Hyper 2000 | 🟡 Kandidat | Shelly Pro 3EM / EcoTracker | Spätere Kommunikation lokal, Onboarding kann Shelly-Konto/Cloud bzw. Gerätezuordnung voraussetzen; Drittanbieter-Kompatibilitätsmodus derzeit nicht sicher. | ⬜ |
+| 21 | Zendure | SolarFlow 800 | 🟡 Kandidat | EcoTracker | EcoTracker wird unterstützt; Drittanbieter-Kompatibilitätsmodus ist derzeit nicht zuverlässig als rein lokale Emulation bestätigt. | ⬜ |
+| 22 | Zendure | SolarFlow 800 Pro | 🟡 Kandidat | EcoTracker / Shelly | Passende Schnittstellen vorhanden, zusätzliche Geräte-/Onboarding-Prüfung nicht ausgeschlossen. | ⬜ |
+| 23 | Zendure | SolarFlow 1600 AC+ | 🟡 Kandidat | EcoTracker / Shelly | Lokale Zählerkommunikation vorgesehen; Akzeptanz einer reinen Emulation noch nicht bestätigt. | ⬜ |
+| 24 | Zendure | SolarFlow 2400 AC+ | 🟡 Kandidat | EcoTracker / Shelly | Offizielle EcoTracker-/Shelly-Unterstützung vorhanden, Discovery/Onboarding mit Emulation bleibt offen. | ⬜ |
+| 25 | Zendure | SolarFlow 2400 Pro | 🟡 Kandidat | EcoTracker / Shelly | Fremdzähler-Unterstützung passt technisch, zusätzliche Modell-/Accountprüfung nicht sicher ausgeschlossen. | ⬜ |
+| 26 | Jackery | Navi 2000 | 🟡 Kandidat | Shelly Pro 3EM / Pro EM-50 | Direkte Smart-Meter-Kopplung vorgesehen; belastbarer Emulations-Praxistest fehlt. | ⬜ |
+| 27 | Jackery | HomePower 2000 Ultra | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Passende Drittanbieter-Zähler unterstützt; Tasmota/TinyC-Unterstützung wird entwickelt, belastbarer Feldnachweis noch nicht ausreichend. | ⬜ |
+| 28 | Jackery | SolarVault 3 Pro | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Drittanbieter-Smart-Meter unterstützt; Originalmodell-/Discovery-Prüfung mit Emulation noch nicht ausgeschlossen. | ⬜ |
+| 29 | Jackery | SolarVault 3 Pro Max | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Gleiche Drittanbieter-Smart-Meter-Familie; Emulations-Onboarding noch nicht praktisch bestätigt. | ⬜ |
+| 30 | Jackery | SolarVault 3 Pro Max AC | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Technisch passende Schnittstellen vorhanden, Geräte-/Onboarding-Prüfung mit Emulation noch offen. | ⬜ |
+| 31 | Maxxisun | Maxxicharge V1 / CCU V1 1800 W | 🟢 Kompatibel | EcoTracker | EcoTracker wird lokal von der CCU V1 unterstützt; Maxxisun ist nicht auf einen einzelnen Zählerhersteller festgelegt. | ⬜ |
+| 32 | Maxxisun | Maxxicharge V2 / CCU V2 1200 W | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | CCU V2 unterstützt verschiedene Smart Meter im Heimnetz; keine harte Originalmodellbindung erkennbar. | ⬜ |
+| 33 | Maxxisun | Maxxicharge V2 / CCU V2 2300 W | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | Lokale Smart-Meter-Anbindung mit mehreren Fremdzählern; keine relevante Originalmodellbindung erkennbar. | ⬜ |
+| 34 | Maxxisun | Maxxicharge V2+ / CCU V2+ 2300 W (M3.0 / M5.0) | 🟢 Kompatibel | EcoTracker / Shelly 3EM / Shelly Pro 3EM | Mehrere unterschiedliche Fremdzähler offiziell unterstützt; keine Bindung an ein einzelnes Originalmodell. | ⬜ |
+| 35 | Marstek | Jupiter-C | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM | Passende Fremdzähler unterstützt; konkreter modellbezogener Emulations-Feldtest noch nicht eindeutig genug. | ⬜ |
+| 36 | Marstek | Jupiter-C Plus | 🟡 Kandidat | EcoTracker / Shelly | Tasmota-Emulationen sind für Jupiter/Marstek vorgesehen, aber ein eindeutiger belastbarer Modellnachweis für Jupiter-C Plus fehlt noch. | ⬜ |
+| 37 | Marstek | Jupiter-E | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM | Passende Schnittstellen vorhanden; konkreter Emulationsnachweis für Jupiter-E noch nicht ausreichend. | ⬜ |
+| 38 | Marstek | Saturn B2500 | 🟢 Kompatibel | Shelly / EcoTracker | B2500 wird praktisch mit Tasmota-Shelly- bzw. EcoTracker-Emulation betrieben; Fremdgerät wird akzeptiert. | ⬜ |
+| 39 | Marstek | Venus-A | 🟢 Kompatibel | Shelly / EcoTracker | Venus A wurde praktisch mit Shelly-/EcoTracker-Emulation bzw. IOmeter-Kompatibilitätsmodus betrieben. | ⬜ |
+| 40 | Marstek | Venus-C | 🟢 Kompatibel | EcoTracker | IOmeter-Kompatibilitätsmodus führt Venus C als bestätigt; keine zwingende Original-EcoTracker-Hardware erforderlich. | ⬜ |
+| 41 | Marstek | Venus-D | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität vorhanden, aber ein eindeutiger Emulations-Praxistest speziell für Venus-D fehlt. | ⬜ |
+| 42 | Marstek | Venus-E | 🟢 Kompatibel | EcoTracker / Shelly | IOmeter-Kompatibilitätsmodus führt Venus E als bestätigt; zusätzlich existieren praktische Emulationsversuche auf ESP32. | ⬜ |
+| 43 | sunpura | S2400 | 🟡 Kandidat | EcoTracker | EcoTracker-kompatibel, aber belastbarer Nachweis einer Fremdgeräte-/Emulationskopplung fehlt. | ⬜ |
+| 44 | APsystems | EZHI | 🟡 Kandidat | EcoTracker / Shelly 3EM / Pro 3EM | Passende Zähler werden unterstützt; Berichte weisen jedoch auf Cloud-basierte Gerätesuche hin, wodurch reine lokale Emulation problematisch sein kann. | ⬜ |
+| 45 | Fox ESS | Avocado 22 Pro | 🟢 Kompatibel | EcoTracker / IOmeter | IOmeter nennt für FoxESS eine direkte Batteriespeicher-Integration; damit ist die Nutzung eines Nicht-Original-EcoTrackers grundsätzlich praktisch vorgesehen. | ⬜ |
+| 46 | GoodWe | ESA Athena | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität gelistet, aber Emulations-/Drittanbieter-Onboarding noch nicht belastbar bestätigt. | ⬜ |
+| 47 | Indevolt | BK1600 | 🟡 Kandidat | EcoTracker / Shelly | Hersteller bestätigt vollständige lokale Bedienung und viele Drittanbieter-Zähler; ein expliziter Emulations-Feldtest fehlt noch. | ⬜ |
+| 48 | Indevolt | BK1600 Ultra | 🟡 Kandidat | EcoTracker / Shelly | Hersteller bestätigt lokale Bedienung und mehrere Fremdzähler; expliziter Emulationsnachweis noch offen. | ⬜ |
+| 49 | Indevolt | PowerFlex 2000 | 🟡 Kandidat | EcoTracker / Shelly | Vollständige lokale Bedienung und Drittanbieter-Kompatibilität sind dokumentiert; reiner Emulations-Praxistest noch nicht belegt. | ⬜ |
+| 50 | Indevolt | SolidFlex 2000 | 🟡 Kandidat | EcoTracker / Shelly | Vollständige lokale Bedienung und Drittanbieter-Kompatibilität sind dokumentiert; reiner Emulations-Praxistest noch nicht belegt. | ⬜ |
+| 51 | Spaun | Energy Master 1600 | 🟡 Kandidat | EcoTracker | EcoTracker-kompatibel; Geräteerkennung/Onboarding einer Emulation noch nicht ausreichend geklärt. | ⬜ |
+| 52 | YOULIQ | one | 🟢 Kompatibel | EcoTracker / IOmeter | YOULIQ nutzt externe Zählerdaten und IOmeter nennt YOUL als direkte Batteriespeicher-Integration; Original-Everhome-Hardware ist damit nicht zwingend. | ⬜ |
 
 ## Aktueller Gesamtstand
 
 **52 relevante Balkonkraftwerk-Speicher-/EMS-Systeme**
 
-- 🟢 **Kompatibel:** 9
-- 🟡 **Kandidaten:** 43
+- 🟢 **Kompatibel:** 17
+- 🟡 **Kandidaten:** 35
 - ✅ **Auf realer Speicher-Hardware mit IR Tracker getestet:** 0
 
 ## Quellenlage und Bewertungsprinzip
 
-Ein grüner Eintrag wird nur gesetzt, wenn mindestens eine belastbare Quelle eine für den IR Tracker relevante **lokale** Fremdzähler-Schnittstelle bestätigt und zusätzlich keine relevante Originalmodell-, Cloud-, Account- oder Geräteidentitätsprüfung erkennbar ist.
+Ein grüner Eintrag wird nur gesetzt, wenn mindestens eine belastbare Quelle eine für den IR Tracker relevante **lokale** Fremdzähler-Schnittstelle bestätigt und zusätzlich keine relevante Originalmodell-, Cloud-, Account- oder Geräteidentitätsprüfung erkennbar ist **oder** wenn eine nicht originale Shelly-/EcoTracker-Emulation bzw. ein kompatibler Drittanbieter-Zähler am betreffenden Speicher praktisch nachgewiesen ist.
 
-Die bloße Unterstützung von Shelly oder EcoTracker reicht deshalb nicht automatisch für Grün. Wenn zwar eine passende API vorhanden ist, aber Discovery, Onboarding oder Geräteidentität noch ungeklärt sind, bleibt das System gelb.
+Besonders aussagekräftig sind Tests mit ESP32/Tasmota, uni-meter und IOmeter-Kompatibilitätsmodus, weil diese Lösungen genau wie IR Tracker Messwerte über nachgebildete lokale Fremdzähler-Schnittstellen bereitstellen.
 
-Die lokale EcoTracker-API `/v1/json` selbst enthält im dokumentierten Messwertformat keine Modell-, Seriennummer- oder MAC-Kennung. Trotzdem kann ein Speicher beim erstmaligen Hinzufügen zusätzliche Discovery-, Cloud- oder App-Informationen verwenden; deshalb werden solche Systeme erst dann grün, wenn dieser Punkt ausreichend geklärt ist.
+Die bloße Unterstützung von Shelly oder EcoTracker reicht nicht automatisch für Grün. Wenn zwar eine passende API vorhanden ist, aber Discovery, Onboarding, Cloud-/Account-Zuordnung oder Stabilität noch ungeklärt sind, bleibt das System gelb.
+
+Die lokale EcoTracker-API `/v1/json` selbst enthält im dokumentierten Messwertformat keine Modell-, Seriennummer- oder MAC-Kennung. Ein Speicher kann beim erstmaligen Hinzufügen dennoch mDNS, Hostname, MAC/Serial, Bluetooth oder Cloud-/App-Informationen verwenden.
 
 ## Anforderungen für einen erfolgreichen Feldtest
 
@@ -117,4 +119,4 @@ Ein Modell erhält erst den Status ✅ **Getestet**, wenn auf echter Hardware mi
 7. Nach Wiederherstellung der Verbindung startet die Regelung automatisch erneut.
 8. Dauerbetrieb über mehrere Stunden verursacht keine Kommunikationsabbrüche.
 
-Damit wird klar zwischen **technischer Protokollkompatibilität** und **praktisch bestätigter Produktkompatibilität** unterschieden.
+Damit wird klar zwischen **technischer Protokollkompatibilität**, **nachgewiesener Fremdgeräte-/Emulationsfähigkeit** und **praktisch bestätigter IR-Tracker-Produktkompatibilität** unterschieden.
