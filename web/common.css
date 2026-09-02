@@ -16,6 +16,7 @@ h2{font-size:1.15rem;margin:22px 0 12px}
 .muted{color:var(--muted);font-size:.9rem}
 label{display:block;margin:15px 0 5px}
 input,select,button{width:100%;padding:11px;border-radius:8px;border:1px solid #456553;background:var(--card);color:var(--text)}
+input.fit{width:auto}
 button{background:var(--accent);font-weight:700;cursor:pointer;margin-top:18px;border-color:var(--accent);transition:.15s transform,.15s filter}
 button:hover{filter:brightness(1.12)}
 button:active{transform:scale(.98)}

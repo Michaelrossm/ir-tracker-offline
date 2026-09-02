@@ -8,12 +8,12 @@
 void startAccessPoint() {
   if (accessPointMode || !accessPointAllowed) return;
   forceFullWifiPower();
-  wifiMinModemSleepActive = false;
   WiFi.persistent(false);
   if (!WiFi.mode(WIFI_AP_STA)) {
     ++wifiModeErrors;
     return;
   }
+  disableWifiPowerSaveForConnection();
   const uint64_t chip = ESP.getEfuseMac();
   char suffix[5];
   snprintf(suffix, sizeof(suffix), "%04X", static_cast<unsigned>(chip & 0xffff));
@@ -34,11 +34,9 @@ void stopAccessPoint() {
   dns.stop();
   if (!WiFi.softAPdisconnect(true)) ++wifiModeErrors;
   if (!WiFi.mode(WIFI_STA)) ++wifiModeErrors;
-  wifiMinModemSleepActive =
-      esp_wifi_set_ps(WIFI_PS_MIN_MODEM) == ESP_OK;
-  if (!wifiMinModemSleepActive) ++wifiModeErrors;
   accessPointMode = false;
   accessPointStartedMs = 0;
+  applyWifiPowerSave();
 }
 
 bool beginNextKnownWifi() {
@@ -50,6 +48,7 @@ bool beginNextKnownWifi() {
     // Association, DHCP and TLS setup are deliberately performed at the
     // performance clock. Eco mode resumes two minutes after the last attempt.
     requestCpuBoost("wifi_connect");
+    disableWifiPowerSaveForConnection();
     WiFi.begin(config.ssid[slot].c_str(), config.password[slot].c_str());
     wifiCandidateStartedMs = millis();
     Serial.printf("Trying Wi-Fi slot %u: %s\n", slot + 1, config.ssid[slot].c_str());
@@ -59,6 +58,85 @@ bool beginNextKnownWifi() {
   lastWifiAttemptMs = millis();
   return false;
 }
+
+#if IR_TRACKER_ENABLE_MDNS
+void stopMdnsDiscovery() {
+  if (!mdnsRunning) return;
+  MDNS.end();
+  mdnsRunning = false;
+  mdnsAdvertisedIp = "";
+  mdnsAdvertisedTransport = "";
+}
+
+bool startMdnsDiscovery() {
+  if (!networkConnected()) return false;
+  const String activeIp = primaryNetworkIp();
+  if (!MDNS.begin(config.hostname.c_str())) {
+    eventLog.add("WARN", "MDNS_FAILED", "mDNS konnte nicht gestartet werden");
+    return false;
+  }
+  MDNS.setInstanceName(deviceIdentity.instance);
+  MDNS.addService("http", "tcp", 80);
+  MDNS.addServiceTxt("http", "tcp", "model", DeviceIdentity::kModel);
+  MDNS.addServiceTxt("http", "tcp", "serial",
+                     static_cast<const char *>(deviceIdentity.serial));
+  MDNS.addService("irtracker", "tcp", 80);
+  MDNS.addServiceTxt("irtracker", "tcp", "model", DeviceIdentity::kModel);
+  MDNS.addServiceTxt("irtracker", "tcp", "serial",
+                     static_cast<const char *>(deviceIdentity.serial));
+  MDNS.addServiceTxt("irtracker", "tcp", "api", "/api/v1/meter");
+  if (config.modbusTcp) {
+    MDNS.addService("modbus", "tcp", 502);
+    MDNS.addServiceTxt("modbus", "tcp", "schema", "irtracker.meter.v1");
+    MDNS.addServiceTxt("modbus", "tcp", "model", DeviceIdentity::kModel);
+  }
+
+  // Protocol-compatible discovery with the tracker's own neutral identity.
+  MDNS.addService("shelly", "tcp", 80);
+  MDNS.addServiceTxt("shelly", "tcp", "id",
+                     static_cast<const char *>(deviceIdentity.hostname));
+  MDNS.addServiceTxt("shelly", "tcp", "model",
+                     DeviceIdentity::kShellyApiModel);
+  MDNS.addServiceTxt("shelly", "tcp", "gen", "2");
+  MDNS.addService("everhome", "tcp", 80);
+  MDNS.addServiceTxt("everhome", "tcp", "serial-number",
+                     static_cast<const char *>(deviceIdentity.serial));
+  MDNS.addServiceTxt("everhome", "tcp", "product", DeviceIdentity::kModel);
+  MDNS.addServiceTxt("everhome", "tcp", "product-id", "IRT1000");
+  MDNS.addServiceTxt("everhome", "tcp", "ip", activeIp.c_str());
+
+  mdnsRunning = true;
+  mdnsAdvertisedIp = activeIp;
+  mdnsAdvertisedTransport = primaryTransportName();
+  eventLog.add("INFO", "MDNS_STARTED",
+               config.hostname + ".local auf " + mdnsAdvertisedTransport +
+                   " (" + activeIp + ")");
+  return true;
+}
+
+void syncMdnsDiscovery() {
+  static uint32_t lastCheckMs = 0;
+  static uint32_t lastStartAttemptMs = 0;
+  if (millis() - lastCheckMs < 1000U) return;
+  lastCheckMs = millis();
+  if (!networkConnected()) {
+    stopMdnsDiscovery();
+    return;
+  }
+  const String activeIp = primaryNetworkIp();
+  const String activeTransport = primaryTransportName();
+  if (mdnsRunning && activeIp == mdnsAdvertisedIp &&
+      activeTransport == mdnsAdvertisedTransport)
+    return;
+  const bool replacingActiveDiscovery = mdnsRunning;
+  stopMdnsDiscovery();
+  if (replacingActiveDiscovery || !lastStartAttemptMs ||
+      millis() - lastStartAttemptMs >= 30000U) {
+    lastStartAttemptMs = millis();
+    if (startMdnsDiscovery()) lastStartAttemptMs = 0;
+  }
+}
+#endif
 
 void manageWifi() {
   static bool wasConnected = false;
@@ -94,25 +172,13 @@ void manageWifi() {
                  "time.cloudflare.com");
     ntpConfigured = true;
   }
-#if IR_TRACKER_ENABLE_MDNS
-  if (anyNetworkConnected && !mdnsRunning) {
-    if (MDNS.begin(config.hostname.c_str())) {
-      MDNS.addService("http", "tcp", 80);
-      mdnsRunning = true;
-      eventLog.add("INFO", "MDNS_STARTED",
-                   "Tracker erreichbar als " + config.hostname + ".local");
-    } else {
-      eventLog.add("WARN", "MDNS_FAILED",
-                   "mDNS konnte nicht gestartet werden");
-    }
-  }
-#endif
   if (connected) {
     if (!wasConnected) {
       stopAccessPoint();
       wifiConnectedSinceMs = millis();
       lastWifiPowerEvaluateMs = millis();
       forceFullWifiPower();
+      applyWifiPowerSave();
       accessPointAllowed = true;
       Serial.printf("Wi-Fi connected: %s, %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
       eventLog.add("INFO", "WIFI_CONNECTED",
@@ -122,16 +188,10 @@ void manageWifi() {
   } else {
     if (wasConnected) {
       forceFullWifiPower();
+      disableWifiPowerSaveForConnection();
       wifiConnectedSinceMs = 0;
       lastWifiPowerEvaluateMs = 0;
-      wifiMinModemSleepActive = false;
       eventLog.add("WARN", "WIFI_LOST", "WLAN-Verbindung verloren");
-#if IR_TRACKER_ENABLE_MDNS
-      if (mdnsRunning && !ethernetConnected) {
-        MDNS.end();
-        mdnsRunning = false;
-      }
-#endif
       wifiTried = 0;
       wifiCandidate = 0;
       wifiCandidateStartedMs = 0;
@@ -156,4 +216,7 @@ void manageWifi() {
   }
   wasConnected = connected;
   wasEthernetConnected = ethernetConnected;
+#if IR_TRACKER_ENABLE_MDNS
+  syncMdnsDiscovery();
+#endif
 }

@@ -68,6 +68,7 @@ def main() -> None:
         ROOT / "docs" / "INSTALLATION.md",
         ROOT / ".github" / "SECURITY.md",
         ROOT / "docs" / "INTERFACES.md",
+        ROOT / "docs" / "MODBUS.md",
         ROOT / "docs" / "USB_SWITCHING.md",
         ROOT / "docs" / "SOAK_TEST.md",
         ROOT / "docs" / "legal" / "RIGHTS_REVIEW.md",

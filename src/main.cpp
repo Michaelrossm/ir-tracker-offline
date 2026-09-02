@@ -36,6 +36,7 @@
 #include "app/meter/D0Parser.h"
 #include "app/meter/SmlParser.h"
 #include "app/core/EventLog.h"
+#include "app/core/DeviceIdentity.h"
 #include "app/update/FirmwareSigningPublicKey.h"
 #if IR_TRACKER_ENABLE_GITHUB_UPDATE
 #include "app/update/GithubRootCertificates.h"
@@ -56,7 +57,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.2";
+constexpr char kFirmwareVersion[] = "1.3.3";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -73,6 +74,7 @@ constexpr uint32_t kLoginWindowMs = 10UL * 60UL * 1000UL;
 constexpr uint32_t kLoginMaxLockMs = 60UL * 60UL * 1000UL;
 constexpr uint32_t kBrowserSessionSeconds = 60UL * 24UL * 60UL * 60UL;
 constexpr uint32_t kCpuBoostHoldMs = 2UL * 60UL * 1000UL;
+constexpr uint32_t kCpuNormalHoldMs = 60UL * 1000UL;
 constexpr uint32_t kEcoCpuMhz = 80;
 constexpr uint32_t kPerformanceCpuMhz = 160;
 constexpr uint32_t kWifiPowerStableMs = 3UL * 60UL * 1000UL;
@@ -119,6 +121,8 @@ struct Config {
   String mqttPassword;
   bool homeAssistantDiscovery = true;
   uint8_t apiAccess = 0;  // DE: 0=lokal offen, 1=Admin, 2=aus | EN: 0=local public, 1=admin, 2=off
+  bool storageCompatibilityMode = false;
+  bool modbusTcp = false;
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
   bool snifferEnabled = false;
   bool bridgeEnabled = false;
@@ -135,6 +139,7 @@ struct Config {
   bool ecoMode = true;
   bool ecoLedOff = true;
   bool adaptiveWifiPower = true;
+  bool wifiPowerSave = false;
   bool githubUpdateCheck = true;
   bool githubAutoInstall = false;
 } config;
@@ -146,12 +151,15 @@ uint32_t accessPointStartedMs = 0;
 bool accessPointAllowed = true;
 #if IR_TRACKER_ENABLE_MDNS
 bool mdnsRunning = false;
+String mdnsAdvertisedIp;
+String mdnsAdvertisedTransport;
 #endif
 uint32_t lastWifiAttemptMs = 0;
 uint32_t lastMqttAttemptMs = 0;
 uint32_t mqttRetryMs = 10000;
 uint32_t lastMqttPublishMs = 0;
 String deviceId;
+DeviceIdentity deviceIdentity;
 uint8_t wifiCandidate = 0;
 uint8_t wifiTried = 0;
 uint32_t wifiCandidateStartedMs = 0;
@@ -167,6 +175,7 @@ const char *browserSessionState = "not_checked";
 String bootResetReason;
 bool heapWarningActive = false;
 uint32_t cpuBoostUntilMs = 0;
+uint32_t cpuNormalUntilMs = 0;
 uint32_t cpuFrequencySwitches = 0;
 uint32_t cpuFrequencyErrors = 0;
 bool cpuEcoRuntimeFault = false;
@@ -320,6 +329,9 @@ struct ApatorUnlockJob {
 
 #include "app/web/WebUi.cpp"
 
+bool modbusMeterRunning();
+void manageModbusMeterServer();
+
 #include "app/meter/MeterManager.cpp"
 
 #include "app/diagnostics/FactoryTest.cpp"
@@ -347,6 +359,8 @@ struct ApatorUnlockJob {
 #include "app/meter/IrControl.cpp"
 
 #include "app/network/NetworkManager.cpp"
+
+#include "app/network/ModbusMeterServer.cpp"
 
 #include "app/network/MqttManager.cpp"
 
@@ -406,6 +420,8 @@ void setup() {
     esp_task_wdt_add(nullptr);
   const esp_partition_t *running = esp_ota_get_running_partition();
   esp_ota_mark_app_valid_cancel_rollback();
+  deviceIdentity.begin();
+  deviceId = deviceIdentity.mqttId;
   loadConfig();
   // Probe Ethernet before UART/LED GPIOs are configured. If no W5500 answers
   // VERSIONR, the SPI bus is released and all GPIOs remain available to the
@@ -436,10 +452,6 @@ void setup() {
                "Firmware " + String(kFirmwareVersion) +
                    (historyReady ? " gestartet" : " ohne Historie gestartet") +
                    ", Ursache: " + bootResetReason);
-  char idBuffer[24];
-  snprintf(idBuffer, sizeof(idBuffer), "irtracker_%08lx",
-           static_cast<unsigned long>(ESP.getEfuseMac() & 0xffffffff));
-  deviceId = idBuffer;
   meterSerial.setRxBufferSize(2048);
   restoreConfiguredMeterSerial();
   if (config.ledPin >= 0) {
@@ -475,6 +487,7 @@ void loop() {
   serviceMeterInput();
   ethernet.loop();
   manageWifi();
+  manageModbusMeterServer();
   manageAdaptiveWifiPower();
   manageMqtt();
   manageGithubFirmwareUpdate();

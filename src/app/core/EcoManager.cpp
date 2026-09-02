@@ -40,6 +40,26 @@ void forceFullWifiPower() {
     wifiTxPowerRuntimeFault = true;
 }
 
+void disableWifiPowerSaveForConnection() {
+  if (esp_wifi_set_ps(WIFI_PS_NONE) != ESP_OK) ++wifiModeErrors;
+  wifiMinModemSleepActive = false;
+}
+
+bool applyWifiPowerSave() {
+  if (accessPointMode || WiFi.status() != WL_CONNECTED ||
+      !config.wifiPowerSave) {
+    disableWifiPowerSaveForConnection();
+    return false;
+  }
+  if (esp_wifi_set_ps(WIFI_PS_MIN_MODEM) == ESP_OK) {
+    wifiMinModemSleepActive = true;
+    return true;
+  }
+  ++wifiModeErrors;
+  disableWifiPowerSaveForConnection();
+  return false;
+}
+
 void manageAdaptiveWifiPower() {
   if (WiFi.status() != WL_CONNECTED) return;
   if (!config.ecoMode || !config.adaptiveWifiPower ||
@@ -112,6 +132,7 @@ bool switchCpuFrequency(uint32_t targetMhz) {
 void disableCpuEcoForRuntime(const char *reason) {
   cpuEcoRuntimeFault = true;
   cpuBoostUntilMs = 0;
+  cpuNormalUntilMs = 0;
   strlcpy(cpuBoostReason, reason, sizeof(cpuBoostReason));
   switchCpuFrequency(kPerformanceCpuMhz);
 }
@@ -119,6 +140,7 @@ void disableCpuEcoForRuntime(const char *reason) {
 void requestCpuBoost(const char *reason) {
   if (!config.ecoMode || cpuEcoRuntimeFault) return;
   cpuBoostUntilMs = millis() + kCpuBoostHoldMs;
+  cpuNormalUntilMs = 0;
   strlcpy(cpuBoostReason, reason, sizeof(cpuBoostReason));
   if (!switchCpuFrequency(kPerformanceCpuMhz))
     disableCpuEcoForRuntime("frequency_error");
@@ -126,20 +148,34 @@ void requestCpuBoost(const char *reason) {
 
 void startCpuPowerMode() {
   cpuBoostUntilMs = 0;
+  cpuNormalUntilMs = 0;
   if (!config.ecoMode) {
     strlcpy(cpuBoostReason, "eco_disabled", sizeof(cpuBoostReason));
     switchCpuFrequency(kPerformanceCpuMhz);
     return;
   }
-  strlcpy(cpuBoostReason, "eco_idle", sizeof(cpuBoostReason));
+  cpuNormalUntilMs = millis() + kCpuNormalHoldMs;
+  strlcpy(cpuBoostReason, "eco_startup", sizeof(cpuBoostReason));
   if (!switchCpuFrequency(kEcoCpuMhz))
     disableCpuEcoForRuntime("frequency_error");
 }
 
 void manageCpuPowerMode() {
-  if (!config.ecoMode || cpuEcoRuntimeFault || !cpuBoostUntilMs) return;
-  if (static_cast<int32_t>(millis() - cpuBoostUntilMs) < 0) return;
-  cpuBoostUntilMs = 0;
+  if (!config.ecoMode || cpuEcoRuntimeFault) return;
+  const uint32_t now = millis();
+  if (cpuBoostUntilMs) {
+    if (static_cast<int32_t>(now - cpuBoostUntilMs) < 0) return;
+    cpuBoostUntilMs = 0;
+    cpuNormalUntilMs = now + kCpuNormalHoldMs;
+    strlcpy(cpuBoostReason, "eco_cooldown", sizeof(cpuBoostReason));
+    if (!switchCpuFrequency(kEcoCpuMhz))
+      disableCpuEcoForRuntime("frequency_error");
+    return;
+  }
+  if (cpuNormalUntilMs) {
+    if (static_cast<int32_t>(now - cpuNormalUntilMs) < 0) return;
+    cpuNormalUntilMs = 0;
+  }
   strlcpy(cpuBoostReason, "eco_idle", sizeof(cpuBoostReason));
   if (!switchCpuFrequency(kEcoCpuMhz))
     disableCpuEcoForRuntime("frequency_error");

@@ -16,6 +16,9 @@ String statusJson() {
   json = "{";
   json += "\"firmware\":\"offline-" + String(kFirmwareVersion) + "\",";
   json += "\"hardware_profile\":\"universal\",";
+  json += "\"device_model\":\"" + String(DeviceIdentity::kModel) + "\",";
+  json += "\"device_serial\":\"" + String(deviceIdentity.serial) + "\",";
+  json += "\"device_mac\":\"" + String(deviceIdentity.mac) + "\",";
   json += "\"w5500_gpio_reserved\":" +
           String(HardwareProfile::kLanPrepared ? "true" : "false") + ",";
   json += "\"installer_wifi_ota\":true,";
@@ -29,6 +32,12 @@ String statusJson() {
           String(browserSessionState) + "\",";
   json += "\"mode\":\"" + String(primaryTransportName()) + "\",";
   json += "\"hostname\":\"" + jsonEscape(config.hostname) + "\",";
+  json += "\"storage_compatibility_mode\":" +
+          String(config.storageCompatibilityMode ? "true" : "false") + ",";
+  json += "\"modbus_tcp_enabled\":" +
+          String(config.modbusTcp ? "true" : "false") + ",";
+  json += "\"modbus_tcp_running\":" +
+          String(modbusMeterRunning() ? "true" : "false") + ",";
   json += "\"ip\":\"" + primaryNetworkIp() + "\",";
   json += "\"ethernet_initialized\":" +
           String(ethernet.initialized() ? "true" : "false") + ",";
@@ -64,6 +73,8 @@ String statusJson() {
           String(WiFi.getMode() == WIFI_STA ? "true" : "false") + ",";
   json += "\"wifi_min_modem_sleep\":" +
           String(wifiMinModemSleepActive ? "true" : "false") + ",";
+  json += "\"wifi_power_save_configured\":" +
+          String(config.wifiPowerSave ? "true" : "false") + ",";
   json += "\"adaptive_wifi_power\":" +
           String(config.adaptiveWifiPower ? "true" : "false") + ",";
   json += "\"wifi_tx_profile\":\"" + String(wifiTxProfileName()) + "\",";

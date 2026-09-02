@@ -15,6 +15,9 @@ ASSETS = (
     ("i18n.js", "kI18nJsGzip"),
     ("dashboard.js", "kDashboardJsGzip"),
     ("history.js", "kHistoryJsGzip"),
+    ("maintenance.js", "kMaintenanceJsGzip"),
+    ("setup.html", "kSetupHtmlGzip"),
+    ("setup.js", "kSetupJsGzip"),
 )
 
 

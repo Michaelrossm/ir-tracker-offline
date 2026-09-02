@@ -7,6 +7,7 @@ Der Tracker arbeitet als **nur lesender Stromzähler**. Null-Einspeisung, Ladegr
 | Schnittstelle | Zweck |
 |---|---|
 | `/api/v1/status` | aktuelle JSON-Messwerte |
+| `/api/v1/meter` | stabiles herstellerneutrales Schema `irtracker.meter.v1` |
 | `/api/v1/history` | lokale Historie nach Zeitraum |
 | `/api/v1/values.csv` | aktuelle CSV-Werte |
 | `/metrics`, `/openmetrics` | Prometheus/OpenMetrics |
@@ -15,8 +16,22 @@ Der Tracker arbeitet als **nur lesender Stromzähler**. Null-Einspeisung, Ladegr
 | `/shelly`, `/status`, `/emeter/0` | Shelly-EM-kompatible Erkennung und Abfrage |
 | `/rpc`, `/rpc/EM.GetStatus?id=0`, `/rpc/EMData.GetStatus?id=0` | Nur lesende Shelly-Pro-3EM-kompatible RPC-Abfrage |
 | MQTT Discovery | automatische Home-Assistant-Sensoren |
+| Modbus TCP, Port 502 | optionales, nur lesendes IR-Tracker-Registerschema; standardmäßig aus |
 
 Weitere lokale Systeme: ioBroker, Node-RED, openHAB und jede Anwendung mit HTTP/JSON oder MQTT. L1/L2/L3 werden nur ausgegeben, wenn der Stromzähler diese OBIS-Werte sendet.
+
+### Speicher-Kompatibilitätsmodus und Erkennung
+
+Der Modus ist standardmäßig ausgeschaltet. Wird er in den Einstellungen
+aktiviert, sind ausschließlich `/v1/json`, `/shelly`, `/status`, `/emeter/0`
+und die oben genannten nur lesenden RPC-Methoden aus privaten lokalen Netzen
+ohne Anmeldung erreichbar. OTA, Einstellungen, GPIO, Diagnose, Historienänderung
+und alle sonstigen Schreibzugriffe bleiben geschützt. mDNS kündigt
+`_irtracker._tcp`, `_shelly._tcp` und `_everhome._tcp` mit der neutralen IR-Tracker-Identität und
+der aktiven WLAN- oder LAN-IP an. Fremde Modell-, Serien-, OUI- oder
+Produktkennungen werden nicht nachgebildet. Proprietäre UDP- oder Cloud-Bindung
+ist ohne offen dokumentiertes, neutral implementierbares Protokoll absichtlich
+nicht enthalten.
 
 ### Geschützte GPIO-Diagnose
 
@@ -38,6 +53,7 @@ The tracker operates as a **read-only electricity meter**. Zero export, charge l
 | Interface | Purpose |
 |---|---|
 | `/api/v1/status` | current JSON readings |
+| `/api/v1/meter` | stable vendor-neutral `irtracker.meter.v1` schema |
 | `/api/v1/history` | local history by period |
 | `/api/v1/values.csv` | current CSV values |
 | `/metrics`, `/openmetrics` | Prometheus/OpenMetrics |
@@ -46,8 +62,21 @@ The tracker operates as a **read-only electricity meter**. Zero export, charge l
 | `/shelly`, `/status`, `/emeter/0` | Shelly EM compatible discovery and request |
 | `/rpc`, `/rpc/EM.GetStatus?id=0`, `/rpc/EMData.GetStatus?id=0` | Read-only Shelly Pro 3EM compatible RPC request |
 | MQTT Discovery | automatic Home Assistant sensors |
+| Modbus TCP, port 502 | optional read-only IR Tracker register map; disabled by default |
 
 Other local systems include ioBroker, Node-RED, openHAB and any HTTP/JSON or MQTT application. L1/L2/L3 are exposed only when the electricity meter transmits those OBIS values.
+
+### Storage compatibility mode and discovery
+
+This mode is disabled by default. When enabled in Settings, only `/v1/json`,
+`/shelly`, `/status`, `/emeter/0`, and the read-only RPC methods listed above
+are available without authentication from private local networks. OTA,
+settings, GPIO, diagnostics, history mutation, and every other write operation
+remain protected. mDNS advertises `_irtracker._tcp`, `_shelly._tcp`, and `_everhome._tcp` using the
+neutral IR Tracker identity and the active Wi-Fi or Ethernet IP. No third-party
+model, serial, OUI, or product identity is imitated. Proprietary UDP or cloud
+binding is deliberately omitted unless it can be implemented from an openly
+documented protocol without identity spoofing.
 
 ### Protected GPIO diagnostics
 

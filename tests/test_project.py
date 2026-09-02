@@ -42,8 +42,13 @@ COMMON_JS_SOURCE = (ROOT / "web" / "common.js").read_text(encoding="utf-8")
 COMMON_CSS_SOURCE = (ROOT / "web" / "common.css").read_text(encoding="utf-8")
 DASHBOARD_JS_SOURCE = (ROOT / "web" / "dashboard.js").read_text(encoding="utf-8")
 HISTORY_JS_SOURCE = (ROOT / "web" / "history.js").read_text(encoding="utf-8")
+MAINTENANCE_JS_SOURCE = (ROOT / "web" / "maintenance.js").read_text(encoding="utf-8")
+SETUP_JS_SOURCE = (ROOT / "web" / "setup.js").read_text(encoding="utf-8")
+SETUP_HTML_SOURCE = (ROOT / "web" / "setup.html").read_text(encoding="utf-8")
 WEB_RUNTIME_SOURCE = "\n".join(
-    (SOURCE, COMMON_JS_SOURCE, COMMON_CSS_SOURCE, DASHBOARD_JS_SOURCE, HISTORY_JS_SOURCE)
+    (SOURCE, COMMON_JS_SOURCE, COMMON_CSS_SOURCE, DASHBOARD_JS_SOURCE,
+     HISTORY_JS_SOURCE, MAINTENANCE_JS_SOURCE, SETUP_JS_SOURCE,
+     SETUP_HTML_SOURCE)
 )
 HISTORY_SOURCE = (ROOT / "src/app/storage/HistoryStore.cpp").read_text(encoding="utf-8")
 HISTORY_HEADER = (ROOT / "src/app/storage/HistoryStore.h").read_text(encoding="utf-8")
@@ -120,7 +125,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.2"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.3"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -265,7 +270,8 @@ class ProjectSecurityTests(unittest.TestCase):
         source = SOURCE
         self.assertIn("debugStorage.begin()", source)
         self.assertIn("debugStorage.openAsset(relativePath", source)
-        self.assertIn("tryServeDebugAsset(\"/assets/i18n.js\"", source)
+        self.assertIn("tryServeDebugAsset(path, contentType", source)
+        self.assertIn('serveEmbeddedAsset("/assets/i18n.js"', source)
         self.assertIn("board_build.filesystem = littlefs", PLATFORMIO)
         self.assertIn("debugfs,    data, spiffs,  0x2B0000, 0x10000", PARTITIONS)
         self.assertNotIn("coredump,   data, spiffs", PARTITIONS)
@@ -315,6 +321,8 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("signing/private/", ignore)
 
     def test_required_hardening_is_present(self) -> None:
+        self.assertIn("safeSingleLine", SOURCE)
+        self.assertNotIn("value.indexOf('\\0')", SOURCE)
         for marker in (
             "esp_fill_random",
             "guard.failures >= 5",
@@ -372,6 +380,10 @@ class ProjectSecurityTests(unittest.TestCase):
             "dx.lineWidth=2",
             "cx.lineWidth=2",
             "calendarHistoryQuery",
+            "now - static_cast<uint32_t>(since)",
+            "window.irGapEdges",
+            "irGapCount(dd,dFrom,dTo,dStep())",
+            "irGapCount(raw,rangeFrom,rangeTo,expectedStep())",
             "requestedHistoryAnchor",
             "historyTierSeconds",
             "id='dashDaysBack'",
@@ -404,12 +416,12 @@ class ProjectSecurityTests(unittest.TestCase):
             "% zum Jahres-Ø",
             "eventLog.begin(config.persistEventLog)",
             "event_log_persistent",
-            "name='event_flash'",
+            'name="event_flash"',
             "kCpuBoostHoldMs = 2UL * 60UL * 1000UL",
             "kEcoCpuMhz = 80",
             "kPerformanceCpuMhz = 160",
             "prefs.getBool(\"eco_mode\", true)",
-            "name='eco_mode'",
+            'name="eco_mode"',
             "requestCpuBoost(\"history_export\")",
             "requestCpuBoost(\"firmware_update\")",
             "requestCpuBoost(\"wifi_connect\")",
@@ -422,7 +434,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "if(!document.hidden)updateValues()",
             "if(!document.hidden)updateDashboardSummary()",
             "prefs.getBool(\"eco_led_off\", true)",
-            "name='eco_led_off'",
+            'name="eco_led_off"',
             "bool trackerFaultActive()",
             "ecoLedSuppressed()",
             "led_fault_active",
@@ -443,7 +455,9 @@ class ProjectSecurityTests(unittest.TestCase):
             "WIFI_POWER_15dBm",
             "WIFI_POWER_11dBm",
             "prefs.getBool(\"wifi_power_auto\", true)",
-            "name='wifi_power_auto'",
+            'name="wifi_power_auto"',
+            "prefs.getBool(\"wifi_ps\", false)",
+            'name="wifi_ps"',
             "manageAdaptiveWifiPower()",
             "wifi_tx_power_dbm",
             "wifi_min_modem_sleep",
@@ -477,6 +491,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertNotIn("server.enableCORS(true)", SOURCE)
         self.assertNotIn("WiFi.softAPdisconnect(false)", SOURCE)
         self.assertNotIn('requestCpuBoost("history_query")', SOURCE)
+        self.assertNotIn("now - static_cast<uint32_t>(until)", SOURCE)
+        self.assertNotIn("kIdleCpuMhz", SOURCE)
+        self.assertNotIn("setCpuFrequencyMhz(40", SOURCE)
         self.assertNotIn('requestCpuBoost("dashboard_summary")', SOURCE)
         self.assertIn("Record records_[kCapacity]", EVENT_HEADER)
         self.assertIn("static constexpr uint32_t kCapacity = 256", EVENT_HEADER)
@@ -596,6 +613,64 @@ class ProjectSecurityTests(unittest.TestCase):
             self.assertIn(marker, SOURCE)
         self.assertIn("normalizeHardwarePins();", SOURCE)
 
+    def test_storage_compatibility_keeps_neutral_identity_and_secure_default(self):
+        identity = (ROOT / "src/app/core/DeviceIdentity.h").read_text(
+            encoding="utf-8")
+        network = (ROOT / "src/app/network/NetworkManager.cpp").read_text(
+            encoding="utf-8")
+        security = (ROOT / "src/app/core/SecurityManager.cpp").read_text(
+            encoding="utf-8")
+        shelly = (ROOT / "src/app/web/ShellyEmulation.cpp").read_text(
+            encoding="utf-8")
+        eco = (ROOT / "src/app/web/EcoTrackerEmulation.cpp").read_text(
+            encoding="utf-8")
+        routes = (ROOT / "src/app/web/WebApi.cpp").read_text(encoding="utf-8")
+
+        for own_marker in ("IRTRACKER-C3", "IRTRACKER-C3-3EM", "IRT-%s",
+                           "irtracker-%s"):
+            self.assertIn(own_marker, identity)
+        for forbidden in ("SPEM-003CEBEU", "everhome_", "shellypro3em-"):
+            self.assertNotIn(forbidden, SOURCE + identity)
+        self.assertIn('bool storageCompatibilityMode = false', SOURCE)
+        self.assertIn('prefs.getBool("storage_compat", false)', SOURCE)
+        self.assertIn("localCompatibilityClient()", security)
+        self.assertIn("requireStorageCompatibilityAccess()", routes)
+        self.assertIn('MDNS.addService("shelly", "tcp", 80)', network)
+        self.assertIn('MDNS.addService("everhome", "tcp", 80)', network)
+        self.assertIn('MDNS.addService("irtracker", "tcp", 80)', network)
+        self.assertIn('"product-id", "IRT1000"', network)
+        self.assertIn('"serial-number"', network)
+        self.assertIn("deviceIdentity.mac", shelly)
+        compat_id = shelly[shelly.index("String shellyCompatId()"):
+                           shelly.index("String shellyMac()")]
+        self.assertIn("deviceIdentity.hostname", compat_id)
+        self.assertNotIn("config.hostname", compat_id)
+        self.assertIn('\\"energyCounterInT1\\":null', eco)
+        self.assertIn('\\"energyCounterInT2\\":null', eco)
+        self.assertIn("/ 1000U", eco)
+        for protected in ('/system/update', '/api/v1/gpio-scan/start',
+                          '/api/v1/history/clear'):
+            self.assertIn(protected, routes)
+
+    def test_neutral_meter_interfaces_share_one_schema(self) -> None:
+        integration = (ROOT / "src/app/web/IntegrationApi.cpp").read_text(
+            encoding="utf-8")
+        mqtt = (ROOT / "src/app/network/MqttManager.cpp").read_text(
+            encoding="utf-8")
+        routes = (ROOT / "src/app/web/WebApi.cpp").read_text(encoding="utf-8")
+        modbus = (ROOT / "src/app/network/ModbusMeterServer.cpp").read_text(
+            encoding="utf-8")
+        self.assertIn('\\"schema\\":\\"irtracker.meter.v1\\"', integration)
+        self.assertIn('server.on("/api/v1/meter"', routes)
+        self.assertIn("neutralMeterJson()", mqtt)
+        self.assertIn('publish(base, "/meter"', mqtt)
+        self.assertIn("kModbusMeterPort = 502", modbus)
+        self.assertIn("function != 0x03 && function != 0x04", modbus)
+        self.assertIn("isPrivateLocalAddress", modbus)
+        self.assertIn("bool modbusTcp = false", SOURCE)
+        for forbidden in ("SPEM-003CEBEU", "shellypro3em-", "everhome_"):
+            self.assertNotIn(forbidden, modbus)
+
     def test_integrations_share_hardened_read_only_response_path(self) -> None:
         integration = (ROOT / "src" / "app" / "web" /
                        "IntegrationApi.cpp").read_text(encoding="utf-8")
@@ -618,7 +693,7 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertNotIn("/diagnostics", navigation)
         self.assertNotIn("JSON API", navigation)
         self.assertIn("/maintenance/diagnostics", SOURCE)
-        self.assertIn("JSON-API f", SOURCE)
+        self.assertIn("JSON-API f", SETUP_HTML_SOURCE)
         self.assertIn("Content-Encoding", SOURCE)
         self.assertIn("kI18nJsGzip", SOURCE)
         self.assertIn("kCommonCssGzip", SOURCE)
@@ -640,8 +715,8 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn('server.send(303, "text/plain", "")', check_route)
         self.assertNotIn("githubUpdateJson()", check_route)
         self.assertNotIn("<pre>", check_route)
-        self.assertIn("async function loadUpdate()", SOURCE)
-        self.assertIn("Die installierte Firmware ist aktuell.", SOURCE)
+        self.assertIn("async function loadUpdate()", MAINTENANCE_JS_SOURCE)
+        self.assertIn("Die installierte Firmware ist aktuell.", MAINTENANCE_JS_SOURCE)
         self.assertIn("Technischer Fehlercode", SOURCE)
 
     def test_first_access_password_is_prominent_in_readme(self) -> None:
@@ -659,8 +734,8 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("actionMessage", COMMON_JS_SOURCE)
         self.assertIn("new URLSearchParams(new FormData(form))", COMMON_JS_SOURCE)
         self.assertIn("validWifiPassword", SOURCE)
-        self.assertIn("maxlength='32'", SOURCE)
-        self.assertIn("maxlength='64' autocomplete='off'", SOURCE)
+        self.assertIn('maxlength="32"', SETUP_JS_SOURCE)
+        self.assertIn('maxlength="64" autocomplete="off"', SETUP_JS_SOURCE)
         ota_start = SOURCE.index("void handleOtaFinished()")
         ota_end = SOURCE.index("void handleSafeShutdown()", ota_start)
         ota_handler = SOURCE[ota_start:ota_end]
@@ -674,6 +749,9 @@ class ProjectSecurityTests(unittest.TestCase):
             "kI18nJsGzip": I18N_SOURCE,
             "kDashboardJsGzip": DASHBOARD_JS_SOURCE,
             "kHistoryJsGzip": HISTORY_JS_SOURCE,
+            "kMaintenanceJsGzip": MAINTENANCE_JS_SOURCE,
+            "kSetupHtmlGzip": SETUP_HTML_SOURCE,
+            "kSetupJsGzip": SETUP_JS_SOURCE,
         }
         for symbol, source in assets.items():
             expected = source.replace("\r\n", "\n").encode("utf-8")
@@ -690,6 +768,8 @@ class ProjectSecurityTests(unittest.TestCase):
         history = SOURCE[SOURCE.index("void handleHistoryPage()") : SOURCE.index("struct HistoryQuery")]
         self.assertIn("/assets/dashboard.js?v=", dashboard)
         self.assertIn("/assets/history.js?v=", history)
+        self.assertIn("/assets/maintenance.js?v=", SOURCE)
+        self.assertIn("/assets/setup.js?v=", SOURCE)
         self.assertNotIn("String script", dashboard)
         self.assertNotIn("String script", history)
         self.assertIn("/assets/common.css?v=", SOURCE)

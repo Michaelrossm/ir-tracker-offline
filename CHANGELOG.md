@@ -2,6 +2,110 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.3 — 2026-09-02
+
+### Deutsch
+
+- `/api/v1/meter` und MQTT `irtracker/<id>/meter` verwenden gemeinsam das
+  stabile herstellerneutrale Schema `irtracker.meter.v1`. Optional steht ein
+  standardmäßig ausgeschalteter, nur lesender Modbus-TCP-Dienst mit eigenem
+  dokumentiertem IR-Tracker-Registerschema bereit.
+- mDNS kündigt zusätzlich `_irtracker._tcp` und beim aktivierten Modbus-Dienst
+  `_modbus._tcp` an. `_everhome._tcp` enthält die neutrale Produktkennung
+  `IRT1000`; die Shelly-Protokoll-ID ist strikt vom frei änderbaren Hostnamen
+  getrennt.
+- EcoTracker-kompatible Antworten enthalten die dokumentierten Tariffelder
+  `energyCounterInT1` und `energyCounterInT2` als `null`, solange der Zähler
+  keine echten Tarifwerte liefert.
+
+- Wartungs-, Setup- und zugehöriges JavaScript liegen als eigenständige,
+  reproduzierbar gzip-komprimierte Webassets vor. Die C++-Handler erzeugen nur
+  noch die kleine dynamische Gerätekonfiguration und verwenden einen
+  gemeinsamen, gehärteten Asset-Antwortpfad.
+- Der Eco-Modus verwendet ausschließlich 80 MHz im normalen Betrieb und
+  160 MHz für zeitlich begrenzte Rechen-, Verbindungs- und Updateaufgaben. Die
+  auf realer Hardware instabile 40-MHz-Stufe wurde vollständig entfernt.
+- Optionales `WIFI_PS_MIN_MODEM` ist getrennt konfigurierbar und standardmäßig
+  deaktiviert. Verbindungsaufbau, Wiederverbindung und Setup-Hotspot erzwingen
+  weiterhin den sicheren Modus ohne Modem-Sleep.
+- Die Historien-API wählt die feinste Stufe, die den gesamten angefragten
+  Kalenderzeitraum abdeckt. Dadurch werden ältere Tage nicht mehr aus einer
+  bereits teilweise überschriebenen Minutenstufe dargestellt, wenn ihre
+  vollständige 15-Minuten-Historie noch vorhanden ist.
+- Dashboard und Historienansicht verwenden eine gemeinsame Lückenerkennung,
+  die zusätzlich fehlende Bereiche am Anfang und Ende markiert. Der zukünftige
+  Teil des aktuellen Zeitraums gilt nicht als Ausfall.
+- Eine zentrale, neutrale Geräteidentität verwendet ausschließlich
+  `IRTRACKER-C3`, `IRTRACKER-C3-3EM`, `IRT-XXXXXX`, `irtracker-XXXXXX` und die
+  echte ESP32-MAC. Fremde Produkt-, Serien- oder Herstellerkennungen werden
+  nicht nachgebildet.
+- mDNS kündigt HTTP sowie die kompatiblen Dienste `_shelly._tcp` und
+  `_everhome._tcp` mit der aktiven WLAN- oder W5500-IP an und wird bei einem
+  Schnittstellenwechsel kontrolliert neu gestartet.
+- Ein eigener Speicher-Kompatibilitätsmodus öffnet nur die ausgewählten
+  lokalen Leseendpunkte. Er ist bei Neuinstallationen standardmäßig aus;
+  bestehende Installationen mit zuvor lokal offener API werden beim OTA
+  rückwärtskompatibel übernommen. Schreib-, Wartungs-, OTA-, GPIO- und
+  Diagnosewege bleiben geschützt.
+- Die gemeinsame Einzeilenprüfung behandelt den normalen C-String-Abschluss
+  nicht länger als eingebettetes Nullbyte. Einstellungen und Sicherungen mit
+  gültigen WLAN-Daten lassen sich dadurch wieder zuverlässig speichern.
+- EcoTracker-kompatible Antworten liefern das Messwertalter in Sekunden und
+  stabile numerische/null-Felder. Shelly-kompatible EM-/EMData-Antworten wurden
+  um neutrale Identität, Gesamtleistung und verfügbare 3-Phasen-Daten ergänzt.
+- Auf echter ESP32-C3-Hardware per signiertem OTA geprüft: stabiler Übergang
+  von 160 auf 80 MHz, frische SML-Daten ohne CRC- oder Taktfehler sowie
+  vollständige Wiederanzeige eines älteren Kalendertags aus der 15-Minuten-
+  Historie.
+
+### English
+
+- `/api/v1/meter` and MQTT `irtracker/<id>/meter` share the stable
+  vendor-neutral `irtracker.meter.v1` schema. An optional, default-disabled,
+  read-only Modbus TCP service exposes IR Tracker's own documented register map.
+- mDNS additionally advertises `_irtracker._tcp` and, while Modbus is enabled,
+  `_modbus._tcp`. `_everhome._tcp` contains the neutral product ID `IRT1000`;
+  the Shelly protocol ID is strictly separated from the user-editable hostname.
+- EcoTracker-compatible responses include the documented tariff fields
+  `energyCounterInT1` and `energyCounterInT2` as `null` until genuine tariff
+  readings are available.
+
+- Maintenance, setup and related JavaScript are maintained as separate,
+  reproducibly gzip-compressed Web assets. C++ handlers now generate only the
+  small dynamic device configuration and use one shared hardened asset
+  response path.
+- Eco mode uses only 80 MHz during normal operation and 160 MHz for temporary
+  compute, connection and update work. The 40 MHz stage that proved unstable
+  on real hardware has been removed completely.
+- Optional `WIFI_PS_MIN_MODEM` is configured independently and remains
+  disabled by default. Association, reconnection and the setup hotspot always
+  use the safe no-modem-sleep mode.
+- The history API selects the finest tier that covers the complete requested
+  calendar period. Older days are no longer rendered from a partially
+  overwritten minute tier while complete quarter-hour history is available.
+- Dashboard and history views share one gap detector that also marks missing
+  ranges at the beginning and end. Future time in the current period is not
+  treated as an outage.
+- A central neutral identity uses only `IRTRACKER-C3`,
+  `IRTRACKER-C3-3EM`, `IRT-XXXXXX`, `irtracker-XXXXXX`, and the genuine ESP32
+  MAC. No third-party product, serial, or manufacturer identity is imitated.
+- mDNS advertises HTTP and the compatible `_shelly._tcp` and
+  `_everhome._tcp` services with the active Wi-Fi or W5500 address and is
+  restarted cleanly when the preferred interface changes.
+- A dedicated storage compatibility mode opens only the selected local read
+  endpoints. It defaults to off on new installations; OTA upgrades preserve
+  deliberately open legacy API installations. Write, maintenance, OTA, GPIO,
+  and diagnostic paths remain protected.
+- The shared single-line validator no longer mistakes the normal C-string
+  terminator for an embedded null byte, so settings and backups containing
+  valid Wi-Fi data can be saved reliably again.
+- EcoTracker-compatible responses report reading age in seconds and stable
+  numeric/null fields. Shelly-compatible EM/EMData responses now include the
+  neutral identity, total power, and available three-phase readings.
+- Validated by signed OTA on real ESP32-C3 hardware: stable transition from
+  160 to 80 MHz, fresh SML readings without CRC or clock errors, and complete
+  reconstruction of an older calendar day from quarter-hour history.
+
 ## 1.3.2 — 2026-09-01
 
 ### Deutsch

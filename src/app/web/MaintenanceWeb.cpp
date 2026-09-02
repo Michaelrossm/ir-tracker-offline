@@ -85,182 +85,91 @@ void handleMaintenancePage() {
       "<button id='eventsReload'>Protokoll laden</button><button class='danger' id='eventsClear'>Protokoll löschen</button>"
       "<pre id='events' style='white-space:pre-wrap;max-height:420px;overflow:auto'></pre></div>"
       "<p id='maintenanceStatus' class='muted'></p>");
-  String script = F(
-      "const el=id=>document.getElementById(id),status=t=>el('maintenanceStatus').textContent=t;"
-      "const updateText=e=>{if(e==='network_not_connected')return'Keine LAN- oder WLAN-Verbindung. Netzwerkverbindung prüfen.';if(e==='system_time_not_synchronized')return'Die Gerätezeit ist noch nicht synchronisiert.';if(e==='github_json_invalid')return'Die Antwort der Updatequelle konnte nicht verarbeitet werden.';if(e.startsWith('github_http_'))return'Die Updatequelle ist momentan nicht erreichbar.';return'Die Updateprüfung konnte nicht abgeschlossen werden.'};"
-      "async function loadUpdate(){try{const r=await fetch('/api/v1/update/status'),u=await r.json();el('updateCurrent').textContent=u.current_version;el('updateAvailable').textContent=u.available?u.latest_version:'–';el('updateLast').textContent=u.last_success?new Date(u.last_success*1000).toLocaleString():'Noch nicht geprüft';el('updateInstall').hidden=!u.available;const s=el('updateState'),d=el('updateError');d.hidden=!u.error;el('updateErrorCode').textContent=u.error||'';s.className=u.error?'error':u.checked?'status-pill':'muted';s.textContent=u.error?'Updateprüfung fehlgeschlagen: '+updateText(u.error):u.available?'Eine neuere signierte Firmware ist verfügbar.':u.checked?'Die installierte Firmware ist aktuell.':'Es wurde in dieser Laufzeit noch keine manuelle Prüfung durchgeführt.'}catch(e){el('updateState').className='error';el('updateState').textContent='Update-Status konnte nicht geladen werden.'}}loadUpdate();"
-      "const download=(name,data)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};"
-      "el('fullBackup').onclick=()=>{status('Vollständiges Backup wird erstellt …');el('settingsExport').click();setTimeout(()=>el('historyExport').click(),800)};"
-      "el('settingsExport').onclick=async()=>{status('Einstellungen werden geladen ...');const r=await fetch('/api/v1/backup/settings');download('irtracker-settings.json',await r.text());status('Einstellungsbackup erstellt')};"
-      "el('settingsImport').onclick=async()=>{const f=el('settingsFile').files[0];if(!f)return status('Bitte Einstellungsbackup auswählen');"
-      "const text=await f.text();let j;try{j=JSON.parse(text)}catch(e){return status('Ungültige JSON-Datei')}if(j.format!=='irtracker-settings'||j.version!==1)return status('Falsches Backupformat');"
-      "if(!confirm('Einstellungen ersetzen und Tracker neu starten?'))return;const r=await fetch('/api/v1/backup/settings/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:text});status(r.ok?'Wiederhergestellt, Tracker startet neu':'Wiederherstellung fehlgeschlagen')};"
-      "el('historyExport').onclick=async()=>{status('Historie wird gestreamt ...');const out={format:'irtracker-history',version:1,created:new Date().toISOString(),tiers:{}};"
-      "for(const [name,range] of Object.entries({minute:'minute_all',quarter:'quarter_all',hour:'hour_all',day:'day_all'})){const r=await fetch('/api/v1/history?range='+range);if(!r.ok)return status('Fehler bei '+name);out.tiers[name]=(await r.json()).values}"
-      "download('irtracker-history.json',JSON.stringify(out));status('Historienbackup erstellt')};"
-      "el('historyImport').onclick=async()=>{const f=el('historyFile').files[0];if(!f)return status('Bitte Historienbackup auswählen');let b;try{b=JSON.parse(await f.text())}catch(e){return status('Ungültige JSON-Datei')}"
-      "if(b.format!=='irtracker-history'||b.version!==1||!b.tiers)return status('Falsches Backupformat');for(const n of ['minute','quarter','hour','day']){if(!Array.isArray(b.tiers[n]))return status('Historienstufe fehlt: '+n);"
-      "if(!b.tiers[n].every(v=>Number.isInteger(v.ts)&&v.ts>=1700000000&&Number.isFinite(v.avg)&&Number.isFinite(v.min)&&Number.isFinite(v.max)&&(v.import==null||Number.isFinite(v.import))&&(v.export==null||Number.isFinite(v.export))))return status('Ungültiger Datensatz in '+n)}"
-      "if(!confirm('Vorhandene Historie durch dieses Backup ersetzen?'))return;for(const n of ['minute','quarter','hour','day']){status('Importiere '+n+' ...');let r=await fetch('/api/v1/history/import/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier:n})});if(!r.ok)return status('Start fehlgeschlagen: '+n);"
-      "for(let i=0;i<b.tiers[n].length;i+=50){r=await fetch('/api/v1/history/import/batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier:n,values:b.tiers[n].slice(i,i+50)})});if(!r.ok)return status('Import fehlgeschlagen: '+n+' '+i);status('Importiere '+n+': '+Math.min(i+50,b.tiers[n].length)+' / '+b.tiers[n].length)}}status('Historie vollständig wiederhergestellt')};"
-      "el('historyClear').onclick=async()=>{if(!confirm('Wirklich ALLE lokalen Messwerte dauerhaft löschen? Vorher Backup erstellen!'))return;"
-      "const r=await fetch('/api/v1/history/clear',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'confirm=DELETE'});status(r.ok?'Historie vollständig gelöscht':'Historie konnte nicht gelöscht werden')};"
-      "async function loadEvents(){const r=await fetch('/api/v1/events');const j=await r.json();el('events').textContent=j.events.map(x=>`${x.ts>1700000000?new Date(x.ts*1000).toLocaleString('de-DE'):'Uptime '+x.uptime_s+'s'} [${x.level}] ${x.code}: ${x.message}`).join('\\n')||'Keine Ereignisse'}"
-      "el('eventsReload').onclick=loadEvents;el('eventsClear').onclick=async()=>{if(confirm('Protokoll wirklich löschen?')){await fetch('/api/v1/events/clear',{method:'POST'});loadEvents()}};loadEvents();");
-  script += F(
-      "el('safeShutdown').onclick=async()=>{if(!confirm('Tracker wirklich sicher herunterfahren? Zum Starten ist danach Strom Aus/Ein oder Reset nötig.'))return;"
-      "status('Minutenpuffer wird gespeichert ...');const r=await fetch('/system/shutdown',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'confirm=SHUTDOWN'});"
-      "status(r.ok?'Tracker wurde sicher heruntergefahren. Zum Starten Strom Aus/Ein oder Reset.':'Herunterfahren fehlgeschlagen; Tracker bleibt aktiv.')};");
   server.send(200, "text/html; charset=utf-8",
-              page("Backup und Wartung", body, script));
+              page("Backup und Wartung", body, "",
+                   String("/assets/maintenance.js?v=") + kFirmwareVersion));
 }
 
 void handleSetup() {
   if (!requireAdmin()) return;
-  String body = F("<form method='post' action='/setup/save'><fieldset><legend>WLAN-Verbindungen</legend>"
-                  "<p class='muted'>Bis zu drei Netze. Der Tracker probiert sie der Reihe nach. Ist keines erreichbar, startet automatisch der Setup-Hotspot.</p>"
-                  "<div class='error'>HTTP ist nicht transportverschlüsselt. Nur in einem vertrauenswürdigen Heim- oder getrennten IoT-Netz betreiben, keine Router-Portfreigabe einrichten und Fernzugriff ausschließlich per VPN verwenden.</div>");
-  for (uint8_t i = 0; i < kWifiSlots; ++i) {
-    body += "<div class='inline'><div><label>WLAN " + String(i + 1) + "</label><input name='ssid" +
-            String(i) + "' value=\"" + htmlEscape(config.ssid[i]) +
-            "\" maxlength='32' placeholder='Netzwerkname'></div><div><label>Passwort</label><input type='password' name='pass" +
-            String(i) + "' placeholder='" + String(config.password[i].length() ? "gespeichert" : "offenes WLAN") +
-            "' maxlength='64' autocomplete='off' data-lpignore='true'></div></div>";
+  String setupConfig;
+  setupConfig.reserve(1800);
+  setupConfig = F("window.IR_TRACKER_SETUP={\"ssids\":[");
+  for (uint8_t index = 0; index < kWifiSlots; ++index) {
+    if (index) setupConfig += ',';
+    setupConfig += "\"" + jsonEscape(config.ssid[index]) + "\"";
   }
-  body += F("<label>Hostname</label><input name='hostname' value='");
-  body += htmlEscape(config.hostname);
-  body += F("'><label>Zeitzone (POSIX-TZ)</label><input name='timezone' value='");
-  body += htmlEscape(config.timezone);
-  body += F("'><p class='muted'>Deutschland: CET-1CEST,M3.5.0,M10.5.0/3</p>"
-            "<label>Setup-Hotspot Laufzeit (Minuten)</label><input type='number' name='ap_minutes' min='5' max='60' value='");
-  body += String(config.setupApMinutes);
-  body += F("'><p class='muted'>Nach Ablauf wird der Hotspot abgeschaltet. Ein Neustart öffnet ihn erneut.</p>"
-            "<label>Neues Admin-Passwort</label><input type='password' name='admin_pass' "
-            "minlength='4' maxlength='64' autocomplete='new-password' placeholder='unverändert lassen'>"
-            "<label>Neues Admin-Passwort wiederholen</label><input type='password' name='admin_pass_confirm' "
-            "minlength='4' maxlength='64' autocomplete='new-password' placeholder='unverändert lassen'>"
-            "<p class='muted'>Erlaubt sind 4 bis 64 Zeichen; für gute Sicherheit werden mindestens 12 Zeichen empfohlen. "
-            "Angemeldete Browser werden 60 Tage über ein signiertes "
-            "HttpOnly-Cookie wiedererkannt. Eine Passwortänderung macht alte Sitzungen ungültig.</p>"
-            "</fieldset><fieldset><legend>Stromzähler</legend>"
-            "<label>IR-Eingang (GPIO)</label><select name='rx_pin'>");
+  setupConfig += F("],\"gpios\":[");
+  bool firstPin = true;
   for (int pin = 0; pin <= 10; ++pin) {
     if (!trackerGpioAvailable(pin)) continue;
-    body += "<option value='" + String(pin) + "'" + (pin == config.rxPin ? " selected" : "") + ">" + String(pin) + "</option>";
+    if (!firstPin) setupConfig += ',';
+    setupConfig += String(pin);
+    firstPin = false;
   }
-  body += F("</select><label>IR-Sendeausgang (GPIO, -1 = aus)</label><select name='tx_pin'>"
-            "<option value='-1'>Aus</option>");
-  for (int pin = 0; pin <= 10; ++pin) {
-    if (!trackerGpioAvailable(pin)) continue;
-    body += "<option value='" + String(pin) + "'" + (pin == config.txPin ? " selected" : "") + ">" + String(pin) + "</option>";
-  }
-  body += "</select>";
+  setupConfig += F("],\"hostname\":\"");
+  setupConfig += jsonEscape(config.hostname);
+  setupConfig += F("\",\"timezone\":\"");
+  setupConfig += jsonEscape(config.timezone);
+  setupConfig += F("\",\"ap_minutes\":");
+  setupConfig += String(config.setupApMinutes);
+  setupConfig += F(",\"rx_pin\":");
+  setupConfig += String(config.rxPin);
+  setupConfig += F(",\"tx_pin\":");
+  setupConfig += String(config.txPin);
+  setupConfig += F(",\"led_pin\":");
+  setupConfig += String(config.ledPin);
+  setupConfig += F(",\"led_inv\":");
+  setupConfig += config.ledInverted ? "true" : "false";
+  setupConfig += F(",\"meter_protocol\":");
+  setupConfig += String(static_cast<uint8_t>(config.meterProtocol));
+  setupConfig += F(",\"baud\":");
+  setupConfig += String(config.baud);
+  setupConfig += F(",\"api_access\":");
+  setupConfig += String(config.apiAccess);
+  setupConfig += F(",\"storage_compat\":");
+  setupConfig += config.storageCompatibilityMode ? "true" : "false";
+  setupConfig += F(",\"modbus_tcp\":");
+  setupConfig += config.modbusTcp ? "true" : "false";
+  setupConfig += F(",\"event_flash\":");
+  setupConfig += config.persistEventLog ? "true" : "false";
+  setupConfig += F(",\"mqtt_host\":\"");
+  setupConfig += jsonEscape(config.mqttHost);
+  setupConfig += F("\",\"mqtt_port\":");
+  setupConfig += String(config.mqttPort);
+  setupConfig += F(",\"mqtt_user\":\"");
+  setupConfig += jsonEscape(config.mqttUser);
+  setupConfig += F("\",\"mqtt_password_saved\":");
+  setupConfig += config.mqttPassword.length() ? "true" : "false";
+  setupConfig += F(",\"ha_disc\":");
+  setupConfig += config.homeAssistantDiscovery ? "true" : "false";
+  setupConfig += F(",\"eco_mode\":");
+  setupConfig += config.ecoMode ? "true" : "false";
+  setupConfig += F(",\"eco_led_off\":");
+  setupConfig += config.ecoLedOff ? "true" : "false";
+  setupConfig += F(",\"wifi_power_auto\":");
+  setupConfig += config.adaptiveWifiPower ? "true" : "false";
+  setupConfig += F(",\"wifi_ps\":");
+  setupConfig += config.wifiPowerSave ? "true" : "false";
+  setupConfig += F(",\"gh_check\":");
+  setupConfig += config.githubUpdateCheck ? "true" : "false";
+  setupConfig += F(",\"gh_auto\":");
+  setupConfig += config.githubAutoInstall ? "true" : "false";
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
-  body += "<label><input style='width:auto' type='checkbox' name='sniffer' value='1'" +
-          String(config.snifferEnabled ? " checked" : "") +
-          "> IR-Sniffer auf Port 81 aktivieren</label>"
-          "<label><input style='width:auto' type='checkbox' name='bridge' value='1'" +
-          String(config.bridgeEnabled ? " checked" : "") +
-          "> Schreibende IR-Bridge aktivieren</label>"
-          "<p class='muted'>Nur im Entwickler-Build verfuegbar.</p>";
+  setupConfig += F(",\"developer_io\":true,\"sniffer\":");
+  setupConfig += config.snifferEnabled ? "true" : "false";
+  setupConfig += F(",\"bridge\":");
+  setupConfig += config.bridgeEnabled ? "true" : "false";
+#else
+  setupConfig += F(",\"developer_io\":false");
 #endif
-  body += F("<label>Status-LED (GPIO, -1 = aus)</label><select name='led_pin'>"
-            "<option value='-1'>Aus</option>");
-  for (int pin = 0; pin <= 10; ++pin) {
-    if (!trackerGpioAvailable(pin)) continue;
-    body += "<option value='" + String(pin) + "'" + (pin == config.ledPin ? " selected" : "") + ">" + String(pin) + "</option>";
-  }
-  body += "</select><label><input style='width:auto' type='checkbox' name='led_inv' value='1'" +
-          String(config.ledInverted ? " checked" : "") + "> LED invertieren</label>";
-  body += F("<label>Zählerprotokoll</label><select name='meter_protocol'>"
-            "<option value='0'");
-  if (config.meterProtocol == MeterProtocol::Auto) body += " selected";
-  body += F(">Automatisch (SML und älteres IEC 62056-21)</option>"
-            "<option value='1'");
-  if (config.meterProtocol == MeterProtocol::Sml) body += " selected";
-  body += F(">SML</option><option value='2'");
-  if (config.meterProtocol == MeterProtocol::Iec62056) body += " selected";
-  body += F(">IEC 62056-21 / D0 passiv (ASCII)</option><option value='3'");
-  if (config.meterProtocol == MeterProtocol::Iec62056Active) body += " selected";
-  body += F(">IEC 62056-21 / D0 aktiv (300 Baud)</option></select>"
-            "<p class='muted'>Automatisch liest SML und passive ASCII-Telegramme. "
-            "Bleiben gültige Daten aus, versucht der Tracker zusätzlich eine aktive "
-            "IEC-Abfrage. Der aktive Modus sendet /?! und ACK 000 an ältere Zähler.</p>"
-            "<label>Baudrate</label><select name='baud'>");
-  const uint32_t rates[] = {300, 600, 1200, 2400, 4800,
-                            9600, 19200, 38400, 115200};
-  for (uint32_t rate : rates) {
-    body += "<option value='" + String(rate) + "'" + (rate == config.baud ? " selected" : "") + ">" + String(rate) + "</option>";
-  }
-  body += F("</select></fieldset><fieldset><legend>Lokale API und Kompatibilität</legend>"
-            "<label>Zugriffsmodus</label><select name='api_access'><option value='0'");
-  if (config.apiAccess == 0) body += " selected";
-  body += F(">Lokal offen (Integrationen ohne Anmeldung)</option><option value='1'");
-  if (config.apiAccess == 1) body += " selected";
-  body += F(">Admin-Anmeldung erforderlich</option><option value='2'");
-  if (config.apiAccess == 2) body += " selected";
-  body += F(">API und Shelly-Kompatibilität deaktiviert</option></select>"
-            "<p class='muted'>Betrifft Messwert-API, Prometheus, Influx, CSV und Shelly-Endpunkte. Einstellungen und Wartung bleiben immer geschützt.</p>"
-            "<details class='compact-details'><summary>JSON-API für Experten</summary>"
-            "<p class='muted'>Für Home Assistant, ioBroker, Node-RED, openHAB und eigene lokale Auswertungen. "
-            "Die API ist keine eigene Bedienseite und bleibt deshalb aus der Hauptnavigation ausgeblendet.</p>"
-            "<code>/api/v1/status</code><br><code>/api/v1/obis</code><br>"
-            "<code>/api/v1/history</code><br><code>/api/v1/values.csv</code>"
-            "</details>"
-            "<label><input style='width:auto' type='checkbox' name='event_flash' value='1'");
-  if (config.persistEventLog) body += " checked";
-  body += F("> Ereignis- und Fehlerprotokoll dauerhaft im Flash speichern</label>"
-            "<p class='muted'>Standardmäßig aus: Bis zu 256 Einträge bleiben nur im RAM. "
-            "Die ältesten werden automatisch überschrieben; ein Neustart leert das Protokoll. "
-            "Aktivieren schreibt neue Einträge zusätzlich dauerhaft in den Flash.</p>"
-            "</fieldset><fieldset><legend>Home Assistant / MQTT</legend>"
-            "<p class='muted'>Optional. Mit MQTT Discovery erscheinen die Sensoren automatisch in Home Assistant.</p>"
-            "<div class='inline'><div><label>MQTT-Server</label><input name='mqtt_host' value='");
-  body += htmlEscape(config.mqttHost);
-  body += F("' placeholder='192.168.178.10'></div><div><label>Port</label><input type='number' name='mqtt_port' value='");
-  body += String(config.mqttPort);
-  body += F("'></div></div><div class='inline'><div><label>Benutzer</label><input name='mqtt_user' value='");
-  body += htmlEscape(config.mqttUser);
-  body += F("'></div><div><label>Passwort</label><input type='password' name='mqtt_pass' placeholder='");
-  body += config.mqttPassword.length() ? "gespeichert" : "optional";
-  body += F("'></div></div><label><input style='width:auto' type='checkbox' name='ha_disc' value='1'");
-  if (config.homeAssistantDiscovery) body += " checked";
-  body += F("> Home-Assistant-Discovery aktivieren</label></fieldset>"
-            "<fieldset><legend>Energiesparen</legend>"
-            "<label><input style='width:auto' type='checkbox' name='eco_mode' value='1'");
-  if (config.ecoMode) body += " checked";
-  body += F("> Eco-Modus aktivieren</label>"
-            "<p class='muted'>Standardmäßig aktiv: 80 MHz im Messbetrieb. "
-            "Vollständiger Export, Import und Firmwareupdate schalten automatisch "
-            "auf 160 MHz. Zwei Minuten nach der letzten rechenintensiven Aufgabe wird "
-            "wieder auf 80 MHz reduziert.</p>"
-            "<label><input style='width:auto' type='checkbox' name='eco_led_off' value='1'");
-  if (config.ecoLedOff) body += " checked";
-  body += F("> Status-LED bei fehlerfreiem Eco-Betrieb ausschalten</label>"
-            "<p class='muted'>Wirkt nur bei aktivem Eco-Modus. Bei fehlendem oder "
-            "veraltertem Zählerwert, WLAN-Ausfall, Speicherwarnung oder internem "
-            "Eco-Fehler bleibt die LED-Warnanzeige automatisch aktiv.</p>"
-            "<label><input style='width:auto' type='checkbox' name='wifi_power_auto' value='1'");
-  if (config.adaptiveWifiPower) body += " checked";
-  body += F("> WLAN-Sendeleistung im Eco-Modus automatisch anpassen</label>"
-            "<p class='muted'>Start, Setup-Hotspot und Wiederverbindung verwenden immer "
-            "19,5 dBm. Nach drei stabilen Minuten wird bei gutem Signal vorsichtig auf "
-            "15 oder 11 dBm reduziert. Bei schwachem Signal oder Abbruch wird automatisch "
-            "volle Leistung verwendet.</p></fieldset>"
-            "<fieldset><legend>Firmwareupdates</legend>"
-            "<label><input style='width:auto' type='checkbox' name='gh_check' value='1'");
-  if (config.githubUpdateCheck) body += " checked";
-  body += F("> Täglich auf signierte GitHub-Firmware prüfen</label>"
-            "<label><input style='width:auto' type='checkbox' name='gh_auto' value='1'");
-  if (config.githubAutoInstall) body += " checked";
-  body += F("> Neue signierte Firmware automatisch installieren</label>"
-            "<p class='muted'>Die automatische Installation ist standardmäßig aus. "
-            "Akzeptiert werden nur neuere, von Michael Roßmann kryptografisch signierte "
-            "IRFW-Pakete aus dem offiziellen GitHub-Release.</p></fieldset>"
-            "<button type='submit'>Alle Einstellungen speichern</button></form>"
-            "<form method='post' action='/auth/logout'><button class='secondary' type='submit'>"
-            "Diesen Browser abmelden</button></form>");
-  server.send(200, "text/html; charset=utf-8", page("Einstellungen", body));
+  setupConfig += F("};");
+  const String body =
+      F("<div id='setupRoot' class='card'><p class='muted'>"
+        "Einstellungen werden geladen …</p></div>");
+  server.send(200, "text/html; charset=utf-8",
+              page("Einstellungen", body, setupConfig,
+                   String("/assets/setup.js?v=") + kFirmwareVersion));
 }
 
 void handleSetupSave() {
@@ -326,11 +235,14 @@ void handleSetupSave() {
   config.bridgeEnabled = server.hasArg("bridge");
 #endif
   config.apiAccess = constrain(server.arg("api_access").toInt(), 0, 2);
+  config.storageCompatibilityMode = server.hasArg("storage_compat");
+  config.modbusTcp = server.hasArg("modbus_tcp");
   const bool previousEventPersistence = config.persistEventLog;
   config.persistEventLog = server.hasArg("event_flash");
   config.ecoMode = server.hasArg("eco_mode");
   config.ecoLedOff = server.hasArg("eco_led_off");
   config.adaptiveWifiPower = server.hasArg("wifi_power_auto");
+  config.wifiPowerSave = server.hasArg("wifi_ps");
   config.githubUpdateCheck = server.hasArg("gh_check");
   config.githubAutoInstall = server.hasArg("gh_auto");
   if (config.githubAutoInstall) config.githubUpdateCheck = true;

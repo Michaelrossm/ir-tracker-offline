@@ -54,8 +54,15 @@ bool tryServeDebugAsset(const char *relativePath, const char *mimeType,
 }
 
 bool safeSingleLine(const String &value, size_t maximumLength) {
-  return value.length() <= maximumLength && value.indexOf('\r') < 0 &&
-         value.indexOf('\n') < 0 && value.indexOf('\0') < 0;
+  if (value.length() > maximumLength) return false;
+  // String::indexOf('\0') also sees the normal C-string terminator and would
+  // reject every value. Inspect only the actual payload bytes instead.
+  for (size_t index = 0; index < value.length(); ++index) {
+    const char character = value[index];
+    if (character == '\r' || character == '\n' || character == '\0')
+      return false;
+  }
+  return true;
 }
 
 bool validWifiPassword(const String &value) {
@@ -292,5 +299,29 @@ bool requireApiAccess() {
   }
   const String password = localAdminPassword();
   if (server.authenticate("admin", password.c_str())) return true;
+  return requireAdmin();
+}
+
+bool isPrivateLocalAddress(const IPAddress &address) {
+  return address[0] == 10 || address[0] == 127 ||
+         (address[0] == 172 && address[1] >= 16 && address[1] <= 31) ||
+         (address[0] == 192 && address[1] == 168) ||
+         (address[0] == 169 && address[1] == 254);
+}
+
+bool localCompatibilityClient() {
+  return isPrivateLocalAddress(server.client().remoteIP());
+}
+
+bool requireStorageCompatibilityAccess() {
+  server.sendHeader("Cache-Control", "no-store");
+  server.sendHeader("X-Content-Type-Options", "nosniff");
+  server.sendHeader("Referrer-Policy", "no-referrer");
+  server.sendHeader("X-Frame-Options", "DENY");
+  if (config.apiAccess == 2) {
+    server.send(404, "application/json", "{\"error\":\"api_disabled\"}");
+    return false;
+  }
+  if (config.storageCompatibilityMode && localCompatibilityClient()) return true;
   return requireAdmin();
 }

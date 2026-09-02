@@ -66,6 +66,8 @@ String settingsBackupJson() {
   device["baud"] = config.baud;
   device["meter_protocol"] = static_cast<uint8_t>(config.meterProtocol);
   device["api_access"] = config.apiAccess;
+  device["storage_compatibility"] = config.storageCompatibilityMode;
+  device["modbus_tcp"] = config.modbusTcp;
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
   device["sniffer"] = config.snifferEnabled;
   device["bridge"] = config.bridgeEnabled;
@@ -76,6 +78,7 @@ String settingsBackupJson() {
   device["eco_mode"] = config.ecoMode;
   device["eco_led_off"] = config.ecoLedOff;
   device["adaptive_wifi_power"] = config.adaptiveWifiPower;
+  device["wifi_power_save"] = config.wifiPowerSave;
   device["github_update_check"] = config.githubUpdateCheck;
   device["github_auto_install"] = config.githubAutoInstall;
   JsonObject mqttConfig = document.createNestedObject("mqtt");
@@ -139,7 +142,7 @@ void handleSettingsRestore() {
     }
   }
   const String restoredHostname =
-      String(restoredDevice["hostname"] | "ir-tracker");
+      String(restoredDevice["hostname"] | deviceIdentity.hostname);
   const String restoredTimezone = String(
       restoredDevice["timezone"] | "CET-1CEST,M3.5.0,M10.5.0/3");
   if (!validHostname(restoredHostname) ||
@@ -156,7 +159,7 @@ void handleSettingsRestore() {
     config.password[i] = wifi[i]["password"] | "";
   }
   JsonObject device = document["device"];
-  config.hostname = String(device["hostname"] | "ir-tracker");
+  config.hostname = String(device["hostname"] | deviceIdentity.hostname);
   config.rxPin = constrain(device["rx_pin"] | 3, 0, 10);
   config.txPin = constrain(device["tx_pin"] | 6, -1, 10);
   config.ledPin = constrain(device["led_pin"] | 5, -1, 10);
@@ -167,6 +170,10 @@ void handleSettingsRestore() {
       device["meter_protocol"] | static_cast<int>(MeterProtocol::Auto), 0,
       static_cast<int>(MeterProtocol::Iec62056Active)));
   config.apiAccess = constrain(device["api_access"] | 0, 0, 2);
+  config.storageCompatibilityMode = device.containsKey("storage_compatibility")
+                                        ? device["storage_compatibility"].as<bool>()
+                                        : config.apiAccess == 0;
+  config.modbusTcp = device["modbus_tcp"] | false;
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
   config.snifferEnabled = device["sniffer"] | false;
   config.bridgeEnabled = device["bridge"] | false;
@@ -177,6 +184,7 @@ void handleSettingsRestore() {
   config.ecoMode = device["eco_mode"] | true;
   config.ecoLedOff = device["eco_led_off"] | true;
   config.adaptiveWifiPower = device["adaptive_wifi_power"] | true;
+  config.wifiPowerSave = device["wifi_power_save"] | false;
   config.githubUpdateCheck = device["github_update_check"] | true;
   config.githubAutoInstall = device["github_auto_install"] | false;
   config.timezone = String(

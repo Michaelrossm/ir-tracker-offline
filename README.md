@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.2
+# IR Tracker Offline — 1.3.3
 
 **Deutsch** | [English](#english)
 
@@ -16,7 +16,7 @@ Besonders praktisch sind die **Shelly- und EcoTracker-Kompatibilität**: Der Tra
 
 Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/OpenMetrics und Influx Line Protocol** zur Verfügung. Die komplette SML-/OBIS-Auswertung findet lokal auf dem ESP32-C3 statt.
 
-> **Wichtig:** Shelly-Kompatibilität bedeutet keine garantierte Kompatibilität mit jedem Produkt oder jeder Software, die Shelly-Geräte unterstützt. Der Tracker emuliert ausgewählte, nur lesende Messendpunkte.
+> **Wichtig:** Shelly- und EcoTracker-Kompatibilität bezeichnet ausschließlich kompatibles lokales API- und Netzwerkverhalten. Der IR Tracker gibt sich niemals als Originalgerät eines Fremdherstellers aus: Modell `IRTRACKER-C3`, API-Modell `IRTRACKER-C3-3EM`, Seriennummer `IRT-XXXXXX`, Hostname `irtracker-XXXXXX` und die echte ESP32-MAC bleiben eindeutig neutral. Systeme, die zwingend eine fremde Produktkennung oder Cloud-Bindung verlangen, werden bewusst nicht durch Identitätsfälschung unterstützt.
 
 ## Funktionen
 
@@ -24,6 +24,8 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 - Livewerte für Gesamtleistung, Netzbezug, Einspeisung sowie verfügbare L1/L2/L3-Werte
 - **Shelly-EM- und Shelly-Pro-EM-kompatible Leseendpunkte** für eine möglichst einfache Einbindung in bestehende Systeme
 - **EcoTracker-kompatible lokale API** unter `/v1/json` einschließlich Messwertalter
+- **Neutrale Integrations-API** unter `/api/v1/meter`, dasselbe stabile Schema unter MQTT `irtracker/<id>/meter` und optionales read-only Modbus TCP
+- neutrale mDNS-Erkennung über `_shelly._tcp` und `_everhome._tcp`; der standardmäßig ausgeschaltete Speicher-Kompatibilitätsmodus öffnet nur die zugehörigen lokalen Leseendpunkte
 - **Home Assistant über MQTT Discovery**
 - lokale Schnittstellen über **JSON/HTTP, CSV, Prometheus/OpenMetrics und Influx Line Protocol**
 - lokale Historie mit Stunde, Tag, Woche, Monat, Jahr und Langzeitansicht
@@ -106,12 +108,12 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 
 ## Projektstatus
 
-Version **1.3.2** optimiert die laufzeitkritischen Pfade für Status-JSON, MQTT,
-Zählerempfang und History-Lesezugriffe. Der SML-One-Pass-Parser besitzt einen
-Legacy-Sicherheitsvergleich; getrennte SML-CRC-/D0-BCC-Zähler und ein
-automatisch lösender Protokoll-Lock verhindern irreführende D0-Fehler bei
-stabilem SML-Empfang. Schnittstellen, Messfunktionen und Historienkapazitäten
-bleiben erhalten.
+Version **1.3.3** verkleinert die eingebettete Weboberfläche, stabilisiert den
+Eco-Betrieb bei 80/160 MHz und ergänzt einen optionalen, standardmäßig
+deaktivierten WLAN-Modem-Sleep. Die Historienansicht wählt nun automatisch die
+feinste vollständig verfügbare Auflösung und markiert auch Datenlücken am
+Anfang oder Ende eines Zeitraums. Schnittstellen, Messfunktionen und
+Historienkapazitäten bleiben erhalten.
 Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
 
 Neue USB-Installationen verwenden für den optionalen 64-kB-Debugspeicher das
@@ -144,7 +146,7 @@ Particularly useful are **Shelly and EcoTracker compatibility**. The tracker pro
 
 It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/OpenMetrics and Influx Line Protocol**. SML/OBIS processing remains completely local on the ESP32-C3.
 
-> **Note:** Shelly compatibility does not guarantee compatibility with every product or application supporting Shelly devices. IR Tracker emulates selected read-only measurement endpoints.
+> **Note:** Shelly and EcoTracker compatibility refers exclusively to compatible local API and network behavior. IR Tracker never identifies itself as an original third-party device: model `IRTRACKER-C3`, API model `IRTRACKER-C3-3EM`, serial `IRT-XXXXXX`, hostname `irtracker-XXXXXX`, and the genuine ESP32 MAC remain neutral. Systems that require a third-party product identity or cloud binding are deliberately not supported through identity spoofing.
 
 ### Features
 
@@ -152,6 +154,8 @@ It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/Ope
 - live total power, grid import/export and available L1/L2/L3 readings
 - **read-only Shelly EM and Shelly Pro EM compatible endpoints** for easier integration with existing systems
 - **EcoTracker-compatible local API** at `/v1/json`, including reading age
+- **Neutral integration API** at `/api/v1/meter`, the same stable schema at MQTT `irtracker/<id>/meter`, and optional read-only Modbus TCP
+- neutral mDNS discovery through `_shelly._tcp` and `_everhome._tcp`; the storage compatibility mode is disabled by default and opens only the corresponding local read endpoints
 - **Home Assistant MQTT Discovery**
 - local **JSON/HTTP, CSV, Prometheus/OpenMetrics and Influx Line Protocol** interfaces
 - local history for hour, day, week, month, year and long-term views
@@ -233,12 +237,12 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 
 ### Project status
 
-Version **1.3.2** optimizes the runtime-critical status JSON, MQTT, meter
-reception and history read paths. The SML one-pass parser retains a legacy
-safety comparison; separate SML CRC/D0 BCC counters and an automatically
-released protocol lock prevent misleading D0 errors during stable SML
-reception. Interfaces, metering features and history capacities remain
-unchanged. Feedback about different meters and local integrations is welcome.
+Version **1.3.3** reduces the embedded Web UI, stabilizes Eco operation at
+80/160 MHz and adds optional Wi-Fi modem sleep that remains disabled by
+default. History views now select the finest fully available resolution and
+also mark data gaps at the beginning or end of a period. Interfaces, metering
+features and history capacities remain unchanged. Feedback about different
+meters and local integrations is welcome.
 
 New USB installations use the `debugfs` label for optional 64-kB debug
 storage. The same firmware automatically detects the previous `coredump` label

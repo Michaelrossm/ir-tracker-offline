@@ -22,13 +22,15 @@ def get(base: str, path: str, auth: str) -> tuple[int, bytes, str]:
         return error.code, error.read(), error.headers.get_content_type()
 
 
-def post_json(base: str, path: str, auth: str, payload: dict) -> tuple[int, bytes]:
+def post_json(base: str, path: str, auth: str, payload: dict,
+              csrf: str = "") -> tuple[int, bytes]:
     request = urllib.request.Request(
         base.rstrip("/") + path,
         data=json.dumps(payload).encode(),
         headers={
             "Authorization": "Basic " + auth,
             "Content-Type": "application/json",
+            "X-CSRF-Token": csrf,
         },
         method="POST",
     )
@@ -51,12 +53,15 @@ def main() -> None:
     assert status_code == 200
     status = json.loads(body)
     for field in (
-        "firmware", "author", "license", "power_w", "import_kwh",
+        "firmware", "device_model", "device_serial", "device_mac",
+        "author", "license", "power_w", "import_kwh",
         "export_kwh", "phases", "meter_fresh", "uptime_s", "restart_reason",
         "sml_crc_errors", "d0_bcc_errors",
     ):
         assert field in status, f"status field missing: {field}"
     assert len(status["phases"]) == 3
+    assert status["device_model"] == "IRTRACKER-C3"
+    assert status["device_serial"].startswith("IRT-")
 
     code, body, _ = get(args.base, "/api/v1/history?range=day", auth)
     assert code == 200
@@ -89,8 +94,29 @@ def main() -> None:
     eco_tracker = json.loads(body)
     for field in ("power", "powerAvg", "energyCounterIn", "agePower"):
         assert field in eco_tracker, f"EcoTracker field missing: {field}"
-    assert "energyCounterInT1" not in eco_tracker
-    assert "energyCounterInT2" not in eco_tracker
+    assert eco_tracker["energyCounterInT1"] is None
+    assert eco_tracker["energyCounterInT2"] is None
+    assert eco_tracker["agePower"] is None or eco_tracker["agePower"] >= 0
+
+    code, body, _ = get(args.base, "/api/v1/meter", auth)
+    assert code == 200
+    neutral_meter = json.loads(body)
+    assert neutral_meter["schema"] == "irtracker.meter.v1"
+    for field in ("timestamp", "fresh", "age_s", "power", "import",
+                  "export", "phases", "units"):
+        assert field in neutral_meter, f"neutral meter field missing: {field}"
+    assert len(neutral_meter["phases"]) == 3
+
+    code, body, _ = get(args.base, "/shelly", auth)
+    assert code == 200
+    device_info = json.loads(body)
+    assert device_info["model"] == "IRTRACKER-C3-3EM"
+    assert device_info["serial"].startswith("IRT-")
+    assert device_info["mac"] == status["device_mac"]
+
+    code, body, _ = get(args.base, "/api/v1/admin-session", auth)
+    assert code == 200
+    csrf = json.loads(body)["csrf_token"]
 
     code, body, _ = get(args.base, "/rpc/EM.GetStatus?id=0", auth)
     assert code == 200
@@ -106,7 +132,7 @@ def main() -> None:
     code, body = post_json(
         args.base, "/rpc", auth,
         {"id": 7, "src": "acceptance-test", "method": "EM.GetStatus",
-         "params": {"id": 0}},
+         "params": {"id": 0}}, csrf,
     )
     rpc = json.loads(body)
     assert code == 200 and rpc["id"] == 7 and "result" in rpc

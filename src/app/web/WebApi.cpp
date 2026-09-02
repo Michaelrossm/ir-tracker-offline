@@ -5,64 +5,56 @@
 #error "Compile this module through main.cpp"
 #endif
 
+void serveEmbeddedAsset(const char *path, const char *contentType,
+                        const uint8_t *gzipData, size_t gzipSize) {
+  if (tryServeDebugAsset(path, contentType, gzipData, gzipSize)) return;
+  server.sendHeader("Content-Encoding", "gzip");
+  server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+  server.sendHeader("X-Content-Type-Options", "nosniff");
+  server.send_P(200, contentType, reinterpret_cast<PGM_P>(gzipData), gzipSize);
+}
+
 void setupRoutes() {
   const char *securityHeaders[] = {"Origin", "Referer", "Authorization",
                                    "X-CSRF-Token", "Cookie"};
   server.collectHeaders(securityHeaders, 5);
   server.on("/assets/common.css", HTTP_GET, [] {
-    if (tryServeDebugAsset("/assets/common.css", "text/css; charset=utf-8",
-                           kCommonCssGzip, kCommonCssGzipSize))
-      return;
-    server.sendHeader("Content-Encoding", "gzip");
-    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
-    server.sendHeader("X-Content-Type-Options", "nosniff");
-    server.send_P(200, PSTR("text/css; charset=utf-8"),
-                  reinterpret_cast<PGM_P>(kCommonCssGzip), kCommonCssGzipSize);
+    serveEmbeddedAsset("/assets/common.css", "text/css; charset=utf-8",
+                       kCommonCssGzip, kCommonCssGzipSize);
   });
   server.on("/assets/common.js", HTTP_GET, [] {
-    if (tryServeDebugAsset("/assets/common.js",
-                           "application/javascript; charset=utf-8",
-                           kCommonJsGzip, kCommonJsGzipSize))
-      return;
-    server.sendHeader("Content-Encoding", "gzip");
-    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
-    server.sendHeader("X-Content-Type-Options", "nosniff");
-    server.send_P(200, PSTR("application/javascript; charset=utf-8"),
-                  reinterpret_cast<PGM_P>(kCommonJsGzip), kCommonJsGzipSize);
+    serveEmbeddedAsset("/assets/common.js",
+                       "application/javascript; charset=utf-8",
+                       kCommonJsGzip, kCommonJsGzipSize);
   });
   server.on("/assets/i18n.js", HTTP_GET, [] {
-    if (tryServeDebugAsset("/assets/i18n.js",
-                           "application/javascript; charset=utf-8",
-                           kI18nJsGzip, kI18nJsGzipSize))
-      return;
-    server.sendHeader("Content-Encoding", "gzip");
-    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
-    server.sendHeader("X-Content-Type-Options", "nosniff");
-    server.send_P(200, PSTR("application/javascript; charset=utf-8"),
-                  reinterpret_cast<PGM_P>(kI18nJsGzip), kI18nJsGzipSize);
+    serveEmbeddedAsset("/assets/i18n.js",
+                       "application/javascript; charset=utf-8",
+                       kI18nJsGzip, kI18nJsGzipSize);
   });
   server.on("/assets/dashboard.js", HTTP_GET, [] {
-    if (tryServeDebugAsset("/assets/dashboard.js",
-                           "application/javascript; charset=utf-8",
-                           kDashboardJsGzip, kDashboardJsGzipSize))
-      return;
-    server.sendHeader("Content-Encoding", "gzip");
-    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
-    server.sendHeader("X-Content-Type-Options", "nosniff");
-    server.send_P(200, PSTR("application/javascript; charset=utf-8"),
-                  reinterpret_cast<PGM_P>(kDashboardJsGzip),
-                  kDashboardJsGzipSize);
+    serveEmbeddedAsset("/assets/dashboard.js",
+                       "application/javascript; charset=utf-8",
+                       kDashboardJsGzip, kDashboardJsGzipSize);
   });
   server.on("/assets/history.js", HTTP_GET, [] {
-    if (tryServeDebugAsset("/assets/history.js",
-                           "application/javascript; charset=utf-8",
-                           kHistoryJsGzip, kHistoryJsGzipSize))
-      return;
-    server.sendHeader("Content-Encoding", "gzip");
-    server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
-    server.sendHeader("X-Content-Type-Options", "nosniff");
-    server.send_P(200, PSTR("application/javascript; charset=utf-8"),
-                  reinterpret_cast<PGM_P>(kHistoryJsGzip), kHistoryJsGzipSize);
+    serveEmbeddedAsset("/assets/history.js",
+                       "application/javascript; charset=utf-8",
+                       kHistoryJsGzip, kHistoryJsGzipSize);
+  });
+  server.on("/assets/maintenance.js", HTTP_GET, [] {
+    serveEmbeddedAsset("/assets/maintenance.js",
+                       "application/javascript; charset=utf-8",
+                       kMaintenanceJsGzip, kMaintenanceJsGzipSize);
+  });
+  server.on("/assets/setup.html", HTTP_GET, [] {
+    serveEmbeddedAsset("/assets/setup.html", "text/html; charset=utf-8",
+                       kSetupHtmlGzip, kSetupHtmlGzipSize);
+  });
+  server.on("/assets/setup.js", HTTP_GET, [] {
+    serveEmbeddedAsset("/assets/setup.js",
+                       "application/javascript; charset=utf-8",
+                       kSetupJsGzip, kSetupJsGzipSize);
   });
   server.on("/", HTTP_GET, handleRoot);
   server.on("/history", HTTP_GET, handleHistoryPage);
@@ -110,6 +102,9 @@ void setupRoutes() {
   server.on("/api/v1/status", HTTP_GET, [] {
     if (requireApiAccess())
       sendIntegrationJson(statusJson());
+  });
+  server.on("/api/v1/meter", HTTP_GET, [] {
+    if (requireApiAccess()) sendIntegrationJson(neutralMeterJson());
   });
   server.on("/api/v1/admin-session", HTTP_GET, [] {
     if (!requireAdmin()) return;
@@ -184,38 +179,38 @@ void setupRoutes() {
   // DE: EcoTracker-kompatible, nur lesende lokale Zaehler-API.
   // EN: EcoTracker-compatible read-only local meter API.
   server.on("/v1/json", HTTP_GET, [] {
-    if (requireApiAccess())
+    if (requireStorageCompatibilityAccess())
       sendIntegrationJson(ecoTrackerJson());
   });
   server.on("/shelly", HTTP_GET, [] {
-    if (requireApiAccess()) sendIntegrationJson(shellyDeviceInfo());
+    if (requireStorageCompatibilityAccess()) sendIntegrationJson(shellyDeviceInfo());
   });
   server.on("/status", HTTP_GET, [] {
-    if (requireApiAccess())
+    if (requireStorageCompatibilityAccess())
       sendIntegrationJson(shellyGen1Status());
   });
   server.on("/emeter/0", HTTP_GET, [] {
-    if (requireApiAccess())
+    if (requireStorageCompatibilityAccess())
       sendIntegrationJson(shellyGen1Emeter());
   });
   server.on("/rpc/EM.GetStatus", HTTP_GET, [] {
-    if (requireApiAccess())
+    if (requireStorageCompatibilityAccess())
       sendIntegrationJson(shellyEmStatus());
   });
   server.on("/rpc/EMData.GetStatus", HTTP_GET, [] {
-    if (requireApiAccess())
+    if (requireStorageCompatibilityAccess())
       sendIntegrationJson(shellyEmDataStatus());
   });
   server.on("/rpc/Shelly.GetDeviceInfo", HTTP_GET, [] {
-    if (requireApiAccess())
+    if (requireStorageCompatibilityAccess())
       sendIntegrationJson(shellyDeviceInfo());
   });
   server.on("/rpc/Shelly.ListMethods", HTTP_GET, [] {
-    if (requireApiAccess())
+    if (requireStorageCompatibilityAccess())
       sendIntegrationJson(shellyMethodList());
   });
   server.on("/rpc/Shelly.GetStatus", HTTP_GET, [] {
-    if (requireApiAccess())
+    if (requireStorageCompatibilityAccess())
       sendIntegrationJson(shellyRpcStatus());
   });
   server.on("/rpc", HTTP_POST, handleShellyRpc);

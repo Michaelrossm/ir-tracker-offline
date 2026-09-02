@@ -44,18 +44,21 @@ String ecoTrackerJson() {
     json += ",\"powerPhase" + String(phase + 1) + "\":" +
             numberOrNull(meter.phasePowerW[phase], 2);
   }
-  if (std::isfinite(meter.importKwh)) {
-    json += ",\"energyCounterIn\":" +
-            numberOrNull(meter.importKwh * 1000.0, 3);
-  }
-  if (std::isfinite(meter.exportKwh)) {
-    json += ",\"energyCounterOut\":" +
-            numberOrNull(meter.exportKwh * 1000.0, 3);
-  }
+  json += ",\"energyCounterIn\":" +
+          numberOrNull(std::isfinite(meter.importKwh)
+                           ? meter.importKwh * 1000.0
+                           : NAN,
+                       3);
+  json += ",\"energyCounterOut\":" +
+          numberOrNull(std::isfinite(meter.exportKwh)
+                           ? meter.exportKwh * 1000.0
+                           : NAN,
+                       3);
+  json += ",\"energyCounterInT1\":null,\"energyCounterInT2\":null";
 
-  // Compatibility extension: age of the power value in milliseconds.
+  // EcoTracker-compatible age in seconds. Unknown data stays null.
   json += ",\"agePower\":";
-  json += meter.powerUpdatedMs ? String(millis() - meter.powerUpdatedMs)
+  json += meter.powerUpdatedMs ? String((millis() - meter.powerUpdatedMs) / 1000U)
                                : String("null");
   json += "}";
   return json;

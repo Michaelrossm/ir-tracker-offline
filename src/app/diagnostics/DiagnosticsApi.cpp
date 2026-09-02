@@ -260,7 +260,10 @@ String selfTestJson() {
       accessPointMode
           ? "Setup-Hotspot aktiv; volle Sendeleistung"
           : (String("STA, ") +
-             (wifiMinModemSleepActive ? "MIN_MODEM" : "Modem-Sleep Fehler") +
+             (wifiMinModemSleepActive
+                  ? "MIN_MODEM aktiv"
+                  : (config.wifiPowerSave ? "Modem-Sleep nicht aktiv"
+                                          : "Modem-Sleep ausgeschaltet")) +
              ", Profil " + wifiTxProfileName()),
       first);
   add("time", "Uhrzeit", time(nullptr) >= 1700000000 ? "ok" : "warn",
@@ -459,6 +462,8 @@ String supportReportText(bool technical) {
   report.reserve(technical ? 3200 : 1800);
   report = "IR Tracker Offline – Diagnosebericht\n";
   report += "Firmware: " + String(kFirmwareVersion) + "\n";
+  report += "Device: " + String(DeviceIdentity::kModel) + " / " +
+            String(deviceIdentity.serial) + " / " + config.hostname + "\n";
   report += "Laufzeit: " + diagnosticDuration(millis() / 1000U) + "\n\n";
 
   report += "=== ZÄHLER ===\n";

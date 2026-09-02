@@ -95,6 +95,8 @@ void publishMqttValues() {
   const bool fresh = meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
   const String status = statusJson();
   publish(base, "/state", status.c_str());
+  const String neutralMeter = neutralMeterJson();
+  publish(base, "/meter", neutralMeter.c_str());
   if (std::isfinite(meter.powerW)) {
     snprintf(value, sizeof(value), "%.3f", meter.powerW);
     publish(base, "/power_w", value);

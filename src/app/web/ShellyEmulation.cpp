@@ -4,22 +4,19 @@
 #endif
 
 String shellyCompatId() {
-  String id = deviceId;
-  id.replace('_', '-');
-  return id;
+  return deviceIdentity.hostname;
 }
 
 String shellyMac() {
-  String mac = WiFi.macAddress();
-  mac.replace(":", "");
-  mac.toUpperCase();
-  return mac;
+  return deviceIdentity.mac;
 }
 
 String shellyDeviceInfo() {
-  const bool authEnabled = config.apiAccess != 0;
+  const bool authEnabled = !config.storageCompatibilityMode;
   return "{\"id\":\"" + shellyCompatId() + "\",\"mac\":\"" + shellyMac() +
-         "\",\"model\":\"IRTRACKER-C3-3EM\",\"gen\":2,\"fw_id\":\"irtracker/" +
+         "\",\"serial\":\"" + String(deviceIdentity.serial) +
+         "\",\"model\":\"" + DeviceIdentity::kShellyApiModel +
+         "\",\"gen\":2,\"fw_id\":\"irtracker/" +
          String(kFirmwareVersion) + "\",\"ver\":\"" + kFirmwareVersion +
          "\",\"app\":\"IRTracker\",\"profile\":\"triphase\",\"auth_en\":" +
          String(authEnabled ? "true" : "false") + ",\"auth_domain\":" +
@@ -65,11 +62,12 @@ String shellyGen1Emeter() {
 
 String shellyGen1Status() {
   return "{\"wifi_sta\":{\"connected\":" +
-         String(WiFi.status() == WL_CONNECTED ? "true" : "false") +
+         String(networkConnected() ? "true" : "false") +
          ",\"ssid\":\"" + jsonEscape(WiFi.SSID()) + "\",\"ip\":\"" +
          primaryNetworkIp() + "\",\"rssi\":" +
          String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) +
          "},\"has_update\":false,\"uptime\":" + String(millis() / 1000) +
+         ",\"total_power\":" + numberOrNull(meter.powerW, 2) +
          ",\"emeters\":[" + shellyGen1Emeter() + "]}";
 }
 
@@ -105,10 +103,21 @@ String shellyEmStatus() {
     json += names[phase];
     json += "_flags\":[]";
   }
+  double totalApparent = 0.0;
+  bool apparentAvailable = false;
+  for (uint8_t phase = 0; phase < 3; ++phase) {
+    if (!std::isfinite(meter.phaseVoltageV[phase]) ||
+        !std::isfinite(meter.phaseCurrentA[phase]))
+      continue;
+    totalApparent += meter.phaseVoltageV[phase] * meter.phaseCurrentA[phase];
+    apparentAvailable = true;
+  }
   json += ",\"n_current\":null,\"total_current\":" +
           numberOrNull(shellyTotalCurrent(), 3) +
           ",\"total_act_power\":" + numberOrNull(meter.powerW, 2) +
-          ",\"total_aprt_power\":null,\"user_calibrated_phase\":[],"
+          ",\"total_aprt_power\":" +
+          numberOrNull(apparentAvailable ? totalApparent : NAN, 2) +
+          ",\"user_calibrated_phase\":[],"
           "\"irtracker_age_s\":" + ageOrNull(meter.powerUpdatedMs) +
           ",\"errors\":" + String(fresh ? "[]" : "[\"meter_stale\"]") + "}";
   return json;
@@ -154,7 +163,7 @@ String shellyRpcResult(const String &method) {
 }
 
 void handleShellyRpc() {
-  if (!requireApiAccess()) return;
+  if (!requireStorageCompatibilityAccess()) return;
   if (server.arg("plain").length() > 1024) {
     sendIntegrationJson(
         "{\"error\":{\"code\":-32600,\"message\":\"Request too large\"}}",

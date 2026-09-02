@@ -42,7 +42,8 @@ void loadConfig() {
     config.ssid[0] = prefs.getString("ssid", "");
     config.password[0] = prefs.getString("password", "");
   }
-  config.hostname = prefs.getString("hostname", "ir-tracker");
+  config.hostname = prefs.getString("hostname", deviceIdentity.hostname);
+  if (config.hostname == "ir-tracker") config.hostname = deviceIdentity.hostname;
   config.rxPin = prefs.getUChar("rx_pin", kDefaultRxPin);
   config.txPin = prefs.getChar("tx_pin", kDefaultTxPin);
   config.ledPin = prefs.getChar("led_pin", 5);
@@ -56,6 +57,14 @@ void loadConfig() {
   config.mqttPassword = prefs.getString("mqtt_pass", "");
   config.homeAssistantDiscovery = prefs.getBool("ha_disc", true);
   config.apiAccess = prefs.getUChar("api_access", 0);
+  // Fresh installations are secure by default. Existing installations that
+  // deliberately used the old locally-open API retain their read-only storage
+  // integration until the new dedicated switch is changed once.
+  config.storageCompatibilityMode =
+      prefs.isKey("storage_compat")
+          ? prefs.getBool("storage_compat", false)
+          : (prefs.isKey("api_access") && config.apiAccess == 0);
+  config.modbusTcp = prefs.getBool("modbus_tcp", false);
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
   config.snifferEnabled = prefs.getBool("sniffer", false);
   config.bridgeEnabled = prefs.getBool("bridge", false);
@@ -73,6 +82,7 @@ void loadConfig() {
   config.ecoMode = prefs.getBool("eco_mode", true);
   config.ecoLedOff = prefs.getBool("eco_led_off", true);
   config.adaptiveWifiPower = prefs.getBool("wifi_power_auto", true);
+  config.wifiPowerSave = prefs.getBool("wifi_ps", false);
   config.githubUpdateCheck = prefs.getBool("gh_check", true);
   config.githubAutoInstall = prefs.getBool("gh_auto", false);
   prefs.end();
@@ -121,6 +131,8 @@ void saveConfig() {
   prefs.putString("mqtt_pass", config.mqttPassword);
   prefs.putBool("ha_disc", config.homeAssistantDiscovery);
   prefs.putUChar("api_access", config.apiAccess);
+  prefs.putBool("storage_compat", config.storageCompatibilityMode);
+  prefs.putBool("modbus_tcp", config.modbusTcp);
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
   prefs.putBool("sniffer", config.snifferEnabled);
   prefs.putBool("bridge", config.bridgeEnabled);
@@ -137,6 +149,7 @@ void saveConfig() {
   prefs.putBool("eco_mode", config.ecoMode);
   prefs.putBool("eco_led_off", config.ecoLedOff);
   prefs.putBool("wifi_power_auto", config.adaptiveWifiPower);
+  prefs.putBool("wifi_ps", config.wifiPowerSave);
   prefs.putBool("gh_check", config.githubUpdateCheck);
   prefs.putBool("gh_auto", config.githubAutoInstall);
   prefs.end();

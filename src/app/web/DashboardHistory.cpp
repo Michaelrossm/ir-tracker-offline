@@ -208,8 +208,15 @@ HistoryQuery calendarHistoryQuery(const String &range, uint32_t now) {
     end.tm_mday += 1;
   end.tm_isdst = -1;
   const time_t until = mktime(&end);
-  const uint32_t age = now > static_cast<uint32_t>(until)
-                           ? now - static_cast<uint32_t>(until)
+  // DE: Die Stufe muss den gesamten angefragten Zeitraum abdecken. Eine
+  // Auswahl anhand des Periodenendes kann bei einem alten Kalendertag eine
+  // bereits teilweise ueberschriebene Minutenstufe liefern, obwohl die
+  // vollstaendige 15-Minuten-Historie noch vorhanden ist.
+  // EN: The tier must cover the complete requested period. Selecting by the
+  // period end can return a partially overwritten minute tier for an older
+  // calendar day even though complete quarter-hour history is still present.
+  const uint32_t age = now > static_cast<uint32_t>(since)
+                           ? now - static_cast<uint32_t>(since)
                            : 0;
   HistoryStore::Tier tier;
   if (range == "year") {
