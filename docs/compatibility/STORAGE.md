@@ -61,16 +61,16 @@ Firmware **1.3.2** stellt unter anderem folgende lokale Integrationen bereit:
 | 24 | Zendure | SolarFlow 2400 AC+ | 🟡 Kandidat | EcoTracker / Shelly | Offizielle EcoTracker-/Shelly-Unterstützung vorhanden, Discovery/Onboarding mit Emulation bleibt offen. | ⬜ |
 | 25 | Zendure | SolarFlow 2400 Pro | 🟡 Kandidat | EcoTracker / Shelly | Fremdzähler-Unterstützung passt technisch, zusätzliche Modell-/Accountprüfung nicht sicher ausgeschlossen. | ⬜ |
 | 26 | Jackery | Navi 2000 | 🟡 Kandidat | Shelly Pro 3EM / Pro EM-50 | Direkte Smart-Meter-Kopplung vorgesehen; belastbarer Emulations-Praxistest fehlt. | ⬜ |
-| 27 | Jackery | HomePower 2000 Ultra | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Passende Drittanbieter-Zähler unterstützt; Tasmota/TinyC-Unterstützung wird entwickelt, belastbarer Feldnachweis noch nicht ausreichend. | ⬜ |
-| 28 | Jackery | SolarVault 3 Pro | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Drittanbieter-Smart-Meter unterstützt; Originalmodell-/Discovery-Prüfung mit Emulation noch nicht ausgeschlossen. | ⬜ |
-| 29 | Jackery | SolarVault 3 Pro Max | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Gleiche Drittanbieter-Smart-Meter-Familie; Emulations-Onboarding noch nicht praktisch bestätigt. | ⬜ |
-| 30 | Jackery | SolarVault 3 Pro Max AC | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM / Pro EM-50 | Technisch passende Schnittstellen vorhanden, Geräte-/Onboarding-Prüfung mit Emulation noch offen. | ⬜ |
+| 27 | Jackery | HomePower 2000 Ultra | 🟢 Kompatibel | EcoTracker | Virtueller EcoTracker aus uni-meter wird von der Jackery-App erkannt und lässt sich einbinden; Nutzer betreiben die Regelung damit praktisch. | ⬜ |
+| 28 | Jackery | SolarVault 3 Pro | 🟢 Kompatibel | EcoTracker | uni-meter führt die Jackery SolarVault Serie 3 ausdrücklich als unterstützten Speicher; virtueller EcoTracker ist damit praktisch nutzbar. | ⬜ |
+| 29 | Jackery | SolarVault 3 Pro Max | 🟢 Kompatibel | EcoTracker | Gehört zur von uni-meter ausdrücklich unterstützten SolarVault-Serie 3; kein Original-EcoTracker erforderlich. | ⬜ |
+| 30 | Jackery | SolarVault 3 Pro Max AC | 🟢 Kompatibel | EcoTracker | Gehört zur von uni-meter ausdrücklich unterstützten SolarVault-Serie 3; virtueller EcoTracker wird als Fremdzählerweg unterstützt. | ⬜ |
 | 31 | Maxxisun | Maxxicharge V1 / CCU V1 1800 W | 🟢 Kompatibel | EcoTracker | EcoTracker wird lokal von der CCU V1 unterstützt; Maxxisun ist nicht auf einen einzelnen Zählerhersteller festgelegt. | ⬜ |
 | 32 | Maxxisun | Maxxicharge V2 / CCU V2 1200 W | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | CCU V2 unterstützt verschiedene Smart Meter im Heimnetz; keine harte Originalmodellbindung erkennbar. | ⬜ |
 | 33 | Maxxisun | Maxxicharge V2 / CCU V2 2300 W | 🟢 Kompatibel | EcoTracker / Shelly Pro 3EM | Lokale Smart-Meter-Anbindung mit mehreren Fremdzählern; keine relevante Originalmodellbindung erkennbar. | ⬜ |
 | 34 | Maxxisun | Maxxicharge V2+ / CCU V2+ 2300 W (M3.0 / M5.0) | 🟢 Kompatibel | EcoTracker / Shelly 3EM / Shelly Pro 3EM | Mehrere unterschiedliche Fremdzähler offiziell unterstützt; keine Bindung an ein einzelnes Originalmodell. | ⬜ |
 | 35 | Marstek | Jupiter-C | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM | Passende Fremdzähler unterstützt; konkreter modellbezogener Emulations-Feldtest noch nicht eindeutig genug. | ⬜ |
-| 36 | Marstek | Jupiter-C Plus | 🟡 Kandidat | EcoTracker / Shelly | Tasmota-Emulationen sind für Jupiter/Marstek vorgesehen, aber ein eindeutiger belastbarer Modellnachweis für Jupiter-C Plus fehlt noch. | ⬜ |
+| 36 | Marstek | Jupiter-C Plus | 🟢 Kompatibel | EcoTracker / Shelly | EcoTracker-Emulation wurde auf ESP32-C3/bitShake mit Jupiter C Plus erfolgreich getestet; auch Shelly-/CT-Emulation wird praktisch verwendet. | ⬜ |
 | 37 | Marstek | Jupiter-E | 🟡 Kandidat | EcoTracker / Shelly Pro 3EM | Passende Schnittstellen vorhanden; konkreter Emulationsnachweis für Jupiter-E noch nicht ausreichend. | ⬜ |
 | 38 | Marstek | Saturn B2500 | 🟢 Kompatibel | Shelly / EcoTracker | B2500 wird praktisch mit Tasmota-Shelly- bzw. EcoTracker-Emulation betrieben; Fremdgerät wird akzeptiert. | ⬜ |
 | 39 | Marstek | Venus-A | 🟢 Kompatibel | Shelly / EcoTracker | Venus A wurde praktisch mit Shelly-/EcoTracker-Emulation bzw. IOmeter-Kompatibilitätsmodus betrieben. | ⬜ |
@@ -81,10 +81,10 @@ Firmware **1.3.2** stellt unter anderem folgende lokale Integrationen bereit:
 | 44 | APsystems | EZHI | 🟡 Kandidat | EcoTracker / Shelly 3EM / Pro 3EM | Passende Zähler werden unterstützt; Berichte weisen jedoch auf Cloud-basierte Gerätesuche hin, wodurch reine lokale Emulation problematisch sein kann. | ⬜ |
 | 45 | Fox ESS | Avocado 22 Pro | 🟢 Kompatibel | EcoTracker / IOmeter | IOmeter nennt für FoxESS eine direkte Batteriespeicher-Integration; damit ist die Nutzung eines Nicht-Original-EcoTrackers grundsätzlich praktisch vorgesehen. | ⬜ |
 | 46 | GoodWe | ESA Athena | 🟡 Kandidat | EcoTracker | EcoTracker-Kompatibilität gelistet, aber Emulations-/Drittanbieter-Onboarding noch nicht belastbar bestätigt. | ⬜ |
-| 47 | Indevolt | BK1600 | 🟡 Kandidat | EcoTracker / Shelly | Hersteller bestätigt vollständige lokale Bedienung und viele Drittanbieter-Zähler; ein expliziter Emulations-Feldtest fehlt noch. | ⬜ |
-| 48 | Indevolt | BK1600 Ultra | 🟡 Kandidat | EcoTracker / Shelly | Hersteller bestätigt lokale Bedienung und mehrere Fremdzähler; expliziter Emulationsnachweis noch offen. | ⬜ |
-| 49 | Indevolt | PowerFlex 2000 | 🟡 Kandidat | EcoTracker / Shelly | Vollständige lokale Bedienung und Drittanbieter-Kompatibilität sind dokumentiert; reiner Emulations-Praxistest noch nicht belegt. | ⬜ |
-| 50 | Indevolt | SolidFlex 2000 | 🟡 Kandidat | EcoTracker / Shelly | Vollständige lokale Bedienung und Drittanbieter-Kompatibilität sind dokumentiert; reiner Emulations-Praxistest noch nicht belegt. | ⬜ |
+| 47 | Indevolt | BK1600 | 🟡 Kandidat | EcoTracker / Shelly | Hersteller bestätigt vollständige lokale Bedienung und viele Drittanbieter-Zähler; ein expliziter Emulations-Feldtest für BK1600 fehlt noch. | ⬜ |
+| 48 | Indevolt | BK1600 Ultra | 🟡 Kandidat | EcoTracker / Shelly | Hersteller bestätigt lokale Bedienung und mehrere Fremdzähler; expliziter Emulationsnachweis für BK1600 Ultra noch offen. | ⬜ |
+| 49 | Indevolt | PowerFlex 2000 | 🟢 Kompatibel | Shelly Pro 3EM | uni-meter-Shelly-Pro-3EM-Ausgabe wurde praktisch mit PowerFlex 2000 verwendet; Nicht-Original-Shelly wird akzeptiert. | ⬜ |
+| 50 | Indevolt | SolidFlex 2000 | 🟢 Kompatibel | EcoTracker / Shelly | uni-meter führt SolidFlex 2000 ausdrücklich als unterstützten Speicher; außerdem wird EcoTracker im Betrieb per fester IP eingebunden. | ⬜ |
 | 51 | Spaun | Energy Master 1600 | 🟡 Kandidat | EcoTracker | EcoTracker-kompatibel; Geräteerkennung/Onboarding einer Emulation noch nicht ausreichend geklärt. | ⬜ |
 | 52 | YOULIQ | one | 🟢 Kompatibel | EcoTracker / IOmeter | YOULIQ nutzt externe Zählerdaten und IOmeter nennt YOUL als direkte Batteriespeicher-Integration; Original-Everhome-Hardware ist damit nicht zwingend. | ⬜ |
 
@@ -92,8 +92,8 @@ Firmware **1.3.2** stellt unter anderem folgende lokale Integrationen bereit:
 
 **52 relevante Balkonkraftwerk-Speicher-/EMS-Systeme**
 
-- 🟢 **Kompatibel:** 17
-- 🟡 **Kandidaten:** 35
+- 🟢 **Kompatibel:** 24
+- 🟡 **Kandidaten:** 28
 - ✅ **Auf realer Speicher-Hardware mit IR Tracker getestet:** 0
 
 ## Quellenlage und Bewertungsprinzip
