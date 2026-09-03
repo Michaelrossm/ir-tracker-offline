@@ -2,6 +2,43 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.5-beta.2 — 2026-09-03
+
+### Deutsch
+
+- Alle neun statischen HTML-/CSS-/JavaScript-Assets werden reproduzierbar
+  minifiziert, gzip-komprimiert und in einem verifizierten Rohdatencontainer
+  innerhalb der vorhandenen 64-kB-Partition abgelegt. Es gibt keine Änderung
+  an Partitionstabelle, OTA-Slots oder History.
+- Vollständige gzip-Doppelkopien wurden aus der App entfernt. Eine kleine,
+  eigenständige Recovery-Seite ermöglicht weiterhin Status, Diagnose,
+  signiertes Firmwareupdate, Asset-Sicherung/-Wiederherstellung und Neustart.
+- Der Container prüft Magic, Schema, exakte Firmwareversion, vollständigen
+  Dateisatz, Grenzen, Duplikate, Größen und SHA-256. Bei jedem Fehler bleiben
+  Messung, History und Schnittstellen aktiv und die Recovery-Seite erreichbar.
+- Offline-Flash sinkt gegenüber dem lokalen Ausgangsstand um 30.922 Byte; die
+  OTA-Reserve wächst um 30.928 Byte. Das statische RAM bleibt unverändert.
+- Auf echter ESP32-C3-Hardware wurden vollständiger Assetbetrieb, beschädigter
+  Container, Recovery, Wiederherstellung, alle neun Assets und die vorhandenen
+  WLAN-Funktions-/Sicherheitstests geprüft.
+
+### English
+
+- All nine static HTML, CSS and JavaScript assets are reproducibly minified,
+  gzip-compressed and stored in a verified raw container within the existing
+  64-kB partition. The partition table, OTA slots and history are unchanged.
+- Full gzip duplicates were removed from the application. A small standalone
+  recovery page retains status, diagnostics, signed firmware update, asset
+  backup/restore and restart capabilities.
+- The container validates magic, schema, exact firmware version, the complete
+  file set, bounds, duplicates, sizes and SHA-256. Meter acquisition, history
+  and interfaces remain active on every error while recovery stays reachable.
+- Offline flash is reduced by 30,922 bytes compared with the local baseline;
+  OTA reserve grows by 30,928 bytes. Static RAM is unchanged.
+- Full asset operation, a damaged container, recovery, restoration, all nine
+  assets and the existing Wi-Fi functional/security tests were verified on
+  real ESP32-C3 hardware.
+
 ## 1.3.5-beta.1 — 2026-09-03
 
 ### Deutsch

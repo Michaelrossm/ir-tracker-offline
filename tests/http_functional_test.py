@@ -53,6 +53,14 @@ def main() -> None:
     assert status_code == 200
     status = json.loads(body)
     for field in (
+        "asset_partition_mounted", "asset_manifest_valid", "asset_version",
+        "asset_source_maintenance_js", "asset_last_error",
+    ):
+        assert field in status, f"asset diagnostics field missing: {field}"
+    assert status["asset_source_maintenance_js"] in (
+        "partition", "embedded_fallback"
+    )
+    for field in (
         "firmware", "device_model", "device_serial", "device_mac",
         "author", "license", "power_w", "import_kwh",
         "export_kwh", "phases", "meter_fresh", "uptime_s", "restart_reason",
@@ -62,6 +70,26 @@ def main() -> None:
     assert len(status["phases"]) == 3
     assert status["device_model"] == "IRTRACKER-C3"
     assert status["device_serial"].startswith("IRT-")
+
+    for path, expected_type in (
+        ("/assets/common.css", "text/css"),
+        ("/assets/common.js", "application/javascript"),
+        ("/assets/i18n.js", "application/javascript"),
+        ("/assets/dashboard.js", "application/javascript"),
+        ("/assets/history.js", "application/javascript"),
+        ("/assets/maintenance.js", "application/javascript"),
+        ("/assets/diagnostics.js", "application/javascript"),
+        ("/assets/setup.html", "text/html"),
+        ("/assets/setup.js", "application/javascript"),
+    ):
+        code, payload, content_type = get(args.base, path, auth)
+        assert code == 200 and payload, f"asset unavailable: {path}"
+        assert content_type == expected_type, f"wrong MIME type: {path}"
+
+    code, body, _ = get(args.base, "/api/v1/status", auth)
+    served_status = json.loads(body)
+    assert code == 200
+    assert served_status["asset_source_maintenance_js"] == "partition"
 
     code, body, _ = get(args.base, "/api/v1/history?range=day", auth)
     assert code == 200
@@ -88,6 +116,15 @@ def main() -> None:
     meter_report = json.loads(body)
     for field in ("crc_errors", "sml_crc_errors", "d0_bcc_errors"):
         assert field in meter_report, f"meter report field missing: {field}"
+
+    code, body, _ = get(args.base, "/api/v1/support-report", auth)
+    assert code == 200
+    report_text = body.decode("utf-8")
+    for label in (
+        "Asset-Partition:", "Manifest:", "Asset-Version:",
+        "maintenance.js Quelle:", "Letzter Asset-Fehler:",
+    ):
+        assert label in report_text, f"support report label missing: {label}"
 
     code, body, _ = get(args.base, "/v1/json", auth)
     assert code == 200

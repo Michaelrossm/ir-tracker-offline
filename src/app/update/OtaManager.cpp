@@ -9,6 +9,141 @@ bool otaRequestAuthorized() {
   return requireAdmin();
 }
 
+struct AssetRawUploadState {
+  bool authorized = false;
+  bool ok = false;
+  bool shaStarted = false;
+  size_t written = 0;
+  String expectedSha256;
+  String error;
+  mbedtls_sha256_context sha;
+} assetRawUpload;
+
+void resetAssetRawUpload() {
+  if (assetRawUpload.shaStarted)
+    mbedtls_sha256_free(&assetRawUpload.sha);
+  assetRawUpload = AssetRawUploadState{};
+  mbedtls_sha256_init(&assetRawUpload.sha);
+}
+
+String assetPartitionLayoutJson() {
+  String json;
+  json.reserve(280);
+  json = "{\"valid\":" +
+         String(debugStorage.fixedLayoutValid() ? "true" : "false") +
+         ",\"error\":\"" + jsonEscape(debugStorage.fixedLayoutError()) +
+         "\",\"label\":\"" +
+         jsonEscape(debugStorage.observedTargetLabel()) +
+         "\",\"offset\":" +
+         String(debugStorage.observedTargetAddress()) +
+         ",\"size\":" + String(debugStorage.observedTargetSize()) +
+         ",\"required_offset\":2818048,\"required_size\":65536,"
+         "\"history_offset\":2883584,\"history_size\":1310720,"
+         "\"ota_0_offset\":65536,\"ota_1_offset\":1441792}";
+  return json;
+}
+
+void handleAssetPartitionBackup() {
+  if (!requireAdmin()) return;
+  if (!debugStorage.fixedLayoutValid()) {
+    server.send(409, "application/json", assetPartitionLayoutJson());
+    return;
+  }
+  requestCpuBoost("asset_backup");
+  server.sendHeader("Content-Disposition",
+                    "attachment; filename=ir-tracker-debugfs-backup.bin");
+  server.setContentLength(0x10000U);
+  server.send(200, "application/octet-stream", "");
+  uint8_t buffer[512];
+  for (size_t offset = 0; offset < 0x10000U; offset += sizeof(buffer)) {
+    if (!debugStorage.readRaw(offset, buffer, sizeof(buffer)) ||
+        server.client().write(buffer, sizeof(buffer)) != sizeof(buffer))
+      return;
+    delay(0);
+  }
+}
+
+void handleAssetPartitionUpload() {
+  HTTPUpload &upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    resetAssetRawUpload();
+    assetRawUpload.authorized = otaRequestAuthorized();
+    assetRawUpload.expectedSha256 = server.header("X-Asset-SHA256");
+    assetRawUpload.expectedSha256.toLowerCase();
+    assetRawUpload.ok = assetRawUpload.authorized &&
+                        server.header("X-Asset-Confirm") ==
+                            "BACKUP-VERIFIED-0x2B0000-0x10000" &&
+                        assetRawUpload.expectedSha256.length() == 64 &&
+                        debugStorage.fixedLayoutValid();
+    if (!assetRawUpload.ok) {
+      assetRawUpload.error = !assetRawUpload.authorized
+                                 ? "unauthorized"
+                                 : !debugStorage.fixedLayoutValid()
+                                       ? debugStorage.fixedLayoutError()
+                                       : "backup_or_sha_confirmation_missing";
+      return;
+    }
+    requestCpuBoost("asset_update");
+    assetRawUpload.ok = debugStorage.beginRawAssetUpdate() &&
+                        mbedtls_sha256_starts_ret(&assetRawUpload.sha, 0) == 0;
+    assetRawUpload.shaStarted = assetRawUpload.ok;
+    if (!assetRawUpload.ok) assetRawUpload.error = "asset_erase_failed";
+  } else if (upload.status == UPLOAD_FILE_WRITE && assetRawUpload.ok) {
+    if (assetRawUpload.written > 0x10000U ||
+        upload.currentSize > 0x10000U - assetRawUpload.written ||
+        mbedtls_sha256_update_ret(&assetRawUpload.sha, upload.buf,
+                                  upload.currentSize) != 0 ||
+        !debugStorage.writeRawAsset(assetRawUpload.written, upload.buf,
+                                    upload.currentSize)) {
+      assetRawUpload.ok = false;
+      assetRawUpload.error = "asset_write_failed";
+      return;
+    }
+    assetRawUpload.written += upload.currentSize;
+  } else if (upload.status == UPLOAD_FILE_END && assetRawUpload.ok) {
+    uint8_t digest[32] = {};
+    const bool complete = assetRawUpload.written == 0x10000U;
+    const bool digestOk =
+        complete &&
+        mbedtls_sha256_finish_ret(&assetRawUpload.sha, digest) == 0 &&
+        constantTimeEqual(hexBytes(digest, sizeof(digest)),
+                          assetRawUpload.expectedSha256);
+    memset(digest, 0, sizeof(digest));
+    assetRawUpload.ok = digestOk;
+    if (!complete)
+      assetRawUpload.error = "asset_size_mismatch";
+    else if (!digestOk)
+      assetRawUpload.error = "asset_sha256_mismatch";
+    else if (!debugStorage.finishRawAssetUpdate(kFirmwareVersion)) {
+      assetRawUpload.ok = false;
+      assetRawUpload.error = debugStorage.assetManifestError();
+    }
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    assetRawUpload.ok = false;
+    assetRawUpload.error = "asset_upload_aborted";
+  }
+}
+
+void handleAssetPartitionUploadFinished() {
+  if (!assetRawUpload.authorized) {
+    server.send(401, "application/json", "{\"error\":\"unauthorized\"}");
+    return;
+  }
+  if (!assetRawUpload.ok) {
+    if (assetRawUpload.written)
+      debugStorage.finishRawAssetUpdate(kFirmwareVersion);
+    server.send(400, "application/json",
+                "{\"error\":\"" + jsonEscape(assetRawUpload.error) +
+                    "\",\"layout\":" + assetPartitionLayoutJson() + "}");
+    return;
+  }
+  eventLog.add("INFO", "ASSET_UPDATE",
+               "Webasset-Image ueber WLAN geprueft und installiert");
+  server.send(200, "application/json",
+              "{\"ok\":true,\"bytes\":65536,\"sha256\":\"" +
+                  assetRawUpload.expectedSha256 + "\"}");
+}
+
 void resetSignedOta() {
   if (signedOta.updateStarted) Update.abort();
   mbedtls_sha256_free(&signedOta.sha);

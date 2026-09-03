@@ -5,61 +5,52 @@
 #error "Compile this module through main.cpp"
 #endif
 
-void serveEmbeddedAsset(const char *path, const char *contentType,
-                        const uint8_t *gzipData, size_t gzipSize) {
-  if (tryServeDebugAsset(path, contentType, gzipData, gzipSize)) return;
-  server.sendHeader("Content-Encoding", "gzip");
-  server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+void servePartitionAsset(const char *path, const char *contentType) {
+  if (tryServeDebugAsset(path, contentType)) return;
+  server.sendHeader("Cache-Control", "no-store");
   server.sendHeader("X-Content-Type-Options", "nosniff");
-  server.send_P(200, contentType, reinterpret_cast<PGM_P>(gzipData), gzipSize);
+  server.send(503, "application/json",
+              "{\"error\":\"asset_recovery_required\"}");
 }
 
 void setupRoutes() {
-  const char *securityHeaders[] = {"Origin", "Referer", "Authorization",
-                                   "X-CSRF-Token", "Cookie"};
-  server.collectHeaders(securityHeaders, 5);
+  const char *securityHeaders[] = {
+      "Origin", "Referer", "Authorization", "X-CSRF-Token", "Cookie",
+      "X-Asset-SHA256", "X-Asset-Confirm"};
+  server.collectHeaders(securityHeaders, 7);
   server.on("/assets/common.css", HTTP_GET, [] {
-    serveEmbeddedAsset("/assets/common.css", "text/css; charset=utf-8",
-                       kCommonCssGzip, kCommonCssGzipSize);
+    servePartitionAsset("/assets/common.css", "text/css; charset=utf-8");
   });
   server.on("/assets/common.js", HTTP_GET, [] {
-    serveEmbeddedAsset("/assets/common.js",
-                       "application/javascript; charset=utf-8",
-                       kCommonJsGzip, kCommonJsGzipSize);
+    servePartitionAsset("/assets/common.js",
+                        "application/javascript; charset=utf-8");
   });
   server.on("/assets/i18n.js", HTTP_GET, [] {
-    serveEmbeddedAsset("/assets/i18n.js",
-                       "application/javascript; charset=utf-8",
-                       kI18nJsGzip, kI18nJsGzipSize);
+    servePartitionAsset("/assets/i18n.js",
+                        "application/javascript; charset=utf-8");
   });
   server.on("/assets/dashboard.js", HTTP_GET, [] {
-    serveEmbeddedAsset("/assets/dashboard.js",
-                       "application/javascript; charset=utf-8",
-                       kDashboardJsGzip, kDashboardJsGzipSize);
+    servePartitionAsset("/assets/dashboard.js",
+                        "application/javascript; charset=utf-8");
   });
   server.on("/assets/history.js", HTTP_GET, [] {
-    serveEmbeddedAsset("/assets/history.js",
-                       "application/javascript; charset=utf-8",
-                       kHistoryJsGzip, kHistoryJsGzipSize);
+    servePartitionAsset("/assets/history.js",
+                        "application/javascript; charset=utf-8");
   });
   server.on("/assets/maintenance.js", HTTP_GET, [] {
-    serveEmbeddedAsset("/assets/maintenance.js",
-                       "application/javascript; charset=utf-8",
-                       kMaintenanceJsGzip, kMaintenanceJsGzipSize);
+    servePartitionAsset("/assets/maintenance.js",
+                        "application/javascript; charset=utf-8");
   });
   server.on("/assets/diagnostics.js", HTTP_GET, [] {
-    serveEmbeddedAsset("/assets/diagnostics.js",
-                       "application/javascript; charset=utf-8",
-                       kDiagnosticsJsGzip, kDiagnosticsJsGzipSize);
+    servePartitionAsset("/assets/diagnostics.js",
+                        "application/javascript; charset=utf-8");
   });
   server.on("/assets/setup.html", HTTP_GET, [] {
-    serveEmbeddedAsset("/assets/setup.html", "text/html; charset=utf-8",
-                       kSetupHtmlGzip, kSetupHtmlGzipSize);
+    servePartitionAsset("/assets/setup.html", "text/html; charset=utf-8");
   });
   server.on("/assets/setup.js", HTTP_GET, [] {
-    serveEmbeddedAsset("/assets/setup.js",
-                       "application/javascript; charset=utf-8",
-                       kSetupJsGzip, kSetupJsGzipSize);
+    servePartitionAsset("/assets/setup.js",
+                        "application/javascript; charset=utf-8");
   });
   server.on("/", HTTP_GET, handleRoot);
   server.on("/history", HTTP_GET, handleHistoryPage);
@@ -275,6 +266,16 @@ void setupRoutes() {
   server.on("/ir/stop", HTTP_POST, handleIrStop);
   server.on("/system/update", HTTP_POST, handleOtaFinished,
             handleOtaUpload);
+  server.on("/system/restart", HTTP_POST, handleRestart);
+  server.on("/api/v1/asset-partition", HTTP_GET, [] {
+    if (requireAdmin())
+      server.send(200, "application/json", assetPartitionLayoutJson());
+  });
+  server.on("/api/v1/asset-partition/backup", HTTP_GET,
+            handleAssetPartitionBackup);
+  server.on("/api/v1/asset-partition/update", HTTP_POST,
+            handleAssetPartitionUploadFinished,
+            handleAssetPartitionUpload);
   server.on("/system/shutdown", HTTP_POST, handleSafeShutdown);
   server.onNotFound([] {
     if (accessPointMode) {

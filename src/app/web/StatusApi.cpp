@@ -152,6 +152,26 @@ String statusJson() {
           String(debugStorage.assetManifestReady() ? "true" : "false") + ",";
   json += "\"asset_manifest_error\":\"" +
           jsonEscape(debugStorage.assetManifestError()) + "\",";
+  json += "\"asset_partition_mounted\":" +
+          String(debugStorage.ready() ? "true" : "false") + ",";
+  json += "\"asset_manifest_valid\":" +
+          String(debugStorage.assetManifestReady() ? "true" : "false") + ",";
+  json += "\"asset_version\":\"" +
+          jsonEscape(debugStorage.assetVersion()) + "\",";
+  json += "\"asset_source_maintenance_js\":\"" +
+          String(debugStorage.maintenanceAssetSource()) + "\",";
+  json += "\"asset_last_error\":\"" +
+          jsonEscape(debugStorage.assetManifestError()) + "\",";
+  json += "\"asset_fixed_layout_valid\":" +
+          String(debugStorage.fixedLayoutValid() ? "true" : "false") + ",";
+  json += "\"asset_fixed_layout_error\":\"" +
+          jsonEscape(debugStorage.fixedLayoutError()) + "\",";
+  json += "\"asset_observed_label\":\"" +
+          jsonEscape(debugStorage.observedTargetLabel()) + "\",";
+  json += "\"asset_observed_offset\":" +
+          String(debugStorage.observedTargetAddress()) + ",";
+  json += "\"asset_observed_size\":" +
+          String(debugStorage.observedTargetSize()) + ",";
   json += "\"live_history_minutes\":70,";
   json += "\"time_valid\":" + String(time(nullptr) >= 1700000000 ? "true" : "false") + ",";
   json += "\"event_count\":" + String(eventLog.count()) + ",";

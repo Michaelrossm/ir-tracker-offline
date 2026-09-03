@@ -42,6 +42,24 @@ void handleSafeShutdown() {
   esp_deep_sleep_start();
 }
 
+void handleRestart() {
+  if (!requireAdmin()) return;
+  if (server.arg("confirm") != "RESTART") {
+    server.send(400, "application/json",
+                "{\"error\":\"restart_confirmation_required\"}");
+    return;
+  }
+  if (!history.flushPending(HistoryStore::Tier::Minute)) {
+    server.send(500, "application/json",
+                "{\"error\":\"history_flush_failed\"}");
+    return;
+  }
+  eventLog.add("INFO", "RESTART", "Kontrollierter Neustart angefordert");
+  server.send(200, "application/json", "{\"ok\":true}");
+  delay(500);
+  ESP.restart();
+}
+
 void handleMaintenancePage() {
   if (!requireAdmin()) return;
   String body = maintenanceTabs(false);

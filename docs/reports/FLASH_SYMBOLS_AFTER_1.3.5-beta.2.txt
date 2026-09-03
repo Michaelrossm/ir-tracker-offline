@@ -1,0 +1,50 @@
+﻿1107494034 00001880 T spicommon_bus_initialize_io
+1107611394 00001908 t lwip_setsockopt_callback
+1108017660 00002040 T scan_parse_beacon
+1070205232 00002096 b xIsrStack
+1070148412 00002104 D _ZN12_GLOBAL__N_18d0ParserE.lto_priv.643
+1107931592 00002112 t mbedtls_x509_crt_parse_der_internal.part.13
+1107444906 00002126 T (anonymous namespace)::metricsText() [clone .lto_priv.525]
+1107959710 00002194 T hostap_recv_mgmt
+1107821208 00002268 T mbedtls_ssl_read_record
+1107465376 00002286 t (anonymous namespace)::acceptParserEvent(MeterParseStatus, MeterParseResult const&)
+1108084930 00002382 T wdev_funcs_init
+1108029250 00002386 T sta_recv_mgmt
+1107587754 00002458 T wpa_sm_rx_eapol
+1107447032 00002548 T (anonymous namespace)::selfTestJson() [clone .lto_priv.538]
+1107738214 00002690 t _mdns_service_task
+1070213440 00002776 B ftm_initiator
+1107401308 00002778 T (anonymous namespace)::handleSettingsRestore() [clone .lto_priv.499]
+1007626024 00002889 D _ZL23kGithubRootCertificates.lto_priv.584
+1108222206 00003096 T __ieee754_pow
+1107452884 00003168 t D0Parser::parseFrame(MeterData&, bool, bool)
+1107906502 00003202 T mbedtls_internal_sha512_process
+1107640272 00003238 t tcp_receive
+1107409176 00003254 T (anonymous namespace)::handleSetupSave() [clone .lto_priv.490]
+1108020178 00003312 T ieee80211_sta_new_state
+1107883398 00003376 T mbedtls_high_level_strerr
+1108152624 00003382 T _strtod_l
+1108189728 00003402 T _dtoa_r
+1107319934 00003526 T HTTPClient::sendRequest(char const*, unsigned char*, unsigned int) [clone .constprop.58]
+1070218512 00003800 B g_cnxMgr
+1107681964 00003830 T nd6_input
+1107428424 00004002 T (anonymous namespace)::meterReportJson() [clone .lto_priv.537]
+1107367254 00004012 t (anonymous namespace)::setupRoutes()
+1107643510 00004126 T tcp_input
+1007758460 00004840 d ciphersuite_definitions
+1107323460 00004854 T WebServer::_parseRequest(WiFiClient&) [clone .constprop.41]
+1107390668 00005046 T setup()
+1108200470 00005230 T _svfiprintf_r
+1108214644 00005460 T _vfiprintf_r
+1107435348 00005522 T (anonymous namespace)::supportReportText(bool) [clone .lto_priv.536]
+1107732230 00005630 T mdns_parse_packet
+1107835192 00006398 T mbedtls_ssl_handshake_client_step
+1108206130 00006850 T __ssvfiscanf_r
+1107842322 00007100 T mbedtls_ssl_handshake_server_step
+1108168352 00008156 T __ssvfscanf_r
+1107474836 00008546 T (anonymous namespace)::statusJson() [clone .lto_priv.546]
+1108159398 00008910 T _svfprintf_r
+1108179314 00009130 T _vfprintf_r
+1107379048 00010012 T loop()
+1070134972 00013440 D _ZN12_GLOBAL__N_111liveSamplesE.lto_priv.602
+1070167836 00032800 B _ZN12_GLOBAL__N_18eventLogE.lto_priv.427

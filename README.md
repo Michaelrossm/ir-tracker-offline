@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.5-beta.1
+# IR Tracker Offline — 1.3.5-beta.2
 
 **Deutsch** | [English](#english)
 
@@ -43,8 +43,8 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 - automatische UART-/Parser-Wiederherstellung bei ausbleibenden Zählerdaten
 - gesonderter Werksprüfungs-Build mit PASS/FAIL-Prüfung für die eigene LAN-/PoE-Platine
 - Produktions-Build ausschließlich mit lesenden Speicher-/Smart-Home-Schnittstellen
-- vorbereitete, manifest- und SHA-256-geprüfte Webasset-Partition mit sicherem
-  Firmware-Fallback; in dieser Beta zunächst nur für `maintenance.js`
+- alle neun statischen Webassets in einem manifest- und SHA-256-geprüften
+  64-kB-Container; kompakte Recovery-Oberfläche bei fehlenden Assets
 
 ## Schnittstellen und Integration
 
@@ -111,10 +111,10 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 
 ## Projektstatus
 
-Version **1.3.5-beta.1** erprobt die sichere Auslagerung statischer Webassets
-in die vorhandene 64-kB-Partition. Manifest, Firmwareversion, Dateigröße und
-SHA-256 werden geprüft; bei fehlenden oder falschen Assets verwendet die
-Firmware automatisch die eingebettete Oberfläche. Partitionen, History und
+Version **1.3.5-beta.2** lagert alle neun statischen Webassets in einen
+verifizierten Container der vorhandenen 64-kB-Partition aus. Fehlen passende
+Assets, bleibt eine kleine Recovery-Oberfläche für Status, Diagnose, Updates,
+Asset-Wiederherstellung und Neustart erreichbar. Partitionen, History und
 Schnittstellen bleiben unverändert.
 Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
 
@@ -175,6 +175,8 @@ It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/Ope
 - automatic UART/parser recovery when meter data stops
 - separate factory-test build with PASS/FAIL checks for the custom LAN/PoE board
 - production build contains read-only battery and smart-home interfaces only
+- all nine static web assets in a manifest- and SHA-256-verified 64-kB
+  container, with a compact recovery UI if assets are unavailable
 
 ### Interfaces and integration
 
@@ -240,11 +242,11 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 
 ### Project status
 
-Version **1.3.5-beta.1** prototypes safe static web asset storage in the
-existing 64-kB partition. The manifest, firmware version, file size and
-SHA-256 are verified; missing or incompatible assets automatically use the
-embedded UI. Partitions, history and interfaces remain unchanged. Feedback
-about different meters and local integrations is welcome.
+Version **1.3.5-beta.2** moves all nine static web assets into a verified
+container in the existing 64-kB partition. If matching assets are unavailable,
+a compact recovery UI remains accessible for status, diagnostics, updates,
+asset restoration and restart. Partitions, history and interfaces remain
+unchanged. Feedback about different meters and local integrations is welcome.
 
 New USB installations use the `debugfs` label for optional 64-kB debug
 storage. The same firmware automatically detects the previous `coredump` label

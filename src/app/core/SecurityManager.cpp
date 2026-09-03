@@ -27,11 +27,31 @@ String htmlEscape(String value) {
   return value;
 }
 
-bool tryServeDebugAsset(const char *relativePath, const char *mimeType,
-                        const uint8_t *fallback, size_t fallbackSize) {
+bool tryServeDebugAsset(const char *relativePath, const char *mimeType) {
   String compressedPath = relativePath;
   compressedPath += ".gz";
   if (debugStorage.assetManifestReady()) {
+    uint32_t rawOffset = 0;
+    size_t rawSize = 0;
+    if (debugStorage.rawVerifiedAsset(compressedPath.c_str(), rawOffset,
+                                      rawSize)) {
+      server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
+      server.sendHeader("X-Content-Type-Options", "nosniff");
+      server.sendHeader("Content-Encoding", "gzip");
+      server.setContentLength(rawSize);
+      server.send(200, mimeType, "");
+      uint8_t buffer[256];
+      for (size_t position = 0; position < rawSize;
+           position += sizeof(buffer)) {
+        const size_t count = std::min(sizeof(buffer), rawSize - position);
+        if (!debugStorage.readRaw(rawOffset + position, buffer, count) ||
+            server.client().write(buffer, count) != count)
+          return true;
+        delay(0);
+      }
+      debugStorage.noteAssetServed(compressedPath.c_str(), true);
+      return true;
+    }
     File file = debugStorage.openVerifiedAsset(compressedPath.c_str());
     if (file) {
       server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
@@ -39,21 +59,12 @@ bool tryServeDebugAsset(const char *relativePath, const char *mimeType,
       server.sendHeader("Content-Encoding", "gzip");
       server.streamFile(file, mimeType);
       file.close();
+      debugStorage.noteAssetServed(compressedPath.c_str(), true);
       return true;
     }
   }
-  server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
-  server.sendHeader("X-Content-Type-Options", "nosniff");
-  if (strcmp(mimeType, "text/css; charset=utf-8") == 0) {
-    server.sendHeader("Content-Encoding", "gzip");
-    server.send_P(200, PSTR("text/css; charset=utf-8"),
-                  reinterpret_cast<PGM_P>(fallback), fallbackSize);
-    return true;
-  }
-  server.sendHeader("Content-Encoding", "gzip");
-  server.send_P(200, PSTR("application/javascript; charset=utf-8"),
-                reinterpret_cast<PGM_P>(fallback), fallbackSize);
-  return true;
+  debugStorage.noteAssetServed(compressedPath.c_str(), false);
+  return false;
 }
 
 bool safeSingleLine(const String &value, size_t maximumLength) {

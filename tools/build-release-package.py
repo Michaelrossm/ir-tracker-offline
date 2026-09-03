@@ -77,6 +77,9 @@ def main() -> None:
         ROOT / "docs" / "HARDWARE_TEST.md",
         ROOT / "docs" / "ARCHITECTURE.md",
         ROOT / "docs" / "ASSET_PARTITION.md",
+        ROOT / "docs" / "reports" / f"FLASH_REPORT_{version}.md",
+        ROOT / "docs" / "reports" / f"FLASH_SYMBOLS_BEFORE_{version}.txt",
+        ROOT / "docs" / "reports" / f"FLASH_SYMBOLS_AFTER_{version}.txt",
         ROOT / "DEPENDENCIES.lock",
         ROOT / "signing" / "firmware-signing-public.pem",
         ROOT / "tools" / "flash-custom.ps1",
@@ -84,10 +87,13 @@ def main() -> None:
         ROOT / "tools" / "sign-firmware.py",
         ROOT / "tools" / "verify-firmware-package.py",
         ROOT / "tools" / "build-asset-image.py",
+        ROOT / "tools" / "asset_manifest.py",
         ROOT / "tools" / "soak-test.py",
         ROOT / "tests" / "http_functional_test.py",
         ROOT / "tests" / "http_security_test.py",
+        ROOT / "tests" / "test_asset_partition.py",
         release / f"RELEASE_NOTES-{version}.md",
+        release / f"ir-tracker-assets-{version}.report.json",
     ]
     license_files = sorted((ROOT / "licenses").glob("*"))
     files = firmware_files + documents + license_files

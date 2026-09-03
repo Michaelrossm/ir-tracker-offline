@@ -2,39 +2,55 @@
 
 ## Deutsch
 
-Version 1.3.5-beta.1 führt einen sicheren Prototyp für Webassets in der
-optionalen 64-kB-Partition `debugfs` beziehungsweise dem alten Label
-`coredump` ein. Die Firmware prüft Schema, exakte Asset-Version, Dateigröße und
-SHA-256. Nur vollständig geprüfte Dateien werden ausgeliefert. Bei fehlender,
-nicht mountbarer, falscher oder beschädigter Partition wird ohne Absturz der
-eingebettete Firmware-Fallback verwendet.
+Version 1.3.5-beta.2 legt alle neun statischen Webassets in der vorhandenen
+64-kB-Partition `debugfs` beziehungsweise dem alten Label `coredump` ab. Ein
+kompakter Rohdatencontainer funktioniert unabhängig davon,
+ob die bestehende Partition den alten Core-Dump- oder den neuen SPIFFS-Subtype
+trägt. Die Firmware prüft Schema, exakte Asset-Version, Dateigröße und SHA-256.
+Nur vollständig geprüfte Dateien werden ausgeliefert. Bei fehlender, falscher
+oder beschädigter Partition wird ohne Absturz eine kleine, eigenständige
+Recovery-Oberfläche aus der Firmware verwendet. Messung, History und lokale
+Schnittstellen laufen dabei weiter.
 
-Der Prototyp enthält nur `maintenance.js.gz`. Alle neun gzip-Einzeldateien
-belegen zusammen 34.391 Byte, überschreiten als einzelne LittleFS-Dateien wegen
-Block- und Metadatenkosten aber die bestehende 64-kB-Partition. Deshalb wurden
-weder Partitionstabelle noch History verändert.
+Der Container enthält `common.css.gz`, `common.js.gz`, `i18n.js.gz`,
+`dashboard.js.gz`, `history.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
+`setup.html.gz` und `setup.js.gz`. Das Image ist immer exakt 65.536 Byte groß;
+36.360 Byte sind belegt und 29.176 Byte bleiben frei. Weder Partitionstabelle
+noch History werden dafür verändert.
 
 Das signierte IRFW-Paket aktualisiert weiterhin ausschließlich die App. Das
-separate Asset-Image ist nur für kontrollierte USB-Erstinstallationen auf einer
-leeren `debugfs`-Partition vorgesehen. Es darf nicht auf eine bestehende
-`coredump`-Partition geschrieben werden, wenn deren Daten erhalten bleiben
-sollen. Auch ohne Asset-Image bleibt die vollständige Oberfläche verfügbar.
+separate Asset-Image kann kontrolliert per USB oder über die geschützte
+WLAN-Wartungsschnittstelle installiert werden. Vor einem WLAN-Schreibvorgang
+prüft die Firmware die tatsächlich vorhandene Partitionstabelle, verlangt die
+Bestätigung einer geprüften Sicherung und akzeptiert ausschließlich den
+bestehenden Bereich bei `0x2B0000` mit exakt 65.536 Byte. Die Partitionstabelle
+wird dabei weder geschrieben noch verändert. Der bisherige Inhalt muss vor dem
+Überschreiben vollständig gesichert werden. Ohne gültiges Asset-Image bleibt
+die Recovery-Seite mit Status, Diagnose, signiertem Firmwareupdate,
+Asset-Wiederherstellung und Neustart verfügbar.
 
 ## English
 
-Version 1.3.5-beta.1 introduces a safe web asset prototype for the optional
-64-kB partition labelled `debugfs`, with `coredump` retained as the legacy
-label. Firmware verifies the schema, exact asset version, file size and
-SHA-256. Only fully verified files are served. A missing, unmountable,
-incompatible or damaged partition safely falls back to embedded assets.
+Version 1.3.5-beta.2 stores all nine static web assets in the existing 64-kB
+partition labelled `debugfs`, with `coredump` retained as the legacy label. A
+compact raw container works with both the legacy core-dump subtype and
+the newer SPIFFS subtype. Firmware verifies the schema, exact asset version,
+file size and SHA-256. Only fully verified files are served. A missing,
+incompatible or damaged partition safely falls back to a small self-contained
+recovery UI. Meter acquisition, history and local interfaces continue running.
 
-The prototype contains `maintenance.js.gz` only. All nine gzip files total
-34,391 bytes but exceed the existing 64-kB partition as separate LittleFS
-files due to block and metadata overhead. Neither the partition table nor
-history was changed.
+The container holds `common.css.gz`, `common.js.gz`, `i18n.js.gz`,
+`dashboard.js.gz`, `history.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
+`setup.html.gz` and `setup.js.gz`. The image is always exactly 65,536 bytes;
+36,360 bytes are used and 29,176 bytes remain free. Neither the partition table
+nor history is changed.
 
 The signed IRFW package still updates the application only. The separate asset
-image is intended solely for controlled USB first installs onto an empty
-`debugfs` partition. Do not write it over an existing `coredump` partition when
-its contents must be retained. The complete UI remains available without the
-asset image.
+image can be installed in a controlled operation over USB or through the
+protected Wi-Fi maintenance endpoint. Before a Wi-Fi write, firmware validates
+the partition table actually present on the device, requires confirmation of a
+verified backup, and accepts only the existing 65,536-byte region at
+`0x2B0000`. This operation never writes or changes the partition table. Existing
+contents must be backed up completely before they are overwritten. Without a
+valid asset image, the recovery page remains available with status, diagnostics,
+signed firmware update, asset restoration and restart functions.

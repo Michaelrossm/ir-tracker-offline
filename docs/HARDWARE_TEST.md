@@ -17,6 +17,21 @@ Vor Freigabe auf echter Hardware prüfen:
 10. IEC-62056-21/D0 mit einem unterstützten älteren Zähler prüfen.
 11. Mindestens 72 Stunden Dauerlauf ohne Heapwarnung, Neustart oder Messlücke durch die Firmware.
 
+### Ausgeführter Beta-2-Assettest (03.09.2026)
+
+- ESP32-C3 über signiertes WLAN-OTA aktualisiert; Partitionstabelle nicht geschrieben.
+- Tatsächliches Altgerätelayout bestätigt: `coredump`, `0x2B0000`, `0x10000`;
+  History weiterhin bei `0x2C0000`.
+- Alle neun Assets aus dem vollständigen Container geladen;
+  `maintenance.js Quelle: debugfs` bestätigt.
+- Ungültigen 64-kB-Container installiert: Recovery-Seite erschien, kein
+  Bootloop oder Crash, Messwerte, History und lokale APIs blieben erreichbar.
+- Gültigen Container wiederhergestellt und durch vollständiges 64-kB-Readback
+  mit SHA-256 `1490DE1B9096E6AE00DE592AC2D2511E521E941E31C83D690FF60616F845366D`
+  bytegenau bestätigt.
+- 64 gemischte WLAN-Abrufe: 0 Fehler. SML über mehrere Minuten: 0 Parserfehler,
+  CRC-Zähler unverändert, Heap stabil. Dies ersetzt nicht den 72-Stunden-Test.
+
 ## English
 
 Before release, verify on real hardware:
@@ -33,3 +48,18 @@ Before release, verify on real hardware:
 9. Wi-Fi reconnection, Ethernet fallback and the fault LED.
 10. Verify IEC 62056-21/D0 using a supported legacy meter.
 11. At least 72 hours continuous operation without heap warning, reboot or firmware-caused measurement gap.
+
+### Completed beta-2 asset test (2026-09-03)
+
+- Updated the ESP32-C3 through signed Wi-Fi OTA without writing the partition table.
+- Confirmed the actual legacy layout: `coredump`, `0x2B0000`, `0x10000`, with
+  history still at `0x2C0000`.
+- Loaded all nine assets from the complete container and confirmed
+  `maintenance.js Quelle: debugfs`.
+- Installed an invalid 64-kB container: recovery appeared without a bootloop or
+  crash, while measurements, history and local APIs remained reachable.
+- Restored the valid container and confirmed an exact 64-kB readback with
+  SHA-256 `1490DE1B9096E6AE00DE592AC2D2511E521E941E31C83D690FF60616F845366D`.
+- 64 mixed Wi-Fi requests completed with zero failures. SML remained stable for
+  several minutes with zero parser errors, unchanged CRC count and stable heap.
+  This does not replace the 72-hour soak test.

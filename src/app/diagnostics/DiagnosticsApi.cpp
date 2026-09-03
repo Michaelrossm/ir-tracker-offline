@@ -528,6 +528,28 @@ String supportReportText(bool technical) {
   report += "Minimaler Heap: " + String(ESP.getMinFreeHeap()) + " Bytes\n";
   report += "Historie: " + String(history.ready() ? "bereit" : "Fehler") +
             "\n";
+  report += "Asset-Partition: " +
+            String(debugStorage.ready() ? "bereit" : "nicht verfÃ¼gbar") +
+            "\n";
+  report += "Manifest: " +
+            String(debugStorage.assetManifestReady() ? "gÃ¼ltig"
+                                                      : "ungÃ¼ltig") +
+            "\n";
+  report += "Asset-Version: " +
+            String(debugStorage.assetVersion()[0]
+                       ? debugStorage.assetVersion()
+                       : "nicht verfÃ¼gbar") +
+            "\n";
+  report += "maintenance.js Quelle: " +
+            String(!strcmp(debugStorage.maintenanceAssetSource(), "partition")
+                       ? "debugfs"
+                       : "eingebetteter Fallback") +
+            "\n";
+  report += "Letzter Asset-Fehler: " +
+            String(debugStorage.assetManifestError()[0]
+                       ? debugStorage.assetManifestError()
+                       : "keiner") +
+            "\n";
 
   report += "\n=== AUTOMATISCHE BEWERTUNG ===\n";
   report += diagnosis.summary;

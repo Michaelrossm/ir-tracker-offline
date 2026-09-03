@@ -126,7 +126,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.5-beta.1"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.5-beta.2"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -274,20 +274,54 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("tryServeDebugAsset(path, contentType", source)
         self.assertIn('server.sendHeader("Content-Encoding", "gzip")', source)
         self.assertIn("assetManifestReady()", source)
-        self.assertIn("manifest_version_incompatible", DEBUG_STORAGE_SOURCE)
-        self.assertIn("manifest_asset_invalid", DEBUG_STORAGE_SOURCE)
+        self.assertIn('assetManifestError_ = "version_mismatch"', DEBUG_STORAGE_SOURCE)
         self.assertIn("verifyAsset(path.c_str(), expectedSize, expectedSha256)",
                       DEBUG_STORAGE_SOURCE)
+        for error in (
+            "partition_missing", "mount_failed", "manifest_invalid",
+            "version_mismatch", "size_mismatch", "sha256_mismatch",
+            "file_missing",
+        ):
+            self.assertIn(f'"{error}"', DEBUG_STORAGE_SOURCE)
+        for field in (
+            "asset_partition_mounted", "asset_manifest_valid", "asset_version",
+            "asset_source_maintenance_js", "asset_last_error",
+        ):
+            self.assertIn(field, source)
+        self.assertIn("noteAssetServed(compressedPath.c_str(), true)", source)
+        self.assertIn("noteAssetServed(compressedPath.c_str(), false)", source)
+        self.assertIn('return maintenanceServedFromPartition_ ? "partition"',
+                      DEBUG_STORAGE_HEADER)
         asset_builder = (ROOT / "tools/embed_web_assets.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn('PARTITION_ASSETS = {"maintenance.js"}', asset_builder)
+        self.assertIn("PARTITION_ASSETS = set(ASSETS)", asset_builder)
         self.assertIn('"assets_version": firmware_version', asset_builder)
         self.assertIn('hashlib.sha256(compressed).hexdigest()', asset_builder)
-        self.assertIn('serveEmbeddedAsset("/assets/i18n.js"', source)
+        self.assertIn('servePartitionAsset("/assets/i18n.js"', source)
         self.assertIn("board_build.filesystem = littlefs", PLATFORMIO)
         self.assertIn("debugfs,    data, spiffs,  0x2B0000, 0x10000", PARTITIONS)
         self.assertNotIn("coredump,   data, spiffs", PARTITIONS)
+
+    def test_asset_diagnostics_cover_partition_and_all_fallback_causes(self):
+        report = (ROOT / "src/app/diagnostics/DiagnosticsApi.cpp").read_text(
+            encoding="utf-8"
+        )
+        for label in (
+            "Asset-Partition: ", "Manifest: ", "Asset-Version: ",
+            "maintenance.js Quelle: ", "Letzter Asset-Fehler: ",
+        ):
+            self.assertIn(label, report)
+        self.assertIn('"debugfs"', report)
+        self.assertIn('"eingebetteter Fallback"', report)
+        self.assertIn("if (!file) return AssetValidation::FileMissing",
+                      DEBUG_STORAGE_SOURCE)
+        self.assertIn("return AssetValidation::SizeMismatch",
+                      DEBUG_STORAGE_SOURCE)
+        self.assertIn("AssetValidation::Sha256Mismatch",
+                      DEBUG_STORAGE_SOURCE)
+        self.assertIn("assetManifestReady_ = true", DEBUG_STORAGE_SOURCE)
+        self.assertIn("assetManifestError_ = \"\"", DEBUG_STORAGE_SOURCE)
 
     def test_debug_partition_compatibility_contract(self):
         # New labels win, old OTA layouts remain valid, and an absent optional
@@ -296,10 +330,12 @@ class ProjectSecurityTests(unittest.TestCase):
             'return hasDebugfs ? "debugfs" : (hasCoredump ? "coredump" : nullptr);',
             DEBUG_STORAGE_HEADER,
         )
-        self.assertLess(
-            DEBUG_STORAGE_SOURCE.index('findPartition("debugfs")'),
-            DEBUG_STORAGE_SOURCE.index('findPartition("coredump")'),
-        )
+        self.assertIn('strcmp(observedTarget_->label, "debugfs")',
+                      DEBUG_STORAGE_SOURCE)
+        self.assertIn('strcmp(observedTarget_->label, "coredump")',
+                      DEBUG_STORAGE_SOURCE)
+        self.assertIn("loadRawAssetManifest(firmwareVersion)",
+                      DEBUG_STORAGE_SOURCE)
         self.assertIn("if (!partitionLabel_)", DEBUG_STORAGE_SOURCE)
         self.assertIn("State::Missing", DEBUG_STORAGE_SOURCE)
         self.assertIn("debugfs must be preferred", DEBUG_STORAGE_HEADER)
@@ -324,7 +360,7 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertEqual(PLATFORMIO.count("-fno-asynchronous-unwind-tables"), 3)
         self.assertEqual(PLATFORMIO.count("CORE_DEBUG_LEVEL=0"), 2)
         self.assertEqual(PLATFORMIO.count("CORE_DEBUG_LEVEL=1"), 1)
-        self.assertIn("gzip.compress(raw, compresslevel=9, mtime=0)", WEB_ASSET_SCRIPT)
+        self.assertIn("gzip.compress(minified, compresslevel=9, mtime=0)", WEB_ASSET_SCRIPT)
         self.assertIn("serializeJson(document, output)", SOURCE)
         self.assertNotIn("serializeJsonPretty(document, output)", SOURCE)
 
@@ -662,7 +698,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn('\\"energyCounterInT2\\":null', eco)
         self.assertIn("/ 1000U", eco)
         for protected in ('/system/update', '/api/v1/gpio-scan/start',
-                          '/api/v1/history/clear'):
+                          '/api/v1/history/clear',
+                          '/api/v1/asset-partition/backup',
+                          '/api/v1/asset-partition/update'):
             self.assertIn(protected, routes)
 
     def test_neutral_meter_interfaces_share_one_schema(self) -> None:
@@ -711,12 +749,11 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("/maintenance/diagnostics", SOURCE)
         self.assertIn("JSON-API f", SETUP_HTML_SOURCE)
         self.assertIn("Content-Encoding", SOURCE)
-        self.assertIn("kI18nJsGzip", SOURCE)
-        self.assertIn("kCommonCssGzip", SOURCE)
-        self.assertIn("kCommonJsGzip", SOURCE)
-        self.assertIn("kDashboardJsGzip", SOURCE)
-        self.assertIn("kHistoryJsGzip", SOURCE)
-        self.assertIn("kDiagnosticsJsGzip", SOURCE)
+        self.assertIn("String recoveryPage()", SOURCE)
+        self.assertIn("Asset-Image installieren", SOURCE)
+        self.assertIn("servePartitionAsset", SOURCE)
+        self.assertNotIn("kDashboardJsGzip", SOURCE)
+        self.assertNotIn("kHistoryJsGzip", SOURCE)
         self.assertIn("async function loadDiagnosis()", DIAGNOSTICS_JS_SOURCE)
         self.assertNotIn("async function loadDiagnosis()", SOURCE)
         self.assertIn("window.IR_TRACKER_CONFIG={csrfToken:", SOURCE)
@@ -761,27 +798,29 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("Firmwareupdate abgelehnt", ota_handler)
         self.assertNotIn('"application/json"', ota_handler)
 
-    def test_embedded_translation_asset_is_valid_gzip(self) -> None:
+    def test_external_asset_pipeline_is_reproducible_gzip(self) -> None:
         assets = {
-            "kCommonCssGzip": COMMON_CSS_SOURCE,
-            "kCommonJsGzip": COMMON_JS_SOURCE,
-            "kI18nJsGzip": I18N_SOURCE,
-            "kDashboardJsGzip": DASHBOARD_JS_SOURCE,
-            "kHistoryJsGzip": HISTORY_JS_SOURCE,
-            "kMaintenanceJsGzip": MAINTENANCE_JS_SOURCE,
-            "kDiagnosticsJsGzip": DIAGNOSTICS_JS_SOURCE,
-            "kSetupHtmlGzip": SETUP_HTML_SOURCE,
-            "kSetupJsGzip": SETUP_JS_SOURCE,
+            "common.css": COMMON_CSS_SOURCE,
+            "common.js": COMMON_JS_SOURCE,
+            "i18n.js": I18N_SOURCE,
+            "dashboard.js": DASHBOARD_JS_SOURCE,
+            "history.js": HISTORY_JS_SOURCE,
+            "maintenance.js": MAINTENANCE_JS_SOURCE,
+            "diagnostics.js": DIAGNOSTICS_JS_SOURCE,
+            "setup.html": SETUP_HTML_SOURCE,
+            "setup.js": SETUP_JS_SOURCE,
         }
-        for symbol, source in assets.items():
+        for filename, source in assets.items():
             lines = [line.strip() for line in source.replace("\r\n", "\n").split("\n")
                      if line.strip()]
-            separator = "" if symbol == "kDiagnosticsJsGzip" else "\n"
+            separator = "" if filename == "diagnostics.js" else "\n"
             expected = separator.join(lines).encode("utf-8")
             payload = gzip.compress(expected, compresslevel=9, mtime=0)
-            self.assertEqual(gzip.decompress(payload), expected, symbol)
-            self.assertLess(len(payload), len(expected), symbol)
-            self.assertIn(symbol, WEB_ASSET_SCRIPT)
+            self.assertEqual(gzip.decompress(payload), expected, filename)
+            self.assertLess(len(payload), len(expected), filename)
+            self.assertIn(f'"{filename}"', WEB_ASSET_SCRIPT)
+        self.assertIn("PARTITION_ASSETS = set(ASSETS)", WEB_ASSET_SCRIPT)
+        self.assertIn("asset-build-report.json", WEB_ASSET_SCRIPT)
         self.assertIn('Path(env.subst("$BUILD_DIR")) / "generated"', WEB_ASSET_SCRIPT)
         self.assertIn("env.Prepend(CPPPATH", WEB_ASSET_SCRIPT)
         self.assertFalse((ROOT / "src" / "WebAssets.h").exists())
