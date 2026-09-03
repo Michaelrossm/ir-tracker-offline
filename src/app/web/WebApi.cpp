@@ -47,6 +47,11 @@ void setupRoutes() {
                        "application/javascript; charset=utf-8",
                        kMaintenanceJsGzip, kMaintenanceJsGzipSize);
   });
+  server.on("/assets/diagnostics.js", HTTP_GET, [] {
+    serveEmbeddedAsset("/assets/diagnostics.js",
+                       "application/javascript; charset=utf-8",
+                       kDiagnosticsJsGzip, kDiagnosticsJsGzipSize);
+  });
   server.on("/assets/setup.html", HTTP_GET, [] {
     serveEmbeddedAsset("/assets/setup.html", "text/html; charset=utf-8",
                        kSetupHtmlGzip, kSetupHtmlGzipSize);

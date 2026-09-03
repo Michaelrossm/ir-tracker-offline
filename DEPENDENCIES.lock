@@ -3,6 +3,8 @@
 platformio-platform = espressif32@7.0.1
 framework = arduino
 framework-arduinoespressif32 = 3.20017.241212+sha.dcc1105b
+framework-arduinoespressif32-license = LGPL-2.1-or-later
+platformio-espressif32-license = Apache-2.0
 ArduinoJson = 6.21.6
 PubSubClient = 2.8.0
 WebSockets = 2.7.3

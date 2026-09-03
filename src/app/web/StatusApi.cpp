@@ -38,6 +38,17 @@ String statusJson() {
           String(config.modbusTcp ? "true" : "false") + ",";
   json += "\"modbus_tcp_running\":" +
           String(modbusMeterRunning() ? "true" : "false") + ",";
+  json += "\"modbus_connections\":" + String(modbusMeterConnections()) + ",";
+  json += "\"modbus_valid_requests\":" +
+          String(modbusMeterValidRequests()) + ",";
+  json += "\"modbus_invalid_requests\":" +
+          String(modbusMeterInvalidRequests()) + ",";
+  const String modbusLastClient = modbusMeterLastClient();
+  json += "\"modbus_last_client\":";
+  json += modbusLastClient.length()
+              ? "\"" + jsonEscape(modbusLastClient) + "\""
+              : "null";
+  json += ",";
   json += "\"ip\":\"" + primaryNetworkIp() + "\",";
   json += "\"ethernet_initialized\":" +
           String(ethernet.initialized() ? "true" : "false") + ",";
@@ -137,6 +148,10 @@ String statusJson() {
           "\",";
   json += "\"debug_storage_legacy\":" +
           String(debugStorage.usingLegacyLabel() ? "true" : "false") + ",";
+  json += "\"asset_manifest_ready\":" +
+          String(debugStorage.assetManifestReady() ? "true" : "false") + ",";
+  json += "\"asset_manifest_error\":\"" +
+          jsonEscape(debugStorage.assetManifestError()) + "\",";
   json += "\"live_history_minutes\":70,";
   json += "\"time_valid\":" + String(time(nullptr) >= 1700000000 ? "true" : "false") + ",";
   json += "\"event_count\":" + String(eventLog.count()) + ",";

@@ -421,7 +421,17 @@ String meterReportJson() {
   json += ",\"free_heap\":" + String(ESP.getFreeHeap()) +
           ",\"minimum_free_heap\":" + String(ESP.getMinFreeHeap()) +
           ",\"history_ready\":" + String(history.ready() ? "true" : "false") +
-          ",\"mqtt_state\":\"";
+          ",\"modbus_enabled\":" + String(config.modbusTcp ? "true" : "false") +
+          ",\"modbus_running\":" + String(modbusMeterRunning() ? "true" : "false") +
+          ",\"modbus_connections\":" + String(modbusMeterConnections()) +
+          ",\"modbus_valid_requests\":" + String(modbusMeterValidRequests()) +
+          ",\"modbus_invalid_requests\":" + String(modbusMeterInvalidRequests()) +
+          ",\"modbus_last_client\":";
+  const String modbusLastClient = modbusMeterLastClient();
+  json += modbusLastClient.length()
+              ? "\"" + jsonEscape(modbusLastClient) + "\""
+              : "null";
+  json += ",\"mqtt_state\":\"";
   json += !config.mqttHost.length()
               ? "not_configured"
               : (mqtt.connected() ? "connected" : "disconnected");
@@ -493,6 +503,18 @@ String supportReportText(bool technical) {
             diagnosticValue(meter.exportKwh, 6, "kWh") + "\n";
   for (uint8_t phase = 0; phase < 3; ++phase)
     appendDiagnosticPhase(report, phase);
+  if (config.modbusTcp) {
+    report += "\n=== MODBUS TCP ===\n";
+    report += "Status: " + String(modbusMeterRunning() ? "aktiv" : "inaktiv") + "\n";
+    report += "Verbindungen: " + String(modbusMeterConnections()) + "\n";
+    report += "Gültige Requests: " + String(modbusMeterValidRequests()) + "\n";
+    report += "Ungültige Requests: " + String(modbusMeterInvalidRequests()) + "\n";
+    const String modbusLastClient = modbusMeterLastClient();
+    report += "Letzter Client: " +
+              (modbusLastClient.length() ? modbusLastClient
+                                         : "nicht verfügbar") +
+              "\n";
+  }
 
   report += "\n=== NETZWERK ===\n";
   report += "Verbindung: " + String(primaryTransportName()) + "\n";

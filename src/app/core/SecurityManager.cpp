@@ -29,11 +29,14 @@ String htmlEscape(String value) {
 
 bool tryServeDebugAsset(const char *relativePath, const char *mimeType,
                         const uint8_t *fallback, size_t fallbackSize) {
-  if (debugStorage.existsAsset(relativePath)) {
-    File file = debugStorage.openAsset(relativePath, "r");
+  String compressedPath = relativePath;
+  compressedPath += ".gz";
+  if (debugStorage.assetManifestReady()) {
+    File file = debugStorage.openVerifiedAsset(compressedPath.c_str());
     if (file) {
       server.sendHeader("Cache-Control", "public, max-age=86400, immutable");
       server.sendHeader("X-Content-Type-Options", "nosniff");
+      server.sendHeader("Content-Encoding", "gzip");
       server.streamFile(file, mimeType);
       file.close();
       return true;

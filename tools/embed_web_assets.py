@@ -2,6 +2,9 @@
 """Generate reproducible gzip-compressed browser assets for the firmware."""
 
 import gzip
+import hashlib
+import json
+import re
 from pathlib import Path
 
 Import("env")  # type: ignore[name-defined]  # Provided by PlatformIO/SCons.
@@ -9,6 +12,8 @@ Import("env")  # type: ignore[name-defined]  # Provided by PlatformIO/SCons.
 ROOT = Path(env["PROJECT_DIR"])
 GENERATED_DIR = Path(env.subst("$BUILD_DIR")) / "generated"
 TARGET = GENERATED_DIR / "WebAssets.h"
+ASSET_FS_ROOT = GENERATED_DIR / "asset-partition"
+ASSET_FS_DIR = ASSET_FS_ROOT / "assets"
 ASSETS = (
     ("common.css", "kCommonCssGzip"),
     ("common.js", "kCommonJsGzip"),
@@ -16,9 +21,26 @@ ASSETS = (
     ("dashboard.js", "kDashboardJsGzip"),
     ("history.js", "kHistoryJsGzip"),
     ("maintenance.js", "kMaintenanceJsGzip"),
+    ("diagnostics.js", "kDiagnosticsJsGzip"),
     ("setup.html", "kSetupHtmlGzip"),
     ("setup.js", "kSetupJsGzip"),
 )
+# Phase-1 prototype: one external asset proves validation and fallback without
+# changing the 64-kB partition or the history layout.
+PARTITION_ASSETS = {"maintenance.js"}
+
+
+def minify_for_gzip(filename: str, text: str) -> str:
+    """Conservative minification that never rewrites JS/CSS expressions."""
+    lines = [
+        line.strip()
+        for line in text.replace("\r\n", "\n").split("\n")
+        if line.strip()
+    ]
+    # diagnostics.js is authored as complete semicolon/braced statements per
+    # line, therefore joining it cannot change automatic-semicolon behavior.
+    separator = "" if filename == "diagnostics.js" else "\n"
+    return separator.join(lines)
 
 
 def format_bytes(data: bytes) -> str:
@@ -30,11 +52,33 @@ def format_bytes(data: bytes) -> str:
 
 def build(*_args, **_kwargs) -> None:
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    ASSET_FS_DIR.mkdir(parents=True, exist_ok=True)
+    main_source = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
+    version_match = re.search(
+        r'kFirmwareVersion\[\]\s*=\s*"([^"]+)"', main_source
+    )
+    if not version_match:
+        raise RuntimeError("kFirmwareVersion not found")
+    firmware_version = version_match.group(1)
     declarations = []
+    manifest_files = {}
     for filename, symbol in ASSETS:
         source = ROOT / "web" / filename
-        raw = source.read_text(encoding="utf-8").replace("\r\n", "\n").encode("utf-8")
+        raw = minify_for_gzip(
+            filename, source.read_text(encoding="utf-8")
+        ).encode("utf-8")
         compressed = gzip.compress(raw, compresslevel=9, mtime=0)
+        asset_name = filename + ".gz"
+        asset_path = ASSET_FS_DIR / asset_name
+        if filename in PARTITION_ASSETS:
+            if not asset_path.exists() or asset_path.read_bytes() != compressed:
+                asset_path.write_bytes(compressed)
+            manifest_files[asset_name] = {
+                "size": len(compressed),
+                "sha256": hashlib.sha256(compressed).hexdigest(),
+            }
+        elif asset_path.exists():
+            asset_path.unlink()
         declarations.append(
             f"static const uint8_t {symbol}[] PROGMEM = {{\n"
             + format_bytes(compressed)
@@ -49,7 +93,21 @@ def build(*_args, **_kwargs) -> None:
     )
     if not TARGET.exists() or TARGET.read_text(encoding="utf-8") != header:
         TARGET.write_text(header, encoding="utf-8", newline="\n")
+    manifest = {
+        "schema": 1,
+        "assets_version": firmware_version,
+        "files": manifest_files,
+    }
+    manifest_text = json.dumps(
+        manifest, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ) + "\n"
+    manifest_path = ASSET_FS_DIR / "manifest.json"
+    if not manifest_path.exists() or manifest_path.read_text(
+        encoding="utf-8"
+    ) != manifest_text:
+        manifest_path.write_text(manifest_text, encoding="utf-8", newline="\n")
 
 
 build()
 env.Prepend(CPPPATH=[str(GENERATED_DIR)])
+env.Replace(PROJECT_DATA_DIR=str(ASSET_FS_ROOT))

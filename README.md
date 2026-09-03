@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.3
+# IR Tracker Offline — 1.3.5-beta.1
 
 **Deutsch** | [English](#english)
 
@@ -43,6 +43,8 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 - automatische UART-/Parser-Wiederherstellung bei ausbleibenden Zählerdaten
 - gesonderter Werksprüfungs-Build mit PASS/FAIL-Prüfung für die eigene LAN-/PoE-Platine
 - Produktions-Build ausschließlich mit lesenden Speicher-/Smart-Home-Schnittstellen
+- vorbereitete, manifest- und SHA-256-geprüfte Webasset-Partition mit sicherem
+  Firmware-Fallback; in dieser Beta zunächst nur für `maintenance.js`
 
 ## Schnittstellen und Integration
 
@@ -105,15 +107,15 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 - [Markenhinweis / Trademarks](docs/legal/TRADEMARKS.md)
 - [Hinweise zu Drittsoftware / Third-party notices](docs/legal/THIRD_PARTY_NOTICES.md)
 - [Firmware-Architektur / Firmware architecture](docs/ARCHITECTURE.md)
+- [Webasset-Partition / Web asset partition](docs/ASSET_PARTITION.md)
 
 ## Projektstatus
 
-Version **1.3.3** verkleinert die eingebettete Weboberfläche, stabilisiert den
-Eco-Betrieb bei 80/160 MHz und ergänzt einen optionalen, standardmäßig
-deaktivierten WLAN-Modem-Sleep. Die Historienansicht wählt nun automatisch die
-feinste vollständig verfügbare Auflösung und markiert auch Datenlücken am
-Anfang oder Ende eines Zeitraums. Schnittstellen, Messfunktionen und
-Historienkapazitäten bleiben erhalten.
+Version **1.3.5-beta.1** erprobt die sichere Auslagerung statischer Webassets
+in die vorhandene 64-kB-Partition. Manifest, Firmwareversion, Dateigröße und
+SHA-256 werden geprüft; bei fehlenden oder falschen Assets verwendet die
+Firmware automatisch die eingebettete Oberfläche. Partitionen, History und
+Schnittstellen bleiben unverändert.
 Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
 
 Neue USB-Installationen verwenden für den optionalen 64-kB-Debugspeicher das
@@ -234,15 +236,15 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 - [Trademarks](docs/legal/TRADEMARKS.md)
 - [Third-party notices](docs/legal/THIRD_PARTY_NOTICES.md)
 - [Firmware architecture](docs/ARCHITECTURE.md)
+- [Web asset partition](docs/ASSET_PARTITION.md)
 
 ### Project status
 
-Version **1.3.3** reduces the embedded Web UI, stabilizes Eco operation at
-80/160 MHz and adds optional Wi-Fi modem sleep that remains disabled by
-default. History views now select the finest fully available resolution and
-also mark data gaps at the beginning or end of a period. Interfaces, metering
-features and history capacities remain unchanged. Feedback about different
-meters and local integrations is welcome.
+Version **1.3.5-beta.1** prototypes safe static web asset storage in the
+existing 64-kB partition. The manifest, firmware version, file size and
+SHA-256 are verified; missing or incompatible assets automatically use the
+embedded UI. Partitions, history and interfaces remain unchanged. Feedback
+about different meters and local integrations is welcome.
 
 New USB installations use the `debugfs` label for optional 64-kB debug
 storage. The same firmware automatically detects the previous `coredump` label

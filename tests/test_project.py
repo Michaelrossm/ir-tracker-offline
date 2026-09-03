@@ -43,11 +43,12 @@ COMMON_CSS_SOURCE = (ROOT / "web" / "common.css").read_text(encoding="utf-8")
 DASHBOARD_JS_SOURCE = (ROOT / "web" / "dashboard.js").read_text(encoding="utf-8")
 HISTORY_JS_SOURCE = (ROOT / "web" / "history.js").read_text(encoding="utf-8")
 MAINTENANCE_JS_SOURCE = (ROOT / "web" / "maintenance.js").read_text(encoding="utf-8")
+DIAGNOSTICS_JS_SOURCE = (ROOT / "web" / "diagnostics.js").read_text(encoding="utf-8")
 SETUP_JS_SOURCE = (ROOT / "web" / "setup.js").read_text(encoding="utf-8")
 SETUP_HTML_SOURCE = (ROOT / "web" / "setup.html").read_text(encoding="utf-8")
 WEB_RUNTIME_SOURCE = "\n".join(
     (SOURCE, COMMON_JS_SOURCE, COMMON_CSS_SOURCE, DASHBOARD_JS_SOURCE,
-     HISTORY_JS_SOURCE, MAINTENANCE_JS_SOURCE, SETUP_JS_SOURCE,
+    HISTORY_JS_SOURCE, MAINTENANCE_JS_SOURCE, DIAGNOSTICS_JS_SOURCE, SETUP_JS_SOURCE,
      SETUP_HTML_SOURCE)
 )
 HISTORY_SOURCE = (ROOT / "src/app/storage/HistoryStore.cpp").read_text(encoding="utf-8")
@@ -125,7 +126,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.3"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.5-beta.1"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -238,8 +239,8 @@ class ProjectSecurityTests(unittest.TestCase):
             self.assertIn(technical_only, report)
         self.assertIn('report += "Reset-Ursache: " + bootResetReason', report)
         self.assertIn('/api/v1/support-report', SOURCE)
-        self.assertIn("copyReport(false)", SOURCE)
-        self.assertIn("copyReport(true)", SOURCE)
+        self.assertIn("copyReport(false)", WEB_RUNTIME_SOURCE)
+        self.assertIn("copyReport(true)", WEB_RUNTIME_SOURCE)
         for heading in ("IR-Verbindung", "Protokoll", "Messwerte", "System"):
             self.assertIn(heading, SOURCE)
 
@@ -268,9 +269,21 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_debug_partition_is_used_for_optional_frontend_assets(self):
         source = SOURCE
-        self.assertIn("debugStorage.begin()", source)
-        self.assertIn("debugStorage.openAsset(relativePath", source)
+        self.assertIn("debugStorage.begin(kFirmwareVersion)", source)
+        self.assertIn("debugStorage.openVerifiedAsset(compressedPath.c_str())", source)
         self.assertIn("tryServeDebugAsset(path, contentType", source)
+        self.assertIn('server.sendHeader("Content-Encoding", "gzip")', source)
+        self.assertIn("assetManifestReady()", source)
+        self.assertIn("manifest_version_incompatible", DEBUG_STORAGE_SOURCE)
+        self.assertIn("manifest_asset_invalid", DEBUG_STORAGE_SOURCE)
+        self.assertIn("verifyAsset(path.c_str(), expectedSize, expectedSha256)",
+                      DEBUG_STORAGE_SOURCE)
+        asset_builder = (ROOT / "tools/embed_web_assets.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('PARTITION_ASSETS = {"maintenance.js"}', asset_builder)
+        self.assertIn('"assets_version": firmware_version', asset_builder)
+        self.assertIn('hashlib.sha256(compressed).hexdigest()', asset_builder)
         self.assertIn('serveEmbeddedAsset("/assets/i18n.js"', source)
         self.assertIn("board_build.filesystem = littlefs", PLATFORMIO)
         self.assertIn("debugfs,    data, spiffs,  0x2B0000, 0x10000", PARTITIONS)
@@ -667,6 +680,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("kModbusMeterPort = 502", modbus)
         self.assertIn("function != 0x03 && function != 0x04", modbus)
         self.assertIn("isPrivateLocalAddress", modbus)
+        for counter in ("modbusConnectionCount", "modbusValidRequestCount",
+                        "modbusInvalidRequestCount", "modbusLastClient"):
+            self.assertIn(counter, modbus)
         self.assertIn("bool modbusTcp = false", SOURCE)
         for forbidden in ("SPEM-003CEBEU", "shellypro3em-", "everhome_"):
             self.assertNotIn(forbidden, modbus)
@@ -700,6 +716,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("kCommonJsGzip", SOURCE)
         self.assertIn("kDashboardJsGzip", SOURCE)
         self.assertIn("kHistoryJsGzip", SOURCE)
+        self.assertIn("kDiagnosticsJsGzip", SOURCE)
+        self.assertIn("async function loadDiagnosis()", DIAGNOSTICS_JS_SOURCE)
+        self.assertNotIn("async function loadDiagnosis()", SOURCE)
         self.assertIn("window.IR_TRACKER_CONFIG={csrfToken:", SOURCE)
         self.assertNotIn("script.reserve(26000)", SOURCE)
         self.assertNotIn("DASHBOARD_SCRIPT_MEMORY", SOURCE)
@@ -750,11 +769,15 @@ class ProjectSecurityTests(unittest.TestCase):
             "kDashboardJsGzip": DASHBOARD_JS_SOURCE,
             "kHistoryJsGzip": HISTORY_JS_SOURCE,
             "kMaintenanceJsGzip": MAINTENANCE_JS_SOURCE,
+            "kDiagnosticsJsGzip": DIAGNOSTICS_JS_SOURCE,
             "kSetupHtmlGzip": SETUP_HTML_SOURCE,
             "kSetupJsGzip": SETUP_JS_SOURCE,
         }
         for symbol, source in assets.items():
-            expected = source.replace("\r\n", "\n").encode("utf-8")
+            lines = [line.strip() for line in source.replace("\r\n", "\n").split("\n")
+                     if line.strip()]
+            separator = "" if symbol == "kDiagnosticsJsGzip" else "\n"
+            expected = separator.join(lines).encode("utf-8")
             payload = gzip.compress(expected, compresslevel=9, mtime=0)
             self.assertEqual(gzip.decompress(payload), expected, symbol)
             self.assertLess(len(payload), len(expected), symbol)
@@ -794,6 +817,11 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertTrue(
             (ROOT / "docs/legal/THIRD_PARTY_NOTICES.md").exists()
         )
+        notices = (ROOT / "docs/legal/THIRD_PARTY_NOTICES.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Arduino Core for ESP32 — LGPL-2.1-or-later", notices)
+        self.assertTrue((ROOT / "licenses/Arduino-ESP32-LGPL-2.1.txt").exists())
 
     def test_committed_public_key_matches_header(self) -> None:
         pem = (ROOT / "signing" / "firmware-signing-public.pem").read_text()

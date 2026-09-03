@@ -14,6 +14,11 @@ bool modbusMeterServerRunning = false;
 uint8_t modbusRequest[260] = {};
 size_t modbusRequestLength = 0;
 uint32_t modbusClientLastDataMs = 0;
+uint32_t modbusConnectionCount = 0;
+uint32_t modbusValidRequestCount = 0;
+uint32_t modbusInvalidRequestCount = 0;
+IPAddress modbusLastClient;
+bool modbusLastClientKnown = false;
 
 void setModbusU32(uint16_t *registers, const uint16_t address,
                   const uint32_t value) {
@@ -66,6 +71,7 @@ void buildModbusMeterRegisters(uint16_t *registers) {
 }
 
 void sendModbusException(const uint8_t function, const uint8_t exception) {
+  ++modbusInvalidRequestCount;
   uint8_t response[9] = {modbusRequest[0], modbusRequest[1], 0, 0, 0, 3,
                          modbusRequest[6], static_cast<uint8_t>(function | 0x80U),
                          exception};
@@ -95,6 +101,7 @@ void processModbusRequest() {
     sendModbusException(function, 0x02);
     return;
   }
+  ++modbusValidRequestCount;
   uint16_t registers[kModbusRegisterCount];
   buildModbusMeterRegisters(registers);
   uint8_t response[9U + 64U] = {};
@@ -122,6 +129,12 @@ void stopModbusMeterServer() {
 }
 
 bool modbusMeterRunning() { return modbusMeterServerRunning; }
+uint32_t modbusMeterConnections() { return modbusConnectionCount; }
+uint32_t modbusMeterValidRequests() { return modbusValidRequestCount; }
+uint32_t modbusMeterInvalidRequests() { return modbusInvalidRequestCount; }
+String modbusMeterLastClient() {
+  return modbusLastClientKnown ? modbusLastClient.toString() : String();
+}
 
 void manageModbusMeterServer() {
   if (!config.modbusTcp || !networkConnected()) {
@@ -139,6 +152,9 @@ void manageModbusMeterServer() {
     modbusMeterClient = modbusMeterServer.available();
     modbusRequestLength = 0;
     if (!modbusMeterClient) return;
+    ++modbusConnectionCount;
+    modbusLastClient = modbusMeterClient.remoteIP();
+    modbusLastClientKnown = true;
     if (!isPrivateLocalAddress(modbusMeterClient.remoteIP())) {
       modbusMeterClient.stop();
       return;
@@ -155,6 +171,7 @@ void manageModbusMeterServer() {
     const size_t expected =
         6U + (static_cast<size_t>(modbusRequest[4]) << 8U) + modbusRequest[5];
     if (expected < 8U || expected > sizeof(modbusRequest)) {
+      ++modbusInvalidRequestCount;
       modbusMeterClient.stop();
       modbusRequestLength = 0;
       return;
@@ -167,6 +184,7 @@ void manageModbusMeterServer() {
   }
   if (modbusMeterClient &&
       millis() - modbusClientLastDataMs > kModbusClientTimeoutMs) {
+    if (modbusRequestLength) ++modbusInvalidRequestCount;
     modbusMeterClient.stop();
     modbusRequestLength = 0;
   }

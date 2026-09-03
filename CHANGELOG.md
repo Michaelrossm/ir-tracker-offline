@@ -2,6 +2,42 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.5-beta.1 — 2026-09-03
+
+### Deutsch
+
+- Der optionale Modbus-TCP-Dienst zählt Verbindungen sowie gültige und
+  ungültige Requests und zeigt den letzten Client in Status-API, Diagnose und
+  Supportbericht. Die Werte bleiben ausschließlich im RAM.
+- Das JavaScript der Diagnoseansicht wird als eigenes, reproduzierbar
+  minifiziertes und gzip-komprimiertes Webasset eingebettet. Dadurch sinkt der
+  Flashbedarf, ohne die Bedienoberfläche funktional zu verändern.
+- Der Lizenzhinweis für den Arduino Core for ESP32 wurde auf
+  LGPL-2.1-or-later korrigiert und der zugehörige Lizenztext ergänzt.
+- Die bestehende `DebugStorage`-Abstraktion prüft optionale Webassets jetzt über
+  Manifest, exakte Firmwareversion, Dateigröße und SHA-256. Fehlende, falsche
+  oder beschädigte Assets verwenden automatisch den eingebetteten Fallback.
+- Der 64-kB-Prototyp lagert ausschließlich `maintenance.js.gz` aus. Alle neun
+  Einzeldateien benötigen wegen LittleFS-Block- und Metadatenkosten mehr als
+  64 kB; History und Partitionsgrößen wurden deshalb nicht verändert.
+
+### English
+
+- The optional Modbus TCP service counts connections, valid and invalid
+  requests, and exposes the last client through the status API, diagnostics,
+  and support report. These values remain in RAM only.
+- The diagnostics JavaScript is embedded as a separate, reproducibly minified
+  and gzip-compressed web asset, reducing flash use without changing UI
+  behavior.
+- The Arduino Core for ESP32 license notice was corrected to
+  LGPL-2.1-or-later and the corresponding license text was added.
+- The existing `DebugStorage` abstraction now verifies optional web assets by
+  manifest, exact firmware version, file size and SHA-256. Missing,
+  incompatible or damaged assets automatically use the embedded fallback.
+- The 64-kB prototype externalizes `maintenance.js.gz` only. All nine separate
+  files exceed 64 kB once LittleFS block and metadata overhead are included,
+  so history and partition sizes remain unchanged.
+
 ## 1.3.3 — 2026-09-02
 
 ### Deutsch

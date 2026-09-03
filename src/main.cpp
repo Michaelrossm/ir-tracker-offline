@@ -57,7 +57,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.3";
+constexpr char kFirmwareVersion[] = "1.3.5-beta.1";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -330,6 +330,10 @@ struct ApatorUnlockJob {
 #include "app/web/WebUi.cpp"
 
 bool modbusMeterRunning();
+uint32_t modbusMeterConnections();
+uint32_t modbusMeterValidRequests();
+uint32_t modbusMeterInvalidRequests();
+String modbusMeterLastClient();
 void manageModbusMeterServer();
 
 #include "app/meter/MeterManager.cpp"
@@ -433,7 +437,7 @@ void setup() {
                   ethernet.lastError().c_str());
   }
   normalizeHardwarePins();
-  const bool debugStorageReady = debugStorage.begin();
+  const bool debugStorageReady = debugStorage.begin(kFirmwareVersion);
   if (!debugStorageReady) {
     Serial.printf("Debug storage disabled (%s): using embedded web assets\n",
                   debugStorage.lastError());

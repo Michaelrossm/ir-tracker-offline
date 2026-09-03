@@ -30,6 +30,10 @@ Der Dienst verwendet das bereits zentral normalisierte `MeterData`-Modell.
 REST, MQTT, Shelly-, EcoTracker- und Modbus-Ausgabe interpretieren Messwerte
 daher nicht unabhängig voneinander.
 
+Die Status-API stellt die flüchtigen Diagnosewerte `modbus_connections`,
+`modbus_valid_requests`, `modbus_invalid_requests` und `modbus_last_client`
+bereit. Die Zähler werden nur im RAM gehalten und beim Neustart zurückgesetzt.
+
 ## English
 
 IR Tracker can optionally operate as a **read-only Modbus TCP meter source** on
@@ -57,3 +61,7 @@ and timestamps use `0xFFFFFFFF`. Register 1 is authoritative for availability.
 The service consumes the existing normalized `MeterData` model. REST, MQTT,
 Shelly-compatible, EcoTracker-compatible, and Modbus output therefore do not
 maintain separate interpretations of a reading.
+
+The status API exposes the volatile diagnostics `modbus_connections`,
+`modbus_valid_requests`, `modbus_invalid_requests`, and `modbus_last_client`.
+Counters are held in RAM only and reset on restart.

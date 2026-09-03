@@ -58,6 +58,7 @@ def main() -> None:
         release / f"ir-tracker-custom-{version}.irfw",
         release / f"ir-tracker-custom-{version}-usb.bin",
         release / f"partitions-{version}.bin",
+        release / f"ir-tracker-assets-{version}.bin",
     ]
     documents = [
         ROOT / "README.md",
@@ -75,12 +76,14 @@ def main() -> None:
         ROOT / "docs" / "RELEASE_CHECKLIST.md",
         ROOT / "docs" / "HARDWARE_TEST.md",
         ROOT / "docs" / "ARCHITECTURE.md",
+        ROOT / "docs" / "ASSET_PARTITION.md",
         ROOT / "DEPENDENCIES.lock",
         ROOT / "signing" / "firmware-signing-public.pem",
         ROOT / "tools" / "flash-custom.ps1",
         ROOT / "tools" / "restore-original.ps1",
         ROOT / "tools" / "sign-firmware.py",
         ROOT / "tools" / "verify-firmware-package.py",
+        ROOT / "tools" / "build-asset-image.py",
         ROOT / "tools" / "soak-test.py",
         ROOT / "tests" / "http_functional_test.py",
         ROOT / "tests" / "http_security_test.py",
@@ -99,6 +102,10 @@ def main() -> None:
     if firmware_files[2].stat().st_size != 3072:
         raise SystemExit(
             "Unerwartete Partitionstabellengröße. / Unexpected partition-table size."
+        )
+    if firmware_files[3].stat().st_size != 0x10000:
+        raise SystemExit(
+            "Unerwartete Asset-Partitionsgröße. / Unexpected asset-partition size."
         )
     sums = "\n".join(
         f"{hashlib.sha256(path.read_bytes()).hexdigest().upper()}  {path.name}"

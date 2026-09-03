@@ -18,11 +18,14 @@ class DebugStorage {
     return hasDebugfs ? "debugfs" : (hasCoredump ? "coredump" : nullptr);
   }
 
-  bool begin();
+  bool begin(const char *firmwareVersion = nullptr);
   bool existsAsset(const char *relativePath);
   File openAsset(const char *relativePath, const char *mode = "r");
+  File openVerifiedAsset(const char *relativePath);
 
   bool ready() const { return state_ == State::Ready; }
+  bool assetManifestReady() const { return assetManifestReady_; }
+  const char *assetManifestError() const { return assetManifestError_; }
   bool usingLegacyLabel() const { return legacyLabel_; }
   State state() const { return state_; }
   const char *partitionLabel() const { return partitionLabel_; }
@@ -32,12 +35,19 @@ class DebugStorage {
   bool safeRelativePath(const char *relativePath) const;
   String preferredPath(const char *relativePath) const;
   String legacyPath(const char *relativePath) const;
+  bool loadAssetManifest(const char *firmwareVersion);
+  int8_t knownAssetIndex(const char *relativePath) const;
+  bool verifyAsset(const char *relativePath, size_t expectedSize,
+                   const char *expectedSha256);
 
   fs::LittleFSFS filesystem_;
   State state_ = State::NotStarted;
   const char *partitionLabel_ = nullptr;
   const char *lastError_ = "not_started";
   bool legacyLabel_ = false;
+  bool assetManifestReady_ = false;
+  const char *assetManifestError_ = "not_checked";
+  uint16_t verifiedAssetMask_ = 0;
 };
 
 // DE: Kompilierbare Vertragspruefung: neues Label zuerst, altes als Rueckfall,
