@@ -555,7 +555,7 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertEqual(SOURCE.count("data-theme-var="), 0)
         self.assertIn("const themes=[['#07100c','#10231a','#22c55e']", theme_script)
         self.assertIn("r.setProperty('--accent',themes[n][2])", theme_script)
-        self.assertIn("themeKey='irtracker-theme-v3'", theme_script)
+        self.assertIn("themeKey='irtracker-theme-v2'", theme_script)
         self.assertIn("localStorage.getItem(themeKey)", theme_script)
         self.assertIn("localStorage.setItem(themeKey,n)", theme_script)
         self.assertNotIn("fetch(", theme_script)
