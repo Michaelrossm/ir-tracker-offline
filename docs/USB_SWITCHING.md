@@ -11,7 +11,7 @@ Get-CimInstance Win32_SerialPort | Select-Object DeviceID,Name
 Custom-Firmware installieren:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\flash-custom.ps1 -Port COM3 -Version 1.3.5-beta.2 -ConfirmCustomOnly ERASE-ORIGINAL
+powershell -ExecutionPolicy Bypass -File .\tools\flash-custom.ps1 -Port COM3 -Version 1.3.5-beta.3 -ConfirmCustomOnly ERASE-ORIGINAL
 ```
 
 Vollständiges persönliches Original wiederherstellen:
@@ -33,7 +33,7 @@ Get-CimInstance Win32_SerialPort | Select-Object DeviceID,Name
 Install custom firmware:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\flash-custom.ps1 -Port COM3 -Version 1.3.5-beta.2 -ConfirmCustomOnly ERASE-ORIGINAL
+powershell -ExecutionPolicy Bypass -File .\tools\flash-custom.ps1 -Port COM3 -Version 1.3.5-beta.3 -ConfirmCustomOnly ERASE-ORIGINAL
 ```
 
 Restore the complete personal original image:

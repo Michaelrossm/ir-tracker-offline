@@ -21,7 +21,7 @@ button{background:var(--accent);font-weight:700;cursor:pointer;margin-top:18px;b
 button:hover{filter:brightness(1.12)}
 button:active{transform:scale(.98)}
 .danger{background:#8b2929;border-color:#bb4545}
-.secondary{background:#183526;border-color:#365e45}
+.secondary{background:var(--card);border-color:var(--muted)}
 code{word-break:break-all}
 details{margin-top:24px}
 fieldset{border:1px solid #355540;border-radius:12px;margin:18px 0;padding:16px}

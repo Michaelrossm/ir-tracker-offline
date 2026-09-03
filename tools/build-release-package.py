@@ -78,8 +78,6 @@ def main() -> None:
         ROOT / "docs" / "ARCHITECTURE.md",
         ROOT / "docs" / "ASSET_PARTITION.md",
         ROOT / "docs" / "reports" / f"FLASH_REPORT_{version}.md",
-        ROOT / "docs" / "reports" / f"FLASH_SYMBOLS_BEFORE_{version}.txt",
-        ROOT / "docs" / "reports" / f"FLASH_SYMBOLS_AFTER_{version}.txt",
         ROOT / "DEPENDENCIES.lock",
         ROOT / "signing" / "firmware-signing-public.pem",
         ROOT / "tools" / "flash-custom.ps1",

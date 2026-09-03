@@ -13,7 +13,7 @@
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\flash-custom.ps1 `
-  -Port COM3 -Version 1.3.5-beta.2 -ConfirmCustomOnly ERASE-ORIGINAL
+  -Port COM3 -Version 1.3.5-beta.3 -ConfirmCustomOnly ERASE-ORIGINAL
 ```
 
 Der Vorgang installiert die Custom-Firmware redundant. Er darf nur mit vorhandener persönlicher Originalsicherung ausgeführt werden.
@@ -21,10 +21,10 @@ Der Vorgang installiert die Custom-Firmware redundant. Er darf nur mit vorhanden
 ### Signiertes WLAN-Update
 
 Unter **Wartung → Custom-Firmware aktualisieren** zuerst ausschließlich
-`ir-tracker-custom-1.3.5-beta.2.irfw` laden. Signatur und ESP32-Image werden vor
+`ir-tracker-custom-1.3.5-beta.3.irfw` laden. Signatur und ESP32-Image werden vor
 Aktivierung geprüft. Danach über die Recovery-/Wartungsseite eine Sicherung des
 vorhandenen 64-kB-Bereichs herunterladen und
-`ir-tracker-assets-1.3.5-beta.2.bin` installieren. Einstellungen, Historie und
+`ir-tracker-assets-1.3.5-beta.3.bin` installieren. Einstellungen, Historie und
 der offene Minutenblock bleiben erhalten; vorheriges Backup bleibt trotzdem
 empfohlen.
 
@@ -56,7 +56,7 @@ Dies überschreibt bewusst den vollständigen Flash und entfernt Custom-Firmware
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\flash-custom.ps1 `
-  -Port COM3 -Version 1.3.5-beta.2 -ConfirmCustomOnly ERASE-ORIGINAL
+  -Port COM3 -Version 1.3.5-beta.3 -ConfirmCustomOnly ERASE-ORIGINAL
 ```
 
 The operation installs the custom firmware redundantly and may only be run when a personal original backup exists.
@@ -64,10 +64,10 @@ The operation installs the custom firmware redundantly and may only be run when 
 ### Signed Wi-Fi update
 
 Under **Maintenance → Update custom firmware**, first upload only
-`ir-tracker-custom-1.3.5-beta.2.irfw`. Its signature and ESP32 image are
+`ir-tracker-custom-1.3.5-beta.3.irfw`. Its signature and ESP32 image are
 verified before activation. Then download a backup of the existing 64-kB region
 through the recovery/maintenance page and install
-`ir-tracker-assets-1.3.5-beta.2.bin`. Settings, history and the current minute
+`ir-tracker-assets-1.3.5-beta.3.bin`. Settings, history and the current minute
 block are preserved; a backup is still recommended.
 
 A normal OTA update does not replace the partition table. Devices carrying the

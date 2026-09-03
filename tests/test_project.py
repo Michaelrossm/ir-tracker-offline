@@ -126,7 +126,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.5-beta.2"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.5-beta.3"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -419,7 +419,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "if (!responseClient.connected()) return false",
             "localStorage.getItem(themeKey)",
             "localStorage.setItem(themeKey,n)",
-            "const themes=[['#07100c','#10231a']",
+            "const themes=[['#07100c','#10231a','#22c55e']",
             "target=dFrom+f*(dTo-dFrom)",
             "class='chart-section'",
             "width:min(100%,1800px)",
@@ -553,7 +553,9 @@ class ProjectSecurityTests(unittest.TestCase):
     def test_theme_stays_browser_local(self) -> None:
         theme_script = COMMON_JS_SOURCE
         self.assertEqual(SOURCE.count("data-theme-var="), 0)
-        self.assertIn("const themes=[['#07100c','#10231a']", theme_script)
+        self.assertIn("const themes=[['#07100c','#10231a','#22c55e']", theme_script)
+        self.assertIn("r.setProperty('--accent',themes[n][2])", theme_script)
+        self.assertIn("themeKey='irtracker-theme-v3'", theme_script)
         self.assertIn("localStorage.getItem(themeKey)", theme_script)
         self.assertIn("localStorage.setItem(themeKey,n)", theme_script)
         self.assertNotIn("fetch(", theme_script)
@@ -711,6 +713,8 @@ class ProjectSecurityTests(unittest.TestCase):
         routes = (ROOT / "src/app/web/WebApi.cpp").read_text(encoding="utf-8")
         modbus = (ROOT / "src/app/network/ModbusMeterServer.cpp").read_text(
             encoding="utf-8")
+        interfaces = (ROOT / "src/app/web/SettingsApi.cpp").read_text(
+            encoding="utf-8")
         self.assertIn('\\"schema\\":\\"irtracker.meter.v1\\"', integration)
         self.assertIn('server.on("/api/v1/meter"', routes)
         self.assertIn("neutralMeterJson()", mqtt)
@@ -718,6 +722,8 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("kModbusMeterPort = 502", modbus)
         self.assertIn("function != 0x03 && function != 0x04", modbus)
         self.assertIn("isPrivateLocalAddress", modbus)
+        self.assertIn("<h2>Modbus TCP</h2>", interfaces)
+        self.assertIn("docs/MODBUS.md", interfaces)
         for counter in ("modbusConnectionCount", "modbusValidRequestCount",
                         "modbusInvalidRequestCount", "modbusLastClient"):
             self.assertIn(counter, modbus)

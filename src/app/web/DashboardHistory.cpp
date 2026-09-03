@@ -44,7 +44,7 @@ void handleRoot() {
       <div id='dashDateNav' class='date-nav'>
         <label><span id='dashAnchorLabel'>Zeitpunkt</span><input id='dashDate' type='datetime-local' step='3600'></label>
         <button id='dashPrev' type='button' class='secondary'>← Vorheriger Zeitraum</button>
-        <button id='dashToday' type='button'>Aktueller Zeitraum</button>
+        <button id='dashToday' type='button' class='secondary'>Aktueller Zeitraum</button>
         <button id='dashNext' type='button' class='secondary'>Nächster Zeitraum →</button>
         <label class='date-slider'><span id='dashSliderLabel'>Schnell zurückspulen</span>
           <input id='dashDaysBack' type='range' min='0' max='730' value='0'>
@@ -107,14 +107,14 @@ void handleHistoryPage() {
         <div id='modeBox'><label>Leistungsanzeige</label><select id='metric'>
           <option value='avg'>Durchschnitt</option><option value='minmax'>Durchschnitt mit Min/Max</option>
         </select></div>
-        <button id='zoomIn' type='button' title='Hineinzoomen'>Zoom +</button>
-        <button id='zoomOut' type='button' title='Herauszoomen'>Zoom −</button>
-        <button id='reset' type='button'>Gesamt</button>
+        <button id='zoomIn' class='secondary' type='button' title='Hineinzoomen'>Zoom +</button>
+        <button id='zoomOut' class='secondary' type='button' title='Herauszoomen'>Zoom −</button>
+        <button id='reset' class='secondary' type='button'>Gesamt</button>
       </div>
       <div id='historyDateNav' class='date-nav' hidden>
         <label><span id='historyAnchorLabel'>Zeitpunkt</span><input id='historyDate' type='datetime-local' step='3600'></label>
         <button id='historyPrev' type='button' class='secondary'>← Vorheriger Zeitraum</button>
-        <button id='historyToday' type='button'>Aktueller Zeitraum</button>
+        <button id='historyToday' type='button' class='secondary'>Aktueller Zeitraum</button>
         <button id='historyNext' type='button' class='secondary'>Nächster Zeitraum →</button>
         <label class='date-slider'><span id='historySliderLabel'>Schnell zurückspulen</span>
           <input id='historyDaysBack' type='range' min='0' max='730' value='0'>

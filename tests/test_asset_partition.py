@@ -16,7 +16,7 @@ from asset_manifest import (  # noqa: E402
 )
 
 
-VERSION = "1.3.5-beta.2"
+VERSION = "1.3.5-beta.3"
 PAYLOAD = b"verified maintenance javascript"
 PAYLOADS = {
     name: (PAYLOAD if name == "maintenance.js.gz" else

@@ -1,8 +1,8 @@
 (function(){
 const cfg=window.IR_TRACKER_CONFIG||{};
 if(location.href.includes('@'))history.replaceState(null,'',location.pathname+location.search+location.hash);
-const themes=[['#07100c','#10231a'],['#07111a','#102333'],['#000000','#171717']],themeKey='irtracker-theme-v2';
-function setTheme(n,save){n=(+n||0)%themes.length;document.documentElement.style.setProperty('--bg',themes[n][0]);document.documentElement.style.setProperty('--card',themes[n][1]);if(save)try{localStorage.setItem(themeKey,n)}catch(e){}return n}
+const themes=[['#07100c','#10231a','#22c55e'],['#07111a','#102333','#3b82c4'],['#000000','#171717','#737d78']],themeKey='irtracker-theme-v3';
+function setTheme(n,save){n=(+n||0)%themes.length;const r=document.documentElement.style;r.setProperty('--bg',themes[n][0]);r.setProperty('--card',themes[n][1]);r.setProperty('--accent',themes[n][2]);if(save)try{localStorage.setItem(themeKey,n)}catch(e){}return n}
 window.irGapAfter=(values,index,step)=>index>0&&values[index].ts-values[index-1].ts>step*1.5;
 window.irGapEdges=(values,from,to,step)=>{if(!values.length)return{leading:false,trailing:false};const expectedEnd=Math.min(to,Math.floor(Date.now()/1000));return{leading:values[0].ts-from>step*1.5,trailing:expectedEnd-values.at(-1).ts>step*1.5}};
 window.irGapCount=(values,from,to,step)=>{const edges=irGapEdges(values,from,to,step);return values.reduce((count,_,index)=>count+(irGapAfter(values,index,step)?1:0),0)+(edges.leading?1:0)+(edges.trailing?1:0)};

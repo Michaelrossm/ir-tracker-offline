@@ -2,7 +2,7 @@
 
 ## Deutsch
 
-Version 1.3.5-beta.2 legt alle neun statischen Webassets in der vorhandenen
+Version 1.3.5-beta.3 legt alle neun statischen Webassets in der vorhandenen
 64-kB-Partition `debugfs` beziehungsweise dem alten Label `coredump` ab. Ein
 kompakter Rohdatencontainer funktioniert unabhängig davon,
 ob die bestehende Partition den alten Core-Dump- oder den neuen SPIFFS-Subtype
@@ -31,7 +31,7 @@ Asset-Wiederherstellung und Neustart verfügbar.
 
 ## English
 
-Version 1.3.5-beta.2 stores all nine static web assets in the existing 64-kB
+Version 1.3.5-beta.3 stores all nine static web assets in the existing 64-kB
 partition labelled `debugfs`, with `coredump` retained as the legacy label. A
 compact raw container works with both the legacy core-dump subtype and
 the newer SPIFFS subtype. Firmware verifies the schema, exact asset version,

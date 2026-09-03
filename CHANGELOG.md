@@ -2,6 +2,16 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.5-beta.3 — 2026-09-03
+
+- Modbus TCP ist nun auch auf der Schnittstellen-Seite sichtbar und verlinkt
+  direkt auf das dokumentierte, nur lesende Registerschema.
+- Farbschemata setzen jetzt auch die Akzentfarbe. Zeitraum- und Zoomnavigation
+  verwenden einheitliche, kartenbasierte Schaltflächen ohne verbliebene feste
+  grüne Aktionsfläche.
+- Release-Ausgabe bereinigt: nur die zusammengehörigen Artefakte der aktuellen
+  Beta verbleiben lokal im erzeugten Release-Ordner.
+
 ## 1.3.5-beta.2 — 2026-09-03
 
 ### Deutsch
