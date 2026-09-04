@@ -126,7 +126,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.5-beta.3"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.5"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -394,7 +394,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "mqttNetwork.connect(config.mqttHost.c_str(), config.mqttPort, 250)",
             "mqttRetryMs * 2",
             "mqtt.setSocketTimeout(1)",
-            "dBindCursor(pc);dBindCursor(dc)",
+            "dBindCursor(pc)",
             "dCursorPinned=true",
             "cursorPinned=true",
             "if(e.detail===1){dCursorPinned=false",
@@ -426,11 +426,15 @@ class ProjectSecurityTests(unittest.TestCase):
             "height:clamp(390px,55vh,680px)",
             "height:clamp(350px,42vh,560px)",
             "px.lineWidth=2",
-            "dx.lineWidth=2",
+            "gridImport=power.map",
+            "gridExport=power.map",
+            "dVisible={power:true,import:true,export:true,gap:true}",
             "cx.lineWidth=2",
             "calendarHistoryQuery",
             "now - static_cast<uint32_t>(since)",
             "window.irGapEdges",
+            "current=to>=now-step",
+            "Math.max(step*2.5,15)",
             "irGapCount(dd,dFrom,dTo,dStep())",
             "irGapCount(raw,rangeFrom,rangeTo,expectedStep())",
             "requestedHistoryAnchor",
@@ -544,6 +548,12 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertNotIn("kIdleCpuMhz", SOURCE)
         self.assertNotIn("setCpuFrequencyMhz(40", SOURCE)
         self.assertNotIn('requestCpuBoost("dashboard_summary")', SOURCE)
+        self.assertIn("id='powerLegend'", WEB_RUNTIME_SOURCE)
+        for series in ("power", "import", "export", "gap"):
+            self.assertIn(f"data-series='{series}'", WEB_RUNTIME_SOURCE)
+        self.assertIn("button.setAttribute('aria-pressed'", WEB_RUNTIME_SOURCE)
+        self.assertNotIn("id='dashChart'", WEB_RUNTIME_SOURCE)
+        self.assertNotIn("id='dashChartWrap'", WEB_RUNTIME_SOURCE)
         self.assertIn("Record records_[kCapacity]", EVENT_HEADER)
         self.assertIn("static constexpr uint32_t kCapacity = 256", EVENT_HEADER)
         self.assertIn("bool setPersistence(bool persistent)", EVENT_HEADER)

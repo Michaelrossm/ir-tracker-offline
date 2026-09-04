@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.5-beta.3
+# IR Tracker Offline — 1.3.5
 
 **Deutsch** | [English](#english)
 
@@ -111,7 +111,7 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 
 ## Projektstatus
 
-Version **1.3.5-beta.3** lagert alle neun statischen Webassets in einen
+Version **1.3.5** lagert alle neun statischen Webassets in einen
 verifizierten Container der vorhandenen 64-kB-Partition aus. Fehlen passende
 Assets, bleibt eine kleine Recovery-Oberfläche für Status, Diagnose, Updates,
 Asset-Wiederherstellung und Neustart erreichbar. Partitionen, History und
@@ -242,7 +242,7 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 
 ### Project status
 
-Version **1.3.5-beta.3** moves all nine static web assets into a verified
+Version **1.3.5** moves all nine static web assets into a verified
 container in the existing 64-kB partition. If matching assets are unavailable,
 a compact recovery UI remains accessible for status, diagnostics, updates,
 asset restoration and restart. Partitions, history and interfaces remain

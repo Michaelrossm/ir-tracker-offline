@@ -2,6 +2,31 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.5 — 2026-09-04
+
+### Deutsch
+
+- Dashboard-Verlauf vereinheitlicht: Gesamtleistung, Netzbezug und Einspeisung
+  nutzen jetzt ein gemeinsames Diagramm, dieselbe Zeitachse und dieselbe
+  vorhandene Historienquelle.
+- Die Legende schaltet jede Messreihe sowie die Ausfallmarkierungen einzeln ein
+  und aus. Netzbezug und Einspeisung werden aus dem Vorzeichen der gemessenen
+  Netzleistung gebildet und können daher nicht gleichzeitig auftreten.
+- Der noch offene aktuelle Historienblock erhält eine kurze Toleranzzeit. So
+  erscheint beim automatischen Nachladen keine vorübergehende falsche
+  Ausfallmarkierung; echte und abgeschlossene Datenlücken bleiben sichtbar.
+
+### English
+
+- Unified the dashboard chart: total power, grid import and grid export now use
+  one chart, one time axis and the same existing history source.
+- Legend entries toggle each series and outage markers independently. Grid
+  import and export are derived from the sign of measured grid power and
+  therefore cannot occur at the same time.
+- Added a short grace period for the still-open current history bucket. This
+  prevents transient false outage markers during automatic refresh while real
+  and completed gaps remain visible.
+
 ## 1.3.5-beta.3 — 2026-09-03
 
 - Modbus TCP ist nun auch auf der Schnittstellen-Seite sichtbar und verlinkt

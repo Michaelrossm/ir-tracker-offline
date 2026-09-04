@@ -35,6 +35,8 @@ legend{color:var(--green);font-weight:700}
 .actions form{margin:0}
 .actions button{width:auto;margin:0}
 .legend-item{display:flex;align-items:center;gap:8px;min-width:0;padding:6px 10px;border:1px solid #294735;border-radius:999px;background:var(--card);font-weight:650}
+.legend-toggle{width:auto;margin:0;color:var(--text);cursor:pointer}
+.legend-toggle[aria-pressed=false]{opacity:.45;text-decoration:line-through}
 .swatch{width:24px;height:5px;border-radius:3px;flex:0 0 auto}
 .chart-wrap{position:relative;height:clamp(390px,55vh,680px);margin-top:10px;touch-action:none}
 .chart-wrap canvas{width:100%;height:100%}

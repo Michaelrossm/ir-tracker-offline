@@ -39,7 +39,7 @@ void handleRoot() {
           <option value='hour'>1 Stunde</option><option value='day' selected>Kalendertag (00:00–24:00)</option>
           <option value='week'>Kalenderwoche (Mo–So)</option><option value='month'>Kalendermonat</option>
           <option value='year'>Kalenderjahr</option>
-        </select></div><select id='dashSeries' hidden><option value='energy' selected>Bezug und Einspeisung</option></select>
+        </select></div>
       </div>
       <div id='dashDateNav' class='date-nav'>
         <label><span id='dashAnchorLabel'>Zeitpunkt</span><input id='dashDate' type='datetime-local' step='3600'></label>
@@ -59,21 +59,17 @@ void handleRoot() {
       <div id='dashLoading' class='loading'><span class='spinner'></span>Diagramm wird geladen …</div>
       <div id='dashEmpty' class='empty-state' hidden>Noch keine historischen Werte vorhanden.</div>
       <section class='chart-section'>
-        <h2>Leistung</h2>
+        <h2>Leistung, Netzbezug und Einspeisung</h2>
         <div id='powerChartWrap' class='dashboard-chart' hidden>
           <canvas id='powerChart' aria-label='Leistungsverlauf'></canvas>
           <div id='powerTip' class='tooltip'></div>
         </div>
-        <div class='legend-row'><span class='legend-item'><i class='swatch' style='background:#63e68b'></i>Gesamtleistung</span>
-        <span class='legend-item'><i class='swatch' style='background:var(--chart-gap)'></i>Datenlücke / Ausfall</span></div>
-      </section>
-      <section class='chart-section'>
-        <h2>Netzbezug und Einspeisung</h2>
-        <div id='dashChartWrap' class='dashboard-chart' hidden>
-          <canvas id='dashChart' aria-label='Messwertverlauf'></canvas>
-          <div id='dashTip' class='tooltip'></div>
+        <div id='powerLegend' class='legend-row'>
+          <button type='button' class='legend-item legend-toggle' data-series='power' aria-pressed='true'><i class='swatch' style='background:var(--chart-power)'></i>Gesamtleistung</button>
+          <button type='button' class='legend-item legend-toggle' data-series='import' aria-pressed='true'><i class='swatch' style='background:var(--chart-import)'></i>Netzbezug</button>
+          <button type='button' class='legend-item legend-toggle' data-series='export' aria-pressed='true'><i class='swatch' style='background:var(--chart-export)'></i>Einspeisung</button>
+          <button type='button' class='legend-item legend-toggle' data-series='gap' aria-pressed='true'><i class='swatch' style='background:var(--chart-gap)'></i>Datenlücke / Ausfall</button>
         </div>
-        <div id='dashLegend' class='legend-row'></div>
       </section>
       <p id='dashSummary' class='chart-note muted'></p>
       <p class='chart-note muted'>Messbalken: Maus oder Finger bewegen.
