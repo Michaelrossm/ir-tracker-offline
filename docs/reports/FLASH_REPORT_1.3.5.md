@@ -34,3 +34,11 @@ Partitionsaufteilung wurden nicht verändert.
 All existing features and interfaces remain available. Dashboard, history,
 MQTT, Modbus TCP, Shelly/EcoTracker compatibility, OTA and the partition layout
 remain unchanged.
+
+Der Dashboard-Hotfix verändert weder App-Flash noch statisches RAM. Das
+aktualisierte `dashboard.js` bleibt innerhalb derselben 256-Byte-Ausrichtung;
+der Asset-Container belegt daher weiterhin 36.360 Byte.
+
+The dashboard hotfix changes neither application flash nor static RAM. The
+updated `dashboard.js` remains within the same 256-byte alignment, so the asset
+container still uses 36,360 bytes.

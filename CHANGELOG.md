@@ -15,6 +15,11 @@
 - Der noch offene aktuelle Historienblock erhält eine kurze Toleranzzeit. So
   erscheint beim automatischen Nachladen keine vorübergehende falsche
   Ausfallmarkierung; echte und abgeschlossene Datenlücken bleiben sichtbar.
+- Ein stilles automatisches Nachladen bricht eine bereits laufende
+  Historienabfrage nicht mehr ab. Dadurch beendet das Dashboard auch bei
+  langsameren oder umfangreichen Zeiträumen zuverlässig den Ladezustand.
+- Die Einspeisereihe wird außerhalb tatsächlicher Einspeisung als
+  durchgehende 0-W-Linie dargestellt, statt abschnittsweise zu verschwinden.
 
 ### English
 
@@ -26,6 +31,10 @@
 - Added a short grace period for the still-open current history bucket. This
   prevents transient false outage markers during automatic refresh while real
   and completed gaps remain visible.
+- Silent automatic refresh no longer aborts an already running history request,
+  so loading completes reliably for slower or larger time ranges.
+- The export series now remains visible as a continuous 0 W line whenever no
+  export is taking place instead of disappearing for those sections.
 
 ## 1.3.5-beta.3 — 2026-09-03
 
