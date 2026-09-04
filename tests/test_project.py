@@ -126,7 +126,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.5"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.6"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -145,7 +145,7 @@ class ProjectSecurityTests(unittest.TestCase):
             loop_source.index("manageMqtt();"),
         )
         self.assertIn("const auto readRange", HISTORY_SOURCE)
-        self.assertIn("tier.capacity - first", HISTORY_SOURCE)
+        self.assertIn("tier.capacity - startSlot", HISTORY_SOURCE)
 
     def test_meter_diagnosis_reuses_one_evaluation_for_all_outputs(self):
         diagnostics = (ROOT / "src/app/diagnostics/DiagnosticsApi.cpp").read_text(
@@ -442,6 +442,9 @@ class ProjectSecurityTests(unittest.TestCase):
             "irGapCount(raw,rangeFrom,rangeTo,expectedStep())",
             "requestedHistoryAnchor",
             "historyTierSeconds",
+            "kHistoryJsonChunkBytes = 12 * 1024",
+            "formatNumberOrNull(importValue",
+            "(streamedRecords & 0x3fU) == 0",
             "id='dashDaysBack'",
             "id='historyDaysBack'",
             "Kalendertag (00:00–24:00)",
@@ -542,6 +545,12 @@ class ProjectSecurityTests(unittest.TestCase):
             self.assertIn(marker, WEB_RUNTIME_SOURCE)
         self.assertIn("lastWrittenBucket == bucket", HISTORY_SOURCE)
         self.assertIn("validRecord(record)", HISTORY_SOURCE)
+        self.assertIn("while (binarySearchValid && low < high)", HISTORY_SOURCE)
+        self.assertIn("record.timestamp > until", HISTORY_SOURCE)
+        self.assertIn("(first + logical) % tier.capacity", HISTORY_SOURCE)
+        self.assertIn("(recordsRead & 0x7fU) == 0", HISTORY_SOURCE)
+        self.assertIn("kReadBatchRecords = 32", HISTORY_SOURCE)
+        self.assertEqual(HISTORY_SOURCE.count("delay(0)"), 2)
         self.assertIn("kMaximumPlausiblePowerW", HISTORY_HEADER)
         self.assertIn("file.size() < requiredSize", HISTORY_SOURCE)
         self.assertNotIn("server.enableCORS(true)", SOURCE)

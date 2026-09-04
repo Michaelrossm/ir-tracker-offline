@@ -188,41 +188,99 @@ bool HistoryStore::forEach(Tier tierId, uint32_t since, uint32_t until,
   TierState &tier = state(tierId);
   File file = LittleFS.open(tier.path, "r");
   if (!file) return false;
+  if (!tier.header.count || since > until) {
+    file.close();
+    return true;
+  }
   const uint32_t first =
       tier.header.count < tier.capacity ? 0 : tier.header.writeIndex;
   bool callbackStopped = false;
+  uint32_t recordsRead = 0;
+
+  const auto readLogical = [&](uint32_t logical, Record &record) {
+    const uint32_t slot = (first + logical) % tier.capacity;
+    const size_t offset =
+        2 * sizeof(Header) + static_cast<size_t>(slot) * sizeof(Record);
+    return file.seek(offset, SeekSet) &&
+           file.read(reinterpret_cast<uint8_t *>(&record), sizeof(record)) ==
+               sizeof(record);
+  };
+
+  // Records are written chronologically. Locate the first possible match on
+  // logical ring positions, independent of the physical wrap point. If a
+  // damaged search probe is encountered, retain the previous safe behavior
+  // and scan sequentially from the oldest record so plausibility filtering is
+  // never bypassed.
+  uint32_t startLogical = 0;
+  bool binarySearchValid = since != 0;
+  uint32_t low = 0;
+  uint32_t high = tier.header.count;
+  while (binarySearchValid && low < high) {
+    const uint32_t middle = low + (high - low) / 2;
+    Record record;
+    if (!readLogical(middle, record)) {
+      file.close();
+      return false;
+    }
+    ++recordsRead;
+    if (!validRecord(record)) {
+      binarySearchValid = false;
+      break;
+    }
+    if (record.timestamp < since)
+      low = middle + 1;
+    else
+      high = middle;
+  }
+  if (binarySearchValid) startLogical = low;
+
   const auto readRange = [&](uint32_t startSlot, uint32_t recordCount) {
     if (!recordCount) return true;
     const size_t offset =
         2 * sizeof(Header) +
         static_cast<size_t>(startSlot) * sizeof(Record);
     if (!file.seek(offset, SeekSet)) return false;
-    for (uint32_t i = 0; i < recordCount; ++i) {
-      Record record;
-      if (file.read(reinterpret_cast<uint8_t *>(&record), sizeof(record)) !=
-          sizeof(record))
+    constexpr uint32_t kReadBatchRecords = 32;
+    Record records[kReadBatchRecords];
+    uint32_t remainingRecords = recordCount;
+    while (remainingRecords) {
+      const uint32_t batchRecords =
+          std::min(remainingRecords, kReadBatchRecords);
+      const size_t batchBytes = static_cast<size_t>(batchRecords) * sizeof(Record);
+      if (file.read(reinterpret_cast<uint8_t *>(records), batchBytes) !=
+          batchBytes)
         return false;
-      if (!validRecord(record)) {
-        delay(0);
-        continue;
+      remainingRecords -= batchRecords;
+      for (uint32_t i = 0; i < batchRecords; ++i) {
+        const Record &record = records[i];
+        ++recordsRead;
+        if (!validRecord(record)) {
+          if ((recordsRead & 0x7fU) == 0) delay(0);
+          continue;
+        }
+        if (record.timestamp > until) {
+          callbackStopped = true;
+          return true;
+        }
+        if (record.timestamp >= since && record.timestamp <= until &&
+            !callback(record)) {
+          callbackStopped = true;
+          return true;
+        }
+        if ((recordsRead & 0x7fU) == 0) delay(0);
       }
-      if (record.timestamp >= since && record.timestamp <= until &&
-          !callback(record)) {
-        callbackStopped = true;
-        return true;
-      }
-      delay(0);
     }
     return true;
   };
 
-  // A ring is physically stored in at most two contiguous regions. Preserve
-  // chronological callback order while reducing count seeks to at most two.
-  const uint32_t firstRange =
-      std::min(tier.header.count, tier.capacity - first);
-  bool ok = readRange(first, firstRange);
-  if (ok && !callbackStopped && firstRange < tier.header.count)
-    ok = readRange(0, tier.header.count - firstRange);
+  // Starting at the lower bound, the relevant logical tail is physically
+  // stored in at most two contiguous regions. Preserve chronological order.
+  const uint32_t remaining = tier.header.count - startLogical;
+  const uint32_t startSlot = (first + startLogical) % tier.capacity;
+  const uint32_t firstRange = std::min(remaining, tier.capacity - startSlot);
+  bool ok = readRange(startSlot, firstRange);
+  if (ok && !callbackStopped && firstRange < remaining)
+    ok = readRange(0, remaining - firstRange);
   file.close();
   return ok;
 }

@@ -57,7 +57,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.5";
+constexpr char kFirmwareVersion[] = "1.3.6";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =

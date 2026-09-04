@@ -2,6 +2,42 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.6 — 2026-09-04
+
+### Deutsch
+
+- Tages- und andere begrenzte Historienabfragen starten per binärer Suche an
+  der ersten relevanten logischen Ringposition und beenden das Lesen direkt
+  hinter dem angeforderten Zeitraum.
+- Der benötigte Ringbereich wird bei physischem Wrap weiterhin chronologisch
+  und in höchstens zwei Bereichen gelesen; Datensätze werden in 32er-Blöcken
+  statt über einzelne Dateizugriffe verarbeitet.
+- Socketstatus-Prüfungen erfolgen periodisch sowie an den Sendeblöcken statt
+  für jeden einzelnen Datensatz. Das bestehende JSON wird weiterhin gestreamt,
+  jetzt in größeren Blöcken und mit deutlich weniger temporären Strings.
+- Auf dem WLAN-Testtracker sank die aktuelle Tagesabfrage von rund 10,6 s auf
+  0,59–0,69 s. Gestern mit 1.441 Datensätzen benötigte 0,95 s; Woche, Monat,
+  Jahr und leere Bereiche blieben darunter.
+- History-Dateiformat, Reihenfolge, CRC-/Plausibilitätsprüfung, API, Auflösung,
+  Kapazitäten, OTA- und Partitionstabelle sind unverändert.
+
+### English
+
+- Day and other bounded history queries now use a binary search to start at
+  the first relevant logical ring position and stop immediately after the
+  requested time range.
+- The required ring range remains chronological across physical wrap and is
+  read in at most two regions; records are processed in blocks of 32 instead
+  of individual file reads.
+- Socket state is checked periodically and at output chunks instead of once
+  per record. The existing JSON remains streamed, now in larger chunks and
+  with substantially fewer temporary strings.
+- On the Wi-Fi test tracker, the current day query dropped from about 10.6 s
+  to 0.59–0.69 s. Yesterday with 1,441 records took 0.95 s; week, month, year
+  and empty ranges were faster.
+- History file format, order, CRC/plausibility checks, API, resolution,
+  capacities, OTA and partition layout remain unchanged.
+
 ## 1.3.5 — 2026-09-04
 
 ### Deutsch

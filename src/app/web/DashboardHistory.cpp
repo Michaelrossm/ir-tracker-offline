@@ -435,20 +435,36 @@ void handleHistoryJson() {
                      String(query.until) + ",\"step\":" +
                      String(historyTierSeconds(query.tier)) + ",\"values\":[");
   bool first = true;
+  uint32_t streamedRecords = 0;
   String chunk;
-  chunk.reserve(1200);
+  // Keep the response streamed, but avoid dozens of tiny chunked HTTP writes.
+  // A day currently contains up to 1,440 minute records; batching roughly
+  // 12 KiB keeps transient heap use bounded while cutting TCP round trips.
+  constexpr size_t kHistoryJsonChunkBytes = 12 * 1024;
+  chunk.reserve(kHistoryJsonChunkBytes + 256);
   history.forEach(query.tier, query.since, query.until,
                    [&](const HistoryStore::Record &record) {
-                     if (!responseClient.connected()) return false;
+                     if ((streamedRecords & 0x3fU) == 0 &&
+                         !responseClient.connected())
+                       return false;
+                     ++streamedRecords;
                      if (!first) chunk += ',';
-                    first = false;
-                    chunk += "{\"ts\":" + String(record.timestamp) +
-                             ",\"avg\":" + String(record.averageW, 2) +
-                             ",\"min\":" + String(record.minimumW, 2) +
-                             ",\"max\":" + String(record.maximumW, 2) +
-                             ",\"import\":" + numberOrNull(record.importKwh, 4) +
-                             ",\"export\":" + numberOrNull(record.exportKwh, 4) + "}";
-                     if (chunk.length() > 900) {
+                     first = false;
+                     char importValue[24];
+                     char exportValue[24];
+                     char recordJson[176];
+                     formatNumberOrNull(importValue, sizeof(importValue),
+                                        record.importKwh, 4);
+                     formatNumberOrNull(exportValue, sizeof(exportValue),
+                                        record.exportKwh, 4);
+                     snprintf(recordJson, sizeof(recordJson),
+                              "{\"ts\":%lu,\"avg\":%.2f,\"min\":%.2f,"
+                              "\"max\":%.2f,\"import\":%s,\"export\":%s}",
+                              static_cast<unsigned long>(record.timestamp),
+                              record.averageW, record.minimumW, record.maximumW,
+                              importValue, exportValue);
+                     chunk += recordJson;
+                     if (chunk.length() >= kHistoryJsonChunkBytes) {
                        server.sendContent(chunk);
                        chunk = "";
                        if (!responseClient.connected()) return false;

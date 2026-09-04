@@ -5,8 +5,19 @@
 #error "Compile this module through main.cpp"
 #endif
 
+void formatNumberOrNull(char *destination, size_t capacity, double value,
+                        uint8_t decimals = 3) {
+  if (!capacity) return;
+  if (std::isfinite(value))
+    snprintf(destination, capacity, "%.*f", static_cast<int>(decimals), value);
+  else
+    strlcpy(destination, "null", capacity);
+}
+
 String numberOrNull(double value, uint8_t decimals = 3) {
-  return std::isfinite(value) ? String(value, static_cast<unsigned int>(decimals)) : "null";
+  char formatted[40];
+  formatNumberOrNull(formatted, sizeof(formatted), value, decimals);
+  return String(formatted);
 }
 
 uint32_t valueAgeSeconds(uint32_t updatedMs) {
