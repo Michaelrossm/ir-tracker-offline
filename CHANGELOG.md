@@ -20,6 +20,8 @@
   Jahr und leere Bereiche blieben darunter.
 - History-Dateiformat, Reihenfolge, CRC-/Plausibilitätsprüfung, API, Auflösung,
   Kapazitäten, OTA- und Partitionstabelle sind unverändert.
+- Dashboard-Hotfix: Die orange Einspeisereihe verwendet stets die positive
+  Einspeiseleistung und bleibt bei 0 W als sichtbare gerade Linie erhalten.
 
 ### English
 
@@ -37,6 +39,8 @@
   and empty ranges were faster.
 - History file format, order, CRC/plausibility checks, API, resolution,
   capacities, OTA and partition layout remain unchanged.
+- Dashboard hotfix: the orange export series always uses positive export power
+  and remains visible as a straight 0 W line.
 
 ## 1.3.5 — 2026-09-04
 
