@@ -169,6 +169,12 @@ void handleSetup() {
   setupConfig += config.adaptiveWifiPower ? "true" : "false";
   setupConfig += F(",\"wifi_ps\":");
   setupConfig += config.wifiPowerSave ? "true" : "false";
+  setupConfig += F(",\"wifi_schedule_off\":");
+  setupConfig += config.wifiScheduleOff ? "true" : "false";
+  setupConfig += F(",\"wifi_off_start\":");
+  setupConfig += String(config.wifiScheduleStartMinutes);
+  setupConfig += F(",\"wifi_off_end\":");
+  setupConfig += String(config.wifiScheduleEndMinutes);
   setupConfig += F(",\"gh_check\":");
   setupConfig += config.githubUpdateCheck ? "true" : "false";
   setupConfig += F(",\"gh_auto\":");
@@ -188,6 +194,19 @@ void handleSetup() {
   server.send(200, "text/html; charset=utf-8",
               page("Einstellungen", body, setupConfig,
                    String("/assets/setup.js?v=") + kFirmwareVersion));
+}
+
+int parseClockMinutes(const String &value) {
+  if (value.length() != 5 || value[2] != ':' || value[0] < '0' ||
+      value[0] > '9' || value[1] < '0' || value[1] > '9' ||
+      value[3] < '0' || value[3] > '9' || value[4] < '0' ||
+      value[4] > '9')
+    return -1;
+  const uint8_t hour = static_cast<uint8_t>((value[0] - '0') * 10 +
+                                             (value[1] - '0'));
+  const uint8_t minute = static_cast<uint8_t>((value[3] - '0') * 10 +
+                                               (value[4] - '0'));
+  return hour < 24 && minute < 60 ? hour * 60 + minute : -1;
 }
 
 void handleSetupSave() {
@@ -214,6 +233,12 @@ void handleSetupSave() {
   const String requestedAdminPassword = server.arg("admin_pass");
   const String requestedAdminPasswordConfirm =
       server.arg("admin_pass_confirm");
+  const int wifiScheduleStart = parseClockMinutes(server.arg("wifi_off_start"));
+  const int wifiScheduleEnd = parseClockMinutes(server.arg("wifi_off_end"));
+  if (wifiScheduleStart < 0 || wifiScheduleEnd < 0) {
+    server.send(400, "application/json", "{\"error\":\"invalid_wifi_schedule\"}");
+    return;
+  }
   if (requestedAdminPassword.length() > 64) {
     server.send(400, "application/json",
                 "{\"error\":\"admin_password_too_long\"}");
@@ -252,15 +277,13 @@ void handleSetupSave() {
   config.snifferEnabled = server.hasArg("sniffer");
   config.bridgeEnabled = server.hasArg("bridge");
 #endif
-  config.apiAccess = constrain(server.arg("api_access").toInt(), 0, 2);
-  config.storageCompatibilityMode = server.hasArg("storage_compat");
-  config.modbusTcp = server.hasArg("modbus_tcp");
-  const bool previousEventPersistence = config.persistEventLog;
-  config.persistEventLog = server.hasArg("event_flash");
   config.ecoMode = server.hasArg("eco_mode");
   config.ecoLedOff = server.hasArg("eco_led_off");
   config.adaptiveWifiPower = server.hasArg("wifi_power_auto");
   config.wifiPowerSave = server.hasArg("wifi_ps");
+  config.wifiScheduleOff = server.hasArg("wifi_schedule_off");
+  config.wifiScheduleStartMinutes = static_cast<uint16_t>(wifiScheduleStart);
+  config.wifiScheduleEndMinutes = static_cast<uint16_t>(wifiScheduleEnd);
   config.githubUpdateCheck = server.hasArg("gh_check");
   config.githubAutoInstall = server.hasArg("gh_auto");
   if (config.githubAutoInstall) config.githubUpdateCheck = true;
@@ -270,22 +293,7 @@ void handleSetupSave() {
   config.meterProtocol = static_cast<MeterProtocol>(
       constrain(server.arg("meter_protocol").toInt(), 0, 3));
   config.baud = server.arg("baud").toInt();
-  config.mqttHost = server.arg("mqtt_host");
-  config.mqttHost.trim();
-  config.mqttPort = constrain(server.arg("mqtt_port").toInt(), 1, 65535);
-  config.mqttUser = server.arg("mqtt_user");
-  String newMqttPassword = server.arg("mqtt_pass");
-  if (newMqttPassword.length() || !config.mqttHost.length()) config.mqttPassword = newMqttPassword;
-  config.homeAssistantDiscovery = server.hasArg("ha_disc");
   saveConfig();
-  if (previousEventPersistence != config.persistEventLog &&
-      !eventLog.setPersistence(config.persistEventLog)) {
-    config.persistEventLog = previousEventPersistence;
-    saveConfig();
-    server.send(500, "application/json",
-                "{\"error\":\"event_log_persistence_change_failed\"}");
-    return;
-  }
   eventLog.add("INFO", "SETTINGS_SAVE", "Einstellungen gespeichert");
   server.send(200, "text/html; charset=utf-8",
               page("Gespeichert", "<p>Der Tracker startet jetzt neu.</p>"));

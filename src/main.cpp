@@ -57,7 +57,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.6";
+constexpr char kFirmwareVersion[] = "1.3.7";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -140,6 +140,9 @@ struct Config {
   bool ecoLedOff = true;
   bool adaptiveWifiPower = true;
   bool wifiPowerSave = false;
+  bool wifiScheduleOff = true;
+  uint16_t wifiScheduleStartMinutes = 0;
+  uint16_t wifiScheduleEndMinutes = 5 * 60;
   bool githubUpdateCheck = true;
   bool githubAutoInstall = false;
 } config;
@@ -190,6 +193,7 @@ uint32_t wifiTxPowerErrors = 0;
 uint32_t wifiModeErrors = 0;
 bool wifiTxPowerRuntimeFault = false;
 bool wifiMinModemSleepActive = false;
+bool wifiScheduledOff = false;
 
 #include "app/network/NetworkStatus.cpp"
 

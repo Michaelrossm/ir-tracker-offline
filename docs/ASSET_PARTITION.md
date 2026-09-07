@@ -2,18 +2,20 @@
 
 ## Deutsch
 
-Version 1.3.6 legt alle neun statischen Webassets in der vorhandenen
+Version 1.3.7 legt alle acht aktuellen statischen Webassets in der vorhandenen
 64-kB-Partition `debugfs` beziehungsweise dem alten Label `coredump` ab. Ein
 kompakter Rohdatencontainer funktioniert unabhängig davon,
 ob die bestehende Partition den alten Core-Dump- oder den neuen SPIFFS-Subtype
-trägt. Die Firmware prüft Schema, exakte Asset-Version, Dateigröße und SHA-256.
+trägt. Die Firmware prüft Schema, benötigte Dateien, Dateigröße und SHA-256.
+Ein älterer Container bleibt verwendbar, wenn sämtliche aktuell benötigten
+Dateien geprüft vorhanden sind; zusätzliche frühere Dateien werden ignoriert.
 Nur vollständig geprüfte Dateien werden ausgeliefert. Bei fehlender, falscher
 oder beschädigter Partition wird ohne Absturz eine kleine, eigenständige
 Recovery-Oberfläche aus der Firmware verwendet. Messung, History und lokale
 Schnittstellen laufen dabei weiter.
 
 Der Container enthält `common.css.gz`, `common.js.gz`, `i18n.js.gz`,
-`dashboard.js.gz`, `history.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
+`dashboard.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
 `setup.html.gz` und `setup.js.gz`. Das Image ist immer exakt 65.536 Byte groß;
 36.360 Byte sind belegt und 29.176 Byte bleiben frei. Weder Partitionstabelle
 noch History werden dafür verändert.
@@ -31,16 +33,18 @@ Asset-Wiederherstellung und Neustart verfügbar.
 
 ## English
 
-Version 1.3.6 stores all nine static web assets in the existing 64-kB
+Version 1.3.7 stores all eight current static web assets in the existing 64-kB
 partition labelled `debugfs`, with `coredump` retained as the legacy label. A
 compact raw container works with both the legacy core-dump subtype and
-the newer SPIFFS subtype. Firmware verifies the schema, exact asset version,
-file size and SHA-256. Only fully verified files are served. A missing,
+the newer SPIFFS subtype. Firmware verifies the schema, required files, file
+size and SHA-256. An older container remains usable when all currently
+required files are verified; retired extra files are ignored. Only fully
+verified files are served. A missing,
 incompatible or damaged partition safely falls back to a small self-contained
 recovery UI. Meter acquisition, history and local interfaces continue running.
 
 The container holds `common.css.gz`, `common.js.gz`, `i18n.js.gz`,
-`dashboard.js.gz`, `history.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
+`dashboard.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
 `setup.html.gz` and `setup.js.gz`. The image is always exactly 65,536 bytes;
 36,360 bytes are used and 29,176 bytes remain free. Neither the partition table
 nor history is changed.

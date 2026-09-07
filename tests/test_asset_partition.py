@@ -107,9 +107,12 @@ class AssetPartitionScenarioTests(unittest.TestCase):
         self.manifest.write_text("{invalid", encoding="utf-8")
         self.assert_fallback("manifest_invalid")
 
-    def test_wrong_version_uses_fallback(self):
+    def test_older_verified_version_stays_usable(self):
         self.write_manifest(version="0.0.0-test")
-        self.assert_fallback("version_mismatch")
+        result = validate_asset_tree(self.temp, VERSION)
+        self.assertTrue(result.valid)
+        self.assertEqual(result.version, "0.0.0-test")
+        self.assertEqual(result.maintenance_source, "partition")
 
     def test_wrong_size_uses_fallback(self):
         self.write_manifest(size=len(PAYLOAD) + 1)

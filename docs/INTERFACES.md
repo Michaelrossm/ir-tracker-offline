@@ -22,7 +22,7 @@ Weitere lokale Systeme: ioBroker, Node-RED, openHAB und jede Anwendung mit HTTP/
 
 ### Speicher-Kompatibilitätsmodus und Erkennung
 
-Der Modus ist standardmäßig ausgeschaltet. Wird er in den Einstellungen
+Der Modus ist standardmäßig ausgeschaltet. Wird er unter **Schnittstellen**
 aktiviert, sind ausschließlich `/v1/json`, `/shelly`, `/status`, `/emeter/0`
 und die oben genannten nur lesenden RPC-Methoden aus privaten lokalen Netzen
 ohne Anmeldung erreichbar. OTA, Einstellungen, GPIO, Diagnose, Historienänderung
@@ -68,7 +68,7 @@ Other local systems include ioBroker, Node-RED, openHAB and any HTTP/JSON or MQT
 
 ### Storage compatibility mode and discovery
 
-This mode is disabled by default. When enabled in Settings, only `/v1/json`,
+This mode is disabled by default. When enabled under **Interfaces**, only `/v1/json`,
 `/shelly`, `/status`, `/emeter/0`, and the read-only RPC methods listed above
 are available without authentication from private local networks. OTA,
 settings, GPIO, diagnostics, history mutation, and every other write operation

@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.6
+# IR Tracker Offline — 1.3.7
 
 **Deutsch** | [English](#english)
 
@@ -43,7 +43,7 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 - automatische UART-/Parser-Wiederherstellung bei ausbleibenden Zählerdaten
 - gesonderter Werksprüfungs-Build mit PASS/FAIL-Prüfung für die eigene LAN-/PoE-Platine
 - Produktions-Build ausschließlich mit lesenden Speicher-/Smart-Home-Schnittstellen
-- alle neun statischen Webassets in einem manifest- und SHA-256-geprüften
+- alle acht aktuellen statischen Webassets in einem manifest- und SHA-256-geprüften
   64-kB-Container; kompakte Recovery-Oberfläche bei fehlenden Assets
 
 ## Schnittstellen und Integration
@@ -111,11 +111,13 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 
 ## Projektstatus
 
-Version **1.3.6** lagert alle neun statischen Webassets in einen
-verifizierten Container der vorhandenen 64-kB-Partition aus. Fehlen passende
-Assets, bleibt eine kleine Recovery-Oberfläche für Status, Diagnose, Updates,
-Asset-Wiederherstellung und Neustart erreichbar. Partitionen, History und
-Schnittstellen bleiben unverändert.
+Version **1.3.7** akzeptiert beim signierten Firmwareupdate auch einen
+vollständig geprüften älteren Asset-Container. Dadurch bleibt ein Gerät nach
+einem normalen `.irfw`-Update bedienbar, auch wenn die separate 64-kB-
+Asset-Partition erst später aktualisiert wird. Fehlende oder manipulierte
+benötigte Dateien führen weiterhin sicher zur Recovery-Oberfläche. Die
+Schnittstellenkonfiguration ist jetzt übersichtlich unter „Schnittstellen“
+gebündelt; Partitionen, History und Messwertschnittstellen bleiben unverändert.
 Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
 
 Neue USB-Installationen verwenden für den optionalen 64-kB-Debugspeicher das
@@ -175,7 +177,7 @@ It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/Ope
 - automatic UART/parser recovery when meter data stops
 - separate factory-test build with PASS/FAIL checks for the custom LAN/PoE board
 - production build contains read-only battery and smart-home interfaces only
-- all nine static web assets in a manifest- and SHA-256-verified 64-kB
+- all eight current static web assets in a manifest- and SHA-256-verified 64-kB
   container, with a compact recovery UI if assets are unavailable
 
 ### Interfaces and integration
@@ -242,11 +244,13 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 
 ### Project status
 
-Version **1.3.6** moves all nine static web assets into a verified
-container in the existing 64-kB partition. If matching assets are unavailable,
-a compact recovery UI remains accessible for status, diagnostics, updates,
-asset restoration and restart. Partitions, history and interfaces remain
-unchanged. Feedback about different meters and local integrations is welcome.
+Version **1.3.7** accepts a fully verified older asset container during a
+signed firmware update. The tracker therefore remains usable after a normal
+`.irfw` update even when the separate 64-kB asset partition is updated later.
+Missing or modified required files still safely enter recovery. Interface
+configuration is grouped under “Interfaces”; partitions, history and meter
+interfaces remain unchanged. Feedback about different meters and local
+integrations is welcome.
 
 New USB installations use the `debugfs` label for optional 64-kB debug
 storage. The same firmware automatically detects the previous `coredump` label

@@ -17,7 +17,7 @@ HEADER = struct.Struct("<8sHHI32sHH")
 ENTRY = struct.Struct("<32sII32s")
 REQUIRED_ASSETS = {
     "common.css.gz", "common.js.gz", "i18n.js.gz", "dashboard.js.gz",
-    "history.js.gz", "maintenance.js.gz", "diagnostics.js.gz",
+    "maintenance.js.gz", "diagnostics.js.gz",
     "setup.html.gz", "setup.js.gz",
 }
 
@@ -50,16 +50,14 @@ def validate_asset_tree(root: Path, firmware_version: str,
     if manifest.get("schema") != 1 or not isinstance(manifest.get("files"), dict):
         return ValidationResult(False, "", "manifest_invalid")
     files = manifest["files"]
-    if set(files) != REQUIRED_ASSETS:
+    if not REQUIRED_ASSETS.issubset(files):
         return ValidationResult(False, "", "manifest_invalid")
 
     version = manifest.get("assets_version")
     if not isinstance(version, str):
         return ValidationResult(False, "", "manifest_invalid")
-    if version != firmware_version:
-        return ValidationResult(False, version, "version_mismatch")
-
-    for name, metadata in files.items():
+    for name in REQUIRED_ASSETS:
+        metadata = files[name]
         if not isinstance(name, str) or not isinstance(metadata, dict):
             return ValidationResult(False, version, "manifest_invalid")
         expected_size = metadata.get("size")
@@ -96,11 +94,10 @@ def validate_asset_image(path: Path, firmware_version: str) -> ValidationResult:
     except struct.error:
         return ValidationResult(False, "", "manifest_invalid")
     if (magic != MAGIC or schema != 1 or header_size != HEADER_SIZE or
-            image_size != IMAGE_SIZE or count != len(REQUIRED_ASSETS)):
+            image_size != IMAGE_SIZE or count <= 0 or
+            count > (HEADER_SIZE - HEADER.size) // ENTRY.size):
         return ValidationResult(False, "", "manifest_invalid")
     version = raw_version.split(b"\0", 1)[0].decode("utf-8", errors="replace")
-    if version != firmware_version:
-        return ValidationResult(False, version, "version_mismatch")
     found = set()
     for index in range(count):
         try:
@@ -114,14 +111,15 @@ def validate_asset_image(path: Path, firmware_version: str) -> ValidationResult:
             decoded_name = name.decode("utf-8")
         except UnicodeDecodeError:
             return ValidationResult(False, version, "manifest_invalid")
-        if (decoded_name not in REQUIRED_ASSETS or decoded_name in found or
-                offset < HEADER_SIZE or size <= 0 or offset > IMAGE_SIZE or (
+        if (decoded_name in found or offset < HEADER_SIZE or size <= 0 or
+                offset > IMAGE_SIZE or (
                 size > IMAGE_SIZE - offset)):
             return ValidationResult(False, version, "manifest_invalid")
         found.add(decoded_name)
         payload = image[offset:offset + size]
-        if hashlib.sha256(payload).digest() != expected_sha:
+        if (decoded_name in REQUIRED_ASSETS and
+                hashlib.sha256(payload).digest() != expected_sha):
             return ValidationResult(False, version, "sha256_mismatch")
-    if found != REQUIRED_ASSETS:
+    if not REQUIRED_ASSETS.issubset(found):
         return ValidationResult(False, version, "file_missing")
     return ValidationResult(True, version, "")

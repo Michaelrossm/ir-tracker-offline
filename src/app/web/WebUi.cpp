@@ -7,7 +7,7 @@
 
 String nav() {
   return F("<nav><a href='/'>Dashboard</a><a href='/setup'>Einstellungen</a>"
-           "<a href='/history'>Historie</a><a href='/interfaces'>Schnittstellen</a>"
+           "<a href='/interfaces'>Schnittstellen</a>"
            "<a href='/maintenance'>Wartung</a>"
            "<button id='langToggle' class='theme-toggle' "
            "type='button' aria-label='Sprache wechseln'>English</button>"

@@ -2,6 +2,30 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.7 — 2026-09-07
+
+### Deutsch
+
+- Signierte Firmwareupdates akzeptieren weiterhin einen vollständig geprüften,
+  älteren Webasset-Container. Zusätzliche ausgemusterte Dateien werden ignoriert;
+  fehlende oder veränderte benötigte Dateien bleiben ein sicherer Recovery-Fall.
+- Dadurch führt ein normales `.irfw`-Update nicht mehr allein wegen einer noch
+  nicht separat aktualisierten Asset-Partition zur Recovery-Seite.
+- API-Zugriff, Shelly-/EcoTracker-Kompatibilität, Modbus TCP, MQTT/Home
+  Assistant und Ereignisprotokoll sind unter „Schnittstellen“ gebündelt und
+  mit klareren Hinweisen zu lokalem, ausschließlich lesendem Betrieb versehen.
+
+### English
+
+- Signed firmware updates now retain a fully verified older web-asset
+  container. Retired extra files are ignored; missing or modified required
+  files remain a safe recovery condition.
+- A normal `.irfw` update no longer enters recovery solely because the
+  separate asset partition has not yet been updated.
+- API access, Shelly/EcoTracker compatibility, Modbus TCP, MQTT/Home
+  Assistant and the event log are grouped under “Interfaces” with clearer
+  local read-only guidance.
+
 ## 1.3.6 — 2026-09-04
 
 ### Deutsch

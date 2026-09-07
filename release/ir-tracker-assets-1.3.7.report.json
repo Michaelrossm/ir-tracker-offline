@@ -1,0 +1,80 @@
+{
+  "assets_version": "1.3.7",
+  "files": {
+    "common.css": {
+      "raw": 7307,
+      "minified": 7206,
+      "gzip": 2310,
+      "offset": 1024,
+      "alignment_padding": 0,
+      "container_contribution": 2310
+    },
+    "common.js": {
+      "raw": 7269,
+      "minified": 7268,
+      "gzip": 3271,
+      "offset": 3584,
+      "alignment_padding": 250,
+      "container_contribution": 3521
+    },
+    "i18n.js": {
+      "raw": 19559,
+      "minified": 19558,
+      "gzip": 7937,
+      "offset": 15360,
+      "alignment_padding": 8,
+      "container_contribution": 7945
+    },
+    "dashboard.js": {
+      "raw": 19610,
+      "minified": 19600,
+      "gzip": 6540,
+      "offset": 6912,
+      "alignment_padding": 57,
+      "container_contribution": 6597
+    },
+    "maintenance.js": {
+      "raw": 6533,
+      "minified": 6532,
+      "gzip": 2349,
+      "offset": 23552,
+      "alignment_padding": 255,
+      "container_contribution": 2604
+    },
+    "diagnostics.js": {
+      "raw": 4025,
+      "minified": 4000,
+      "gzip": 1784,
+      "offset": 13568,
+      "alignment_padding": 116,
+      "container_contribution": 1900
+    },
+    "setup.html": {
+      "raw": 4998,
+      "minified": 4993,
+      "gzip": 2014,
+      "offset": 26112,
+      "alignment_padding": 211,
+      "container_contribution": 2225
+    },
+    "setup.js": {
+      "raw": 2149,
+      "minified": 2148,
+      "gzip": 1016,
+      "offset": 28160,
+      "alignment_padding": 34,
+      "container_contribution": 1050
+    }
+  },
+  "totals": {
+    "raw": 71450,
+    "minified": 71305,
+    "gzip": 27221
+  },
+  "container": {
+    "header": 1024,
+    "used": 29176,
+    "free": 36360,
+    "image": 65536
+  }
+}

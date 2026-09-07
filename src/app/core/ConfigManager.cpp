@@ -83,6 +83,10 @@ void loadConfig() {
   config.ecoLedOff = prefs.getBool("eco_led_off", true);
   config.adaptiveWifiPower = prefs.getBool("wifi_power_auto", true);
   config.wifiPowerSave = prefs.getBool("wifi_ps", false);
+  config.wifiScheduleOff = prefs.getBool("wifi_schedule_off", true);
+  config.wifiScheduleStartMinutes =
+      prefs.getUShort("wifi_off_start", 0);
+  config.wifiScheduleEndMinutes = prefs.getUShort("wifi_off_end", 5 * 60);
   config.githubUpdateCheck = prefs.getBool("gh_check", true);
   config.githubAutoInstall = prefs.getBool("gh_auto", false);
   prefs.end();
@@ -106,6 +110,10 @@ void loadConfig() {
   config.setupApMinutes = constrain(config.setupApMinutes, 5, 60);
   config.pinPulseMs = constrain(config.pinPulseMs, 50, 1000);
   config.pinDigitGapMs = constrain(config.pinDigitGapMs, 1000, 10000);
+  config.wifiScheduleStartMinutes =
+      constrain(config.wifiScheduleStartMinutes, 0, 1439);
+  config.wifiScheduleEndMinutes =
+      constrain(config.wifiScheduleEndMinutes, 0, 1439);
   if (config.adminPassword.length() && config.adminPassword.length() < 4)
     config.adminPassword = "";
   if (!config.timezone.length() || config.timezone.length() > 80)
@@ -150,6 +158,9 @@ void saveConfig() {
   prefs.putBool("eco_led_off", config.ecoLedOff);
   prefs.putBool("wifi_power_auto", config.adaptiveWifiPower);
   prefs.putBool("wifi_ps", config.wifiPowerSave);
+  prefs.putBool("wifi_schedule_off", config.wifiScheduleOff);
+  prefs.putUShort("wifi_off_start", config.wifiScheduleStartMinutes);
+  prefs.putUShort("wifi_off_end", config.wifiScheduleEndMinutes);
   prefs.putBool("gh_check", config.githubUpdateCheck);
   prefs.putBool("gh_auto", config.githubAutoInstall);
   prefs.end();

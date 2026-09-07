@@ -22,6 +22,13 @@ const translations={
 "WLAN-Sparmodus (Modem-Sleep) aktivieren":"Enable Wi-Fi power saving (modem sleep)","Standardmäßig aus. Bei stabiler WLAN-Verbindung wird WIFI_PS_MIN_MODEM verwendet. Verbindungsaufbau und Setup-Hotspot laufen ohne Modem-Sleep.":"Disabled by default. WIFI_PS_MIN_MODEM is used on a stable Wi-Fi connection. Connection setup and the setup hotspot run without modem sleep.","80 MHz im normalen Mess- und Netzwerkbetrieb, 160 MHz bei rechenintensiven Aufgaben. Nach einem Boost folgt eine 60-sekündige Abkühlphase bei 80 MHz.":"80 MHz during normal meter and network operation, and 160 MHz for compute-intensive tasks. A 60-second cooldown at 80 MHz follows each boost.",
 "Firmware von Michael Roßmann · © 2026 Michael Roßmann · PolyForm Noncommercial 1.0.0 · nur nichtkommerzielle Nutzung":"Firmware by Michael Roßmann · © 2026 Michael Roßmann · PolyForm Noncommercial 1.0.0 · noncommercial use only","Unabhängiges Community-Projekt; nicht mit Solakon verbunden und nicht von Solakon unterstützt.":"Independent community project; not affiliated with or endorsed by Solakon."
 };
+Object.assign(translations,{
+"Vollständiger Datenexport":"Complete data export",
+"Lädt alle verfügbaren lokalen Historienwerte als CSV-Datei herunter. Die Daten bleiben ausschließlich auf dem Tracker und in diesem Browser.":"Downloads all available local history readings as a CSV file. The data remains exclusively on the tracker and in this browser.",
+"WLAN nach Zeitplan abschalten":"Turn off Wi-Fi on a schedule",
+"Von":"From","Bis":"Until",
+"Standardmäßig aktiv von 00:00 bis 05:00. Ohne gültige Uhrzeit bleibt WLAN an. Bei Speicherbetrieb deaktivieren: In dieser Zeit sind WLAN, MQTT, Weboberfläche und WLAN-Updates nicht erreichbar. LAN bleibt verfügbar.":"Enabled by default from 00:00 to 05:00. Wi-Fi remains on until the clock is valid. Disable this for battery operation: Wi-Fi, MQTT, the web interface and Wi-Fi updates are unavailable during this period. Ethernet remains available."
+});
 const originals=new WeakMap();
 const attrOriginals=new WeakMap();
 function language(){try{return localStorage.getItem(storageKey)==='en'?'en':'de'}catch(e){return 'de'}}

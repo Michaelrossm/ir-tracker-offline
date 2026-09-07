@@ -39,6 +39,55 @@ void stopAccessPoint() {
   applyWifiPowerSave();
 }
 
+bool beginNextKnownWifi();
+
+bool wifiOffScheduleActive() {
+  if (!config.ecoMode || !config.wifiScheduleOff ||
+      config.wifiScheduleStartMinutes == config.wifiScheduleEndMinutes ||
+      time(nullptr) < 1700000000) {
+    return false;
+  }
+  tm localNow = {};
+  const time_t now = time(nullptr);
+  if (!localtime_r(&now, &localNow)) return false;
+  const uint16_t minuteOfDay =
+      static_cast<uint16_t>(localNow.tm_hour * 60 + localNow.tm_min);
+  const uint16_t start = config.wifiScheduleStartMinutes;
+  const uint16_t end = config.wifiScheduleEndMinutes;
+  return start < end ? minuteOfDay >= start && minuteOfDay < end
+                     : minuteOfDay >= start || minuteOfDay < end;
+}
+
+void stopWifiForEcoSchedule() {
+  if (mqtt.connected()) mqtt.disconnect();
+  mqttNetwork.stop();
+  if (accessPointMode) {
+    dns.stop();
+    WiFi.softAPdisconnect(true);
+    accessPointMode = false;
+    accessPointStartedMs = 0;
+  }
+  WiFi.disconnect(false, false);
+  if (!WiFi.mode(WIFI_OFF)) ++wifiModeErrors;
+  wifiConnectedSinceMs = 0;
+  lastWifiPowerEvaluateMs = 0;
+  wifiScheduledOff = true;
+  eventLog.add("INFO", "WIFI_ECO_OFF",
+               "WLAN nach Energiespar-Zeitplan abgeschaltet");
+}
+
+void resumeWifiAfterEcoSchedule() {
+  if (!WiFi.mode(WIFI_STA)) ++wifiModeErrors;
+  wifiScheduledOff = false;
+  wifiTried = 0;
+  wifiCandidate = 0;
+  wifiCandidateStartedMs = 0;
+  lastWifiAttemptMs = 0;
+  eventLog.add("INFO", "WIFI_ECO_ON",
+               "WLAN nach Energiespar-Zeitplan wieder aktiviert");
+  beginNextKnownWifi();
+}
+
 bool beginNextKnownWifi() {
   while (wifiTried < kWifiSlots) {
     const uint8_t slot = wifiCandidate;
@@ -145,6 +194,22 @@ void manageWifi() {
   const bool connected = WiFi.status() == WL_CONNECTED;
   const bool ethernetConnected = ethernet.connected();
   const bool anyNetworkConnected = connected || ethernetConnected;
+
+  const bool scheduleOff = wifiOffScheduleActive();
+  if (scheduleOff) {
+    if (!wifiScheduledOff) stopWifiForEcoSchedule();
+#if IR_TRACKER_ENABLE_MDNS
+    syncMdnsDiscovery();
+#endif
+    return;
+  }
+  if (wifiScheduledOff) {
+    resumeWifiAfterEcoSchedule();
+#if IR_TRACKER_ENABLE_MDNS
+    syncMdnsDiscovery();
+#endif
+    return;
+  }
 
   if (ethernetConnected != wasEthernetConnected) {
     if (ethernetConnected) {

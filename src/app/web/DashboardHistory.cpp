@@ -31,7 +31,6 @@ void handleRoot() {
   body += F(R"HTML(
     <div class='section-head'>
       <div><h2>Verlauf</h2><div class='muted'>Verbrauch und Einspeisung direkt auf dem Tracker</div></div>
-      <a href='/history'>Erweiterte Auswertung öffnen</a>
     </div>
     <div class='card chart-card'>
       <div class='chart-controls'>
@@ -76,6 +75,11 @@ void handleRoot() {
       Doppelklick oder Doppeltippen fixiert; ein einfacher Klick oder Tipp
       löst ihn wieder.</p>
     </div>
+    <section class='card'>
+      <h2>Vollständiger Datenexport</h2>
+      <p class='muted'>Lädt alle verfügbaren lokalen Historienwerte als CSV-Datei herunter. Die Daten bleiben ausschließlich auf dem Tracker und in diesem Browser.</p>
+      <a class='button secondary' href='/api/v1/history.csv?range=complete'>Vollständige Historie als CSV exportieren</a>
+    </section>
     <p style='margin-top:28px'><span class='status-pill'><i class='dot'></i> Lokal · ohne Cloud</span></p>)HTML");
 
   if (!sendPageStreamed("Dashboard", body, "/assets/dashboard.js?v=" + String(kFirmwareVersion))) {

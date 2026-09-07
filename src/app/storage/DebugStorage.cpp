@@ -17,11 +17,12 @@ constexpr uint32_t kAssetAddress = 0x2B0000U;
 constexpr size_t kAssetSize = 0x10000U;
 constexpr uint16_t kRawAssetSchema = 1;
 constexpr uint16_t kRawAssetHeaderSize = 1024;
+constexpr uint8_t kRawAssetEntryCapacity = 9;
 constexpr char kRawAssetMagic[8] = {'I', 'R', 'A', 'S', 'S', 'E', 'T', '1'};
 constexpr const char *kKnownAssetPaths[] = {
     "/assets/common.css.gz",      "/assets/common.js.gz",
     "/assets/i18n.js.gz",        "/assets/dashboard.js.gz",
-    "/assets/history.js.gz",     "/assets/maintenance.js.gz",
+    "/assets/maintenance.js.gz",
     "/assets/diagnostics.js.gz", "/assets/setup.html.gz",
     "/assets/setup.js.gz"};
 constexpr uint8_t kKnownAssetCount =
@@ -44,7 +45,7 @@ struct __attribute__((packed)) RawAssetHeader {
   char version[32];
   uint16_t fileCount;
   uint16_t reserved;
-  RawAssetEntry files[9];
+  RawAssetEntry files[kRawAssetEntryCapacity];
 };
 
 static_assert(sizeof(RawAssetHeader) <= kRawAssetHeaderSize,
@@ -272,17 +273,17 @@ bool DebugStorage::loadRawAssetManifest(const char *firmwareVersion) {
       header.schema != kRawAssetSchema ||
       header.headerSize != kRawAssetHeaderSize ||
       header.imageSize != kAssetSize || !header.fileCount ||
-      header.fileCount != kKnownAssetCount ||
+      header.fileCount > kRawAssetEntryCapacity ||
       !memchr(header.version, '\0', sizeof(header.version))) {
     assetManifestError_ = "manifest_invalid";
     return false;
   }
   strncpy(assetVersion_, header.version, sizeof(assetVersion_) - 1U);
   assetVersion_[sizeof(assetVersion_) - 1U] = '\0';
-  if (strcmp(assetVersion_, firmwareVersion) != 0) {
-    assetManifestError_ = "version_mismatch";
-    return false;
-  }
+  // A signed IRFW updates only the application OTA slot. Keep a verified
+  // older asset bundle usable across app updates so a version change never
+  // turns a healthy tracker into the recovery page. Newer bundles may also
+  // contain retired files; they are ignored and never served.
   for (uint8_t fileIndex = 0; fileIndex < header.fileCount; ++fileIndex) {
     const RawAssetEntry &entry = header.files[fileIndex];
     if (!memchr(entry.name, '\0', sizeof(entry.name))) {
@@ -292,8 +293,8 @@ bool DebugStorage::loadRawAssetManifest(const char *firmwareVersion) {
     String path = "/assets/";
     path += entry.name;
     const int8_t knownIndex = knownAssetIndex(path.c_str());
-    if (knownIndex < 0 ||
-        (verifiedAssetMask_ & static_cast<uint16_t>(1U << knownIndex))) {
+    if (knownIndex < 0) continue;
+    if (verifiedAssetMask_ & static_cast<uint16_t>(1U << knownIndex)) {
       assetManifestError_ = "manifest_invalid";
       return false;
     }
@@ -447,12 +448,8 @@ bool DebugStorage::loadAssetManifest(const char *firmwareVersion) {
   const char *assetsVersion = manifest["assets_version"] | "";
   strncpy(assetVersion_, assetsVersion, sizeof(assetVersion_) - 1U);
   assetVersion_[sizeof(assetVersion_) - 1U] = '\0';
-  if (strcmp(assetsVersion, firmwareVersion) != 0) {
-    assetManifestError_ = "version_mismatch";
-    return false;
-  }
   JsonObject files = manifest["files"].as<JsonObject>();
-  if (files.isNull() || files.size() != kKnownAssetCount) {
+  if (files.isNull() || files.size() < kKnownAssetCount) {
     assetManifestError_ = "manifest_invalid";
     return false;
   }
@@ -462,8 +459,8 @@ bool DebugStorage::loadAssetManifest(const char *firmwareVersion) {
     const int8_t index = knownAssetIndex(path.c_str());
     const size_t expectedSize = entry.value()["size"] | 0U;
     const char *expectedSha256 = entry.value()["sha256"] | "";
-    if (index < 0 ||
-        (verifiedAssetMask_ & static_cast<uint16_t>(1U << index))) {
+    if (index < 0) continue;
+    if (verifiedAssetMask_ & static_cast<uint16_t>(1U << index)) {
       assetManifestError_ = "manifest_invalid";
       verifiedAssetMask_ = 0;
       return false;

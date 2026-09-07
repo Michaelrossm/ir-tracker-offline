@@ -181,6 +181,14 @@ String statusJson() {
           String(config.ecoMode ? "true" : "false") + ",";
   json += "\"eco_led_idle_off\":" +
           String(config.ecoLedOff ? "true" : "false") + ",";
+  json += "\"wifi_schedule_off_enabled\":" +
+          String(config.wifiScheduleOff ? "true" : "false") + ",";
+  json += "\"wifi_schedule_start_minutes\":" +
+          String(config.wifiScheduleStartMinutes) + ",";
+  json += "\"wifi_schedule_end_minutes\":" +
+          String(config.wifiScheduleEndMinutes) + ",";
+  json += "\"wifi_scheduled_off\":" +
+          String(wifiScheduledOff ? "true" : "false") + ",";
   json += "\"led_fault_active\":" +
           String(trackerFaultActive() ? "true" : "false") + ",";
   json += "\"led_suppressed\":" +

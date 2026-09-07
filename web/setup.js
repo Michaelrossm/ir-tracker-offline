@@ -8,7 +8,7 @@ config.ssids.forEach((ssid,index)=>{const row=document.createElement('div');row.
 const addPins=(name,selected,off)=>{const select=field(name);if(off)select.add(new Option('Aus','-1'));config.gpios.forEach(pin=>select.add(new Option(pin,pin)));select.value=String(selected)};
 addPins('rx_pin',config.rx_pin,false);addPins('tx_pin',config.tx_pin,true);addPins('led_pin',config.led_pin,true);
 [300,600,1200,2400,4800,9600,19200,38400,115200].forEach(rate=>field('baud').add(new Option(rate,rate)));
-set('hostname',config.hostname);set('timezone',config.timezone);set('ap_minutes',config.ap_minutes);set('meter_protocol',config.meter_protocol);set('baud',config.baud);set('api_access',config.api_access);set('mqtt_host',config.mqtt_host);set('mqtt_port',config.mqtt_port);set('mqtt_user',config.mqtt_user);field('mqtt_pass').placeholder=config.mqtt_password_saved?'gespeichert':'optional';
-['led_inv','storage_compat','modbus_tcp','event_flash','ha_disc','eco_mode','eco_led_off','wifi_power_auto','wifi_ps','gh_check','gh_auto'].forEach(name=>check(name,config[name]));
+set('hostname',config.hostname);set('timezone',config.timezone);set('ap_minutes',config.ap_minutes);set('meter_protocol',config.meter_protocol);set('baud',config.baud);set('wifi_off_start',`${String(Math.floor(config.wifi_off_start/60)).padStart(2,'0')}:${String(config.wifi_off_start%60).padStart(2,'0')}`);set('wifi_off_end',`${String(Math.floor(config.wifi_off_end/60)).padStart(2,'0')}:${String(config.wifi_off_end%60).padStart(2,'0')}`);
+['led_inv','eco_mode','eco_led_off','wifi_power_auto','wifi_ps','wifi_schedule_off','gh_check','gh_auto'].forEach(name=>check(name,config[name]));
 if(config.developer_io){document.getElementById('developerIo').hidden=false;check('sniffer',config.sniffer);check('bridge',config.bridge)}
 })();

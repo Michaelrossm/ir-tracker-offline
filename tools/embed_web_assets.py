@@ -15,7 +15,7 @@ TARGET = GENERATED_DIR / "WebAssets.h"
 ASSET_FS_ROOT = GENERATED_DIR / "asset-partition"
 ASSET_FS_DIR = ASSET_FS_ROOT / "assets"
 ASSETS = (
-    "common.css", "common.js", "i18n.js", "dashboard.js", "history.js",
+    "common.css", "common.js", "i18n.js", "dashboard.js",
     "maintenance.js", "diagnostics.js", "setup.html", "setup.js",
 )
 # All normal UI assets live in the existing read-only 64-kB container. The

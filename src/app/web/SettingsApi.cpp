@@ -34,8 +34,8 @@ void handleInterfacesPage() {
   body += host;
   body += F("/v1/json</code></div>"
             "<div class='card'><h2>Home Assistant / MQTT</h2>"
-            "<p>MQTT und automatische Home-Assistant-Erkennung werden unter Einstellungen konfiguriert.</p>"
-            "<a href='/setup'>MQTT konfigurieren</a></div>"
+            "<p>Sendet Messwerte an einen eigenen MQTT-Broker. Mit Discovery legt Home Assistant die Sensoren automatisch an.</p>"
+            "<p class='muted'>Optional: Ohne MQTT bleibt der Tracker vollständig lokal funktionsfähig.</p></div>"
             "<div class='card'><h2>Modbus TCP</h2>"
             "<p>Herstellerneutrale, ausschlie&szlig;lich lesende Messwertregister f&uuml;r lokale Energiemanagementsysteme.</p>"
             "<code>Port 502</code><br><a href='https://github.com/Michaelrossm/ir-tracker-offline/blob/main/docs/MODBUS.md' "
@@ -46,8 +46,80 @@ void handleInterfacesPage() {
             "<div class='card'><h2>Sicherheitsprinzip</h2>"
             "<p>Alle hier aufgeführten Schnittstellen geben Messwerte aus. Es werden keine Register am Speicher beschrieben "
             "und keine Lade- oder Entladebefehle verschickt.</p></div>");
+  body += F("<form method='post' action='/interfaces/save'><input type='hidden' name='csrf_token' value='");
+  body += csrfToken;
+  body += F("'><fieldset><legend>Schnittstellen konfigurieren</legend>"
+            "<h2>Lokale API und Kompatibilität</h2>"
+            "<p class='muted'>Diese Optionen betreffen ausschließlich Messwerte im lokalen Netzwerk. Einstellungen, Wartung und Firmwareupdates bleiben immer durch die Admin-Anmeldung geschützt.</p>"
+            "<label>Zugriffsmodus</label><select name='api_access'><option value='0'");
+  body += config.apiAccess == 0 ? " selected" : "";
+  body += F(">Lokal offen – für lokale Integrationen ohne Anmeldung</option><option value='1'");
+  body += config.apiAccess == 1 ? " selected" : "";
+  body += F(">Admin-Anmeldung für die eigene Messwert-API erforderlich</option><option value='2'");
+  body += config.apiAccess == 2 ? " selected" : "";
+  body += F(">Eigene API und Kompatibilitätsendpunkte deaktivieren</option></select>"
+            "<p class='muted'>Freigegeben werden nur Messwert-API, Prometheus, Influx und CSV. Über diese Schnittstellen können keine Einstellungen verändert werden.</p>"
+            "<label><input class='fit' type='checkbox' name='storage_compat' value='1'");
+  body += config.storageCompatibilityMode ? " checked" : "";
+  body += F("> Speicher-Kompatibilitätsmodus aktivieren</label>"
+            "<p class='muted'>Ermöglicht lokalen Speichern und Wechselrichtern die ausschließlich lesenden Shelly- und EcoTracker-kompatiblen Endpunkte ohne Anmeldung. Der Tracker verwendet dabei immer seine eigene, neutrale Geräteidentität.</p>"
+            "<label><input class='fit' type='checkbox' name='modbus_tcp' value='1'");
+  body += config.modbusTcp ? " checked" : "";
+  body += F("> Herstellerneutrales Modbus TCP aktivieren</label>"
+            "<p class='muted'>Stellt das dokumentierte, nur lesende IR-Tracker-Registerschema auf Port 502 bereit. Geeignet für lokale EMS- und Automatisierungssysteme.</p>"
+            "<details class='compact-details'><summary>JSON-API für Experten</summary>"
+            "<p class='muted'>Stabile, herstellerneutrale Messwerte für Home Assistant, ioBroker, Node-RED, openHAB und eigene Anwendungen.</p>"
+            "<code>/api/v1/meter</code><br><code>/api/v1/status</code><br><code>/api/v1/obis</code><br><code>/api/v1/history</code><br><code>/api/v1/values.csv</code></details>"
+            "<h2>Home Assistant / MQTT</h2><p class='muted'>Optional. Der Broker erhält aktuelle Messwerte; mit aktivierter Discovery erscheinen die Sensoren automatisch in Home Assistant.</p>"
+            "<div class='inline'><div><label>MQTT-Server</label><input name='mqtt_host' maxlength='64' placeholder='192.168.178.10' value='");
+  body += htmlEscape(config.mqttHost);
+  body += F("'></div><div><label>Port</label><input name='mqtt_port' type='number' min='1' max='65535' value='");
+  body += String(config.mqttPort);
+  body += F("'></div></div><div class='inline'><div><label>Benutzer</label><input name='mqtt_user' maxlength='64' value='");
+  body += htmlEscape(config.mqttUser);
+  body += F("'></div><div><label>Passwort</label><input name='mqtt_pass' type='password' maxlength='64' autocomplete='new-password' placeholder='");
+  body += config.mqttPassword.length() ? "gespeichert" : "optional";
+  body += F("'></div></div><label><input class='fit' type='checkbox' name='ha_disc' value='1'");
+  body += config.homeAssistantDiscovery ? " checked" : "";
+  body += F("> Home-Assistant-Discovery aktivieren</label>"
+            "<h2>Ereignisprotokoll</h2><label><input class='fit' type='checkbox' name='event_flash' value='1'");
+  body += config.persistEventLog ? " checked" : "";
+  body += F("> Ereignis- und Fehlerprotokoll dauerhaft im Flash speichern</label>"
+            "<p class='muted'>Standard: maximal 256 Einträge im RAM; ein Neustart leert sie. Dauerhaftes Speichern ist für Fehlersuche sinnvoll, erzeugt aber zusätzliche Flash-Schreibvorgänge.</p>"
+            "</fieldset><button type='submit'>Schnittstellen speichern</button></form>");
   server.send(200, "text/html; charset=utf-8",
               page("Schnittstellen", body));
+}
+
+void handleInterfacesSave() {
+  if (!requireAdmin()) return;
+  config.apiAccess = constrain(server.arg("api_access").toInt(), 0, 2);
+  config.storageCompatibilityMode = server.hasArg("storage_compat");
+  config.modbusTcp = server.hasArg("modbus_tcp");
+  const bool previousEventPersistence = config.persistEventLog;
+  config.persistEventLog = server.hasArg("event_flash");
+  config.mqttHost = server.arg("mqtt_host");
+  config.mqttHost.trim();
+  config.mqttPort = constrain(server.arg("mqtt_port").toInt(), 1, 65535);
+  config.mqttUser = server.arg("mqtt_user");
+  const String newMqttPassword = server.arg("mqtt_pass");
+  if (newMqttPassword.length() || !config.mqttHost.length())
+    config.mqttPassword = newMqttPassword;
+  config.homeAssistantDiscovery = server.hasArg("ha_disc");
+  saveConfig();
+  if (previousEventPersistence != config.persistEventLog &&
+      !eventLog.setPersistence(config.persistEventLog)) {
+    config.persistEventLog = previousEventPersistence;
+    saveConfig();
+    server.send(500, "application/json",
+                "{\"error\":\"event_log_persistence_change_failed\"}");
+    return;
+  }
+  eventLog.add("INFO", "INTERFACES_SAVE", "Schnittstellen gespeichert");
+  server.send(200, "text/html; charset=utf-8",
+              page("Gespeichert", "<p>Schnittstellen gespeichert. Der Tracker startet jetzt neu.</p>"));
+  delay(750);
+  ESP.restart();
 }
 
 String settingsBackupJson() {

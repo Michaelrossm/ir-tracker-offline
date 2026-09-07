@@ -33,10 +33,6 @@ void setupRoutes() {
     servePartitionAsset("/assets/dashboard.js",
                         "application/javascript; charset=utf-8");
   });
-  server.on("/assets/history.js", HTTP_GET, [] {
-    servePartitionAsset("/assets/history.js",
-                        "application/javascript; charset=utf-8");
-  });
   server.on("/assets/maintenance.js", HTTP_GET, [] {
     servePartitionAsset("/assets/maintenance.js",
                         "application/javascript; charset=utf-8");
@@ -53,8 +49,8 @@ void setupRoutes() {
                         "application/javascript; charset=utf-8");
   });
   server.on("/", HTTP_GET, handleRoot);
-  server.on("/history", HTTP_GET, handleHistoryPage);
   server.on("/interfaces", HTTP_GET, handleInterfacesPage);
+  server.on("/interfaces/save", HTTP_POST, handleInterfacesSave);
   server.on("/maintenance", HTTP_GET, handleMaintenancePage);
   server.on("/maintenance/diagnostics", HTTP_GET, handleDiagnostics);
 #if IR_TRACKER_ENABLE_FACTORY_TEST

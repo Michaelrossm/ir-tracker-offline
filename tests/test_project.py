@@ -41,14 +41,13 @@ I18N_SOURCE = (ROOT / "web" / "i18n.js").read_text(encoding="utf-8")
 COMMON_JS_SOURCE = (ROOT / "web" / "common.js").read_text(encoding="utf-8")
 COMMON_CSS_SOURCE = (ROOT / "web" / "common.css").read_text(encoding="utf-8")
 DASHBOARD_JS_SOURCE = (ROOT / "web" / "dashboard.js").read_text(encoding="utf-8")
-HISTORY_JS_SOURCE = (ROOT / "web" / "history.js").read_text(encoding="utf-8")
 MAINTENANCE_JS_SOURCE = (ROOT / "web" / "maintenance.js").read_text(encoding="utf-8")
 DIAGNOSTICS_JS_SOURCE = (ROOT / "web" / "diagnostics.js").read_text(encoding="utf-8")
 SETUP_JS_SOURCE = (ROOT / "web" / "setup.js").read_text(encoding="utf-8")
 SETUP_HTML_SOURCE = (ROOT / "web" / "setup.html").read_text(encoding="utf-8")
 WEB_RUNTIME_SOURCE = "\n".join(
     (SOURCE, COMMON_JS_SOURCE, COMMON_CSS_SOURCE, DASHBOARD_JS_SOURCE,
-    HISTORY_JS_SOURCE, MAINTENANCE_JS_SOURCE, DIAGNOSTICS_JS_SOURCE, SETUP_JS_SOURCE,
+    MAINTENANCE_JS_SOURCE, DIAGNOSTICS_JS_SOURCE, SETUP_JS_SOURCE,
      SETUP_HTML_SOURCE)
 )
 HISTORY_SOURCE = (ROOT / "src/app/storage/HistoryStore.cpp").read_text(encoding="utf-8")
@@ -126,7 +125,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.6"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.7"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -274,7 +273,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("tryServeDebugAsset(path, contentType", source)
         self.assertIn('server.sendHeader("Content-Encoding", "gzip")', source)
         self.assertIn("assetManifestReady()", source)
-        self.assertIn('assetManifestError_ = "version_mismatch"', DEBUG_STORAGE_SOURCE)
+        self.assertIn("header.fileCount > kRawAssetEntryCapacity",
+                      DEBUG_STORAGE_SOURCE)
+        self.assertIn("if (knownIndex < 0) continue;", DEBUG_STORAGE_SOURCE)
         self.assertIn("verifyAsset(path.c_str(), expectedSize, expectedSha256)",
                       DEBUG_STORAGE_SOURCE)
         for error in (
@@ -396,27 +397,19 @@ class ProjectSecurityTests(unittest.TestCase):
             "mqtt.setSocketTimeout(1)",
             "dBindCursor(pc)",
             "dCursorPinned=true",
-            "cursorPinned=true",
             "if(e.detail===1){dCursorPinned=false",
-            "if(e.detail===1){cursorPinned=false",
             "Doppelklick oder Doppeltippen fixiert ihn",
             "doubleTap=now-lastTap<420",
-            "doubleTap=now-lastTouchTap<420",
             "e.pointerType==='touch'",
             'range == "hour"',
             "function dTimeAxis",
-            "function hTimeAxis",
             "minute===30?8:4",
-            "function scheduleLoad(delay=140)",
             "function dScheduleLoad(silent=false,delay=140)",
             "if(silent&&dLoadController)return",
             "new AbortController()",
-            "request!==historyRequest",
             "generation!==dLoadGeneration",
             "function dStopLoads()",
-            "function stopHistoryLoads()",
             "addEventListener('pagehide',dStopLoads)",
-            "addEventListener('pagehide',stopHistoryLoads)",
             "if (!responseClient.connected()) return false",
             "localStorage.getItem(themeKey)",
             "localStorage.setItem(themeKey,n)",
@@ -434,21 +427,18 @@ class ProjectSecurityTests(unittest.TestCase):
             "zeroBaseline&&v===0",
             "const exportW=Math.max(0,-v.avg)",
             "dVisible={power:true,import:true,export:true,gap:true}",
-            "cx.lineWidth=2",
             "calendarHistoryQuery",
             "now - static_cast<uint32_t>(since)",
             "window.irGapEdges",
             "current=to>=now-step",
             "Math.max(step*2.5,15)",
             "irGapCount(dd,dFrom,dTo,dStep())",
-            "irGapCount(raw,rangeFrom,rangeTo,expectedStep())",
             "requestedHistoryAnchor",
             "historyTierSeconds",
             "kHistoryJsonChunkBytes = 12 * 1024",
             "formatNumberOrNull(importValue",
             "(streamedRecords & 0x3fU) == 0",
             "id='dashDaysBack'",
-            "id='historyDaysBack'",
             "Kalendertag (00:00–24:00)",
             "type:'datetime-local'",
             "type:'date'",
@@ -458,9 +448,6 @@ class ProjectSecurityTests(unittest.TestCase):
             "label:'Kalenderwoche'",
             "label:'Kalendermonat'",
             "label:'Kalenderjahr'",
-            "function minutePower(a)",
-            "Math.floor(v.ts/60)*60",
-            "rangeStep<60?60:rangeStep",
             "Vollständige Historie als CSV exportieren",
             'range=complete',
             "resolution_seconds",
@@ -477,7 +464,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "% zum Jahres-Ø",
             "eventLog.begin(config.persistEventLog)",
             "event_log_persistent",
-            'name="event_flash"',
+            "name='event_flash'",
             "kCpuBoostHoldMs = 2UL * 60UL * 1000UL",
             "kEcoCpuMhz = 80",
             "kPerformanceCpuMhz = 160",
@@ -519,6 +506,13 @@ class ProjectSecurityTests(unittest.TestCase):
             'name="wifi_power_auto"',
             "prefs.getBool(\"wifi_ps\", false)",
             'name="wifi_ps"',
+            "prefs.getBool(\"wifi_schedule_off\", true)",
+            'name="wifi_schedule_off"',
+            "parseClockMinutes",
+            "wifiOffScheduleActive()",
+            "WIFI_ECO_OFF",
+            "WIFI_ECO_ON",
+            "/api/v1/history.csv?range=complete",
             "manageAdaptiveWifiPower()",
             "wifi_tx_power_dbm",
             "wifi_min_modem_sleep",
@@ -777,7 +771,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertNotIn("/diagnostics", navigation)
         self.assertNotIn("JSON API", navigation)
         self.assertIn("/maintenance/diagnostics", SOURCE)
-        self.assertIn("JSON-API f", SETUP_HTML_SOURCE)
+        self.assertNotIn("JSON-API f", SETUP_HTML_SOURCE)
+        self.assertIn("JSON-API für Experten", SOURCE)
+        self.assertIn('server.on("/interfaces/save"', SOURCE)
         self.assertIn("Content-Encoding", SOURCE)
         self.assertIn("String recoveryPage()", SOURCE)
         self.assertIn("Asset-Image installieren", SOURCE)
@@ -834,7 +830,6 @@ class ProjectSecurityTests(unittest.TestCase):
             "common.js": COMMON_JS_SOURCE,
             "i18n.js": I18N_SOURCE,
             "dashboard.js": DASHBOARD_JS_SOURCE,
-            "history.js": HISTORY_JS_SOURCE,
             "maintenance.js": MAINTENANCE_JS_SOURCE,
             "diagnostics.js": DIAGNOSTICS_JS_SOURCE,
             "setup.html": SETUP_HTML_SOURCE,
@@ -856,14 +851,11 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertFalse((ROOT / "src" / "WebAssets.h").exists())
 
     def test_large_pages_use_cached_external_assets(self) -> None:
-        dashboard = SOURCE[SOURCE.index("void handleRoot()") : SOURCE.index("void handleHistoryPage()")]
-        history = SOURCE[SOURCE.index("void handleHistoryPage()") : SOURCE.index("struct HistoryQuery")]
+        dashboard = SOURCE[SOURCE.index("void handleRoot()") : SOURCE.index("struct HistoryQuery")]
         self.assertIn("/assets/dashboard.js?v=", dashboard)
-        self.assertIn("/assets/history.js?v=", history)
         self.assertIn("/assets/maintenance.js?v=", SOURCE)
         self.assertIn("/assets/setup.js?v=", SOURCE)
         self.assertNotIn("String script", dashboard)
-        self.assertNotIn("String script", history)
         self.assertIn("/assets/common.css?v=", SOURCE)
         self.assertIn("/assets/common.js?v=", SOURCE)
         self.assertIn("window.IR_TRACKER_CONFIG={csrfToken:", SOURCE)
