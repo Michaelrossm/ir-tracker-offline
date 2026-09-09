@@ -55,6 +55,7 @@ def main() -> None:
     version = args.version
     release = ROOT / "release"
     firmware_files = [
+        release / f"ir-tracker-update-{version}.irup",
         release / f"ir-tracker-custom-{version}.irfw",
         release / f"ir-tracker-custom-{version}-usb.bin",
         release / f"partitions-{version}.bin",
@@ -102,12 +103,12 @@ def main() -> None:
         lowered = str(path).lower()
         if "original bin" in lowered or "signing/private" in lowered:
             raise SystemExit(f"Private/proprietäre Datei abgewiesen / Private/proprietary file rejected: {path}")
-    validate_firmware_pair(firmware_files[0], firmware_files[1])
-    if firmware_files[2].stat().st_size != 3072:
+    validate_firmware_pair(firmware_files[1], firmware_files[2])
+    if firmware_files[3].stat().st_size != 3072:
         raise SystemExit(
             "Unerwartete Partitionstabellengröße. / Unexpected partition-table size."
         )
-    if firmware_files[3].stat().st_size != 0x10000:
+    if firmware_files[4].stat().st_size != 0x10000:
         raise SystemExit(
             "Unerwartete Asset-Partitionsgröße. / Unexpected asset-partition size."
         )

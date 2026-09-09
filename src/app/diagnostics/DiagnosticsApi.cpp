@@ -40,13 +40,12 @@ constexpr MeterDiagnosisCode evaluateMeterDiagnosisCode(
                    ? MeterDiagnosisCode::NoTelegram
                    : !fresh
                          ? MeterDiagnosisCode::Stale
-                         : (!hasPower &&
-                            diagnosticErrorRateHigh(
-                                parseErrors,
-                                static_cast<uint64_t>(telegrams) + parseErrors))
-                               ? MeterDiagnosisCode::ParseUnstable
-                               : !hasPower
-                                     ? MeterDiagnosisCode::PartialValues
+                         : !hasPower
+                               ? MeterDiagnosisCode::PartialValues
+                               : diagnosticErrorRateHigh(
+                                     parseErrors,
+                                     static_cast<uint64_t>(telegrams) + parseErrors)
+                                     ? MeterDiagnosisCode::ParseUnstable
                                      : (!hasImport || !hasExport)
                                            ? MeterDiagnosisCode::MissingEnergy
                                            : MeterDiagnosisCode::Complete;
@@ -91,15 +90,28 @@ static_assert(evaluateMeterDiagnosisCode(4096, 0, 0, 80, false, false, false,
               "RX data without a valid telegram must be explicit");
 static_assert(evaluateMeterDiagnosisCode(4096, 10, 20, 0, true, false,
                                          false, false) ==
-                  MeterDiagnosisCode::ParseUnstable,
-              "parse failures plus missing power must warn");
+                  MeterDiagnosisCode::PartialValues,
+              "fresh telegrams without fresh power must be restricted");
+static_assert(evaluateMeterDiagnosisCode(4096, 10, 0, 0, false, false,
+                                         true, true) ==
+                  MeterDiagnosisCode::Stale,
+              "stale telegram and power must report no signal, not restricted");
+static_assert(evaluateMeterDiagnosisCode(4096, 10, 0, 0, true, true,
+                                         true, true) ==
+                  MeterDiagnosisCode::Complete,
+              "fresh telegram and fresh power must remain OK");
 
 MeterDiagnosis meterDiagnosis() {
   const bool fresh =
       meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
+  // Do not diagnose the first accepted frame as restricted. Afterwards this
+  // reuses the same stale interval as the UART recovery logic.
+  const bool powerFresh = meter.powerUpdatedMs &&
+      millis() - meter.powerUpdatedMs < kReadingStaleMs;
+  const bool hasUsablePower = powerFresh || meter.telegrams <= 1U;
   const MeterDiagnosisCode code = evaluateMeterDiagnosisCode(
       meter.bytes, meter.telegrams, meter.parseErrors, meter.crcErrors, fresh,
-      std::isfinite(meter.powerW), std::isfinite(meter.importKwh),
+      hasUsablePower, std::isfinite(meter.importKwh),
       std::isfinite(meter.exportKwh));
   switch (code) {
     case MeterDiagnosisCode::NoSignal:
@@ -115,7 +127,7 @@ MeterDiagnosis meterDiagnosis() {
                "Supportbericht senden, falls der Zustand bestehen bleibt."},
               3};
     case MeterDiagnosisCode::Stale:
-      return {code, "warn", "Der Zähler wurde erkannt, liefert momentan aber keine aktuellen Daten.",
+      return {code, "warn", "Kein gültiges Zählertelegramm wird aktuell empfangen.",
               {"Lesekopfposition und optische Schnittstelle prüfen.",
                "Prüfen, ob der Zähler weiterhin Telegramme sendet.", nullptr},
               2};
@@ -132,10 +144,10 @@ MeterDiagnosis meterDiagnosis() {
                nullptr},
               2};
     case MeterDiagnosisCode::PartialValues:
-      return {code, "warn", "Das Zählertelegramm wird erkannt, aber die Momentanleistung ist nicht verfügbar.",
-              {"Freischaltung der erweiterten Zählerwerte prüfen.",
-               "Verfügbare OBIS-Werte im technischen Bericht prüfen.", nullptr},
-              2};
+      return {code, "warn", "Zähler erkannt – Leistungswert fehlt",
+              {"Gültige Zählerdaten werden empfangen, aber die aktuelle Leistung fehlt. PIN-Freischaltung bzw. erweiterten Datensatz / INFO prüfen.",
+               nullptr, nullptr},
+              1};
     case MeterDiagnosisCode::MissingEnergy:
       if (!std::isfinite(meter.importKwh) &&
           !std::isfinite(meter.exportKwh))
@@ -164,7 +176,7 @@ const char *meterDiagnosisCodeName(MeterDiagnosisCode code) {
   switch (code) {
     case MeterDiagnosisCode::NoSignal: return "no_signal";
     case MeterDiagnosisCode::NoTelegram: return "no_telegram";
-    case MeterDiagnosisCode::Stale: return "stale";
+    case MeterDiagnosisCode::Stale: return "no_signal";
     case MeterDiagnosisCode::ParseUnstable: return "parse_unstable";
     case MeterDiagnosisCode::IntegrityUnstable: return "integrity_unstable";
     case MeterDiagnosisCode::PartialValues: return "partial_values";

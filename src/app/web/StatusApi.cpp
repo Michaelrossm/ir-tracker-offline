@@ -7,6 +7,7 @@
 
 String statusJson() {
   const bool fresh = valueFresh(meter.powerUpdatedMs);
+  const MeterDiagnosis meterHealth = meterDiagnosis();
   const bool browserSessionValid = validBrowserSession();
   // The complete status is currently about 2.6 kB. Reserving once avoids the
   // allocator churn caused by growing Arduino String in 16-byte steps. Keep
@@ -97,6 +98,8 @@ String statusJson() {
           String(wifiTxPowerRuntimeFault ? "true" : "false") + ",";
   json += "\"mqtt_connected\":" + String(mqtt.connected() ? "true" : "false") + ",";
   json += "\"meter_fresh\":" + String(fresh ? "true" : "false") + ",";
+  json += "\"meter_status\":\"" +
+          String(meterDiagnosisCodeName(meterHealth.code)) + "\",";
   json += "\"meter_protocol\":\"" +
           String(meterProtocolName(meter.detectedProtocol)) + "\",";
   json += "\"configured_meter_protocol\":\"" +

@@ -262,6 +262,8 @@ void setupRoutes() {
   server.on("/ir/stop", HTTP_POST, handleIrStop);
   server.on("/system/update", HTTP_POST, handleOtaFinished,
             handleOtaUpload);
+  server.on("/api/v1/update/bundle", HTTP_POST,
+            handleCombinedBundleFinished, handleCombinedBundleUpload);
   server.on("/system/restart", HTTP_POST, handleRestart);
   server.on("/api/v1/asset-partition", HTTP_GET, [] {
     if (requireAdmin())

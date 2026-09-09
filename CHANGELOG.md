@@ -2,6 +2,36 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.8 — 2026-09-09
+
+### Deutsch
+
+- Neues signiertes Ein-Datei-Format `IRUP200`: Firmware und 64-kB-Webassets
+  werden gemeinsam ausgeliefert und über WLAN installiert.
+- Signatur und Manifest werden vor dem Schreiben geprüft. Firmware- und
+  Asset-SHA-256 müssen stimmen; der neue OTA-Slot wird erst danach aktiviert.
+- GitHub-Updates verwenden das vollständige `.irup`-Paket. Das normale
+  signierte `.irfw` bleibt zusätzlich für ältere Tracker und manuelle
+  App-Updates verfügbar.
+- Die Wartungsseite benötigt für ein vollständiges Update nur noch eine
+  `.irup`-Datei und sichert vorher die bestehende Asset-Partition.
+- Zählerdiagnose unterscheidet nun fehlende Telegramme, gültige Telegramme
+  ohne aktuellen Leistungswert und vollständig aktuelle Daten.
+- Historienansicht stellt Ausfälle als dezente Flächen dar und vermeidet eine
+  kurzzeitige falsche Lücke am aktuellen Rand.
+- History-Tagesabfrage und Weboberfläche wurden weiter optimiert.
+
+### English
+
+- Added the signed `IRUP200` single-file format containing both firmware and
+  the 64 KiB web asset image.
+- Signature and manifest are verified before writing. Both SHA-256 digests
+  must match, and the new OTA slot is activated only after all checks pass.
+- GitHub updates use the complete `.irup` bundle. The normal signed `.irfw`
+  remains available for older trackers and manual app-only updates.
+- Meter diagnostics now distinguish no valid telegram, valid telegrams with
+  stale or missing power, and fully current readings.
+
 ## 1.3.7 — 2026-09-07
 
 ### Deutsch

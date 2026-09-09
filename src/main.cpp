@@ -57,7 +57,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.7";
+constexpr char kFirmwareVersion[] = "1.3.8";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -205,11 +205,29 @@ struct GithubUpdateState {
   String version;
   String assetName;
   String assetUrl;
+  String planUrl;
+  String webAssetUrl;
   String error;
   size_t assetSize = 0;
+  size_t planSize = 0;
+  size_t webAssetSize = 0;
   uint32_t lastAttemptMs = 0;
   time_t lastSuccess = 0;
 } githubUpdate;
+
+struct CombinedUpdatePlan {
+  bool valid = false;
+  bool firmwareStaged = false;
+  bool assetsStaged = false;
+  char version[32] = {};
+  char firmwareSha256[65] = {};
+  char assetsSha256[65] = {};
+  uint32_t firmwareSize = 0;
+  uint32_t assetsSize = 0;
+  String error;
+} combinedUpdate;
+
+bool assetBackupServed = false;
 
 // DE: Die gefuehrte GPIO-Suche veraendert nur die laufende UART-Konfiguration.
 // Sie speichert nichts und stellt die normale Konfiguration nach Erfolg, Fehler
@@ -346,6 +364,11 @@ void manageModbusMeterServer();
 
 #include "app/diagnostics/GpioScanner.cpp"
 
+uint32_t largestFreeHeapBlockBytes();
+uint32_t loopStackHighWaterMarkBytes();
+
+#include "app/diagnostics/DiagnosticsApi.cpp"
+
 #include "app/web/StatusApi.cpp"
 
 #include "app/web/TelemetryApi.cpp"
@@ -353,8 +376,6 @@ void manageModbusMeterServer();
 #include "app/web/EcoTrackerEmulation.cpp"
 
 #include "app/web/ShellyEmulation.cpp"
-
-#include "app/diagnostics/DiagnosticsApi.cpp"
 
 #include "app/web/DashboardHistory.cpp"
 

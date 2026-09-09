@@ -26,6 +26,58 @@ void resetAssetRawUpload() {
   mbedtls_sha256_init(&assetRawUpload.sha);
 }
 
+bool beginAssetRawUpload(const String &expectedSha256) {
+  assetRawUpload.expectedSha256 = expectedSha256;
+  assetRawUpload.expectedSha256.toLowerCase();
+  if (assetRawUpload.expectedSha256.length() != 64 ||
+      !debugStorage.fixedLayoutValid()) {
+    assetRawUpload.error = !debugStorage.fixedLayoutValid()
+                                ? debugStorage.fixedLayoutError()
+                                : "asset_sha256_missing";
+    return false;
+  }
+  requestCpuBoost("asset_update");
+  assetRawUpload.ok = debugStorage.beginRawAssetUpdate() &&
+                      mbedtls_sha256_starts_ret(&assetRawUpload.sha, 0) == 0;
+  assetRawUpload.shaStarted = assetRawUpload.ok;
+  if (!assetRawUpload.ok) assetRawUpload.error = "asset_erase_failed";
+  return assetRawUpload.ok;
+}
+
+bool writeAssetRawUpload(const uint8_t *data, size_t length) {
+  if (!assetRawUpload.ok || assetRawUpload.written > 0x10000U ||
+      length > 0x10000U - assetRawUpload.written ||
+      mbedtls_sha256_update_ret(&assetRawUpload.sha, data, length) != 0 ||
+      !debugStorage.writeRawAsset(assetRawUpload.written, data, length)) {
+    assetRawUpload.ok = false;
+    assetRawUpload.error = "asset_write_failed";
+    return false;
+  }
+  assetRawUpload.written += length;
+  return true;
+}
+
+bool finishAssetRawUpload() {
+  uint8_t digest[32] = {};
+  const bool complete = assetRawUpload.written == 0x10000U;
+  const bool digestOk =
+      complete && mbedtls_sha256_finish_ret(&assetRawUpload.sha, digest) == 0 &&
+      constantTimeEqual(hexBytes(digest, sizeof(digest)),
+                        assetRawUpload.expectedSha256);
+  memset(digest, 0, sizeof(digest));
+  assetRawUpload.ok = digestOk;
+  if (!complete)
+    assetRawUpload.error = "asset_size_mismatch";
+  else if (!digestOk)
+    assetRawUpload.error = "asset_sha256_mismatch";
+  else if (!debugStorage.finishRawAssetUpdate(kFirmwareVersion)) {
+    assetRawUpload.ok = false;
+    assetRawUpload.error = debugStorage.assetManifestError();
+  }
+  if (assetRawUpload.ok) assetBackupServed = false;
+  return assetRawUpload.ok;
+}
+
 String assetPartitionLayoutJson() {
   String json;
   json.reserve(280);
@@ -61,6 +113,7 @@ void handleAssetPartitionBackup() {
       return;
     delay(0);
   }
+  assetBackupServed = true;
 }
 
 void handleAssetPartitionUpload() {
@@ -68,12 +121,9 @@ void handleAssetPartitionUpload() {
   if (upload.status == UPLOAD_FILE_START) {
     resetAssetRawUpload();
     assetRawUpload.authorized = otaRequestAuthorized();
-    assetRawUpload.expectedSha256 = server.header("X-Asset-SHA256");
-    assetRawUpload.expectedSha256.toLowerCase();
     assetRawUpload.ok = assetRawUpload.authorized &&
                         server.header("X-Asset-Confirm") ==
                             "BACKUP-VERIFIED-0x2B0000-0x10000" &&
-                        assetRawUpload.expectedSha256.length() == 64 &&
                         debugStorage.fixedLayoutValid();
     if (!assetRawUpload.ok) {
       assetRawUpload.error = !assetRawUpload.authorized
@@ -83,41 +133,11 @@ void handleAssetPartitionUpload() {
                                        : "backup_or_sha_confirmation_missing";
       return;
     }
-    requestCpuBoost("asset_update");
-    assetRawUpload.ok = debugStorage.beginRawAssetUpdate() &&
-                        mbedtls_sha256_starts_ret(&assetRawUpload.sha, 0) == 0;
-    assetRawUpload.shaStarted = assetRawUpload.ok;
-    if (!assetRawUpload.ok) assetRawUpload.error = "asset_erase_failed";
+    assetRawUpload.ok = beginAssetRawUpload(server.header("X-Asset-SHA256"));
   } else if (upload.status == UPLOAD_FILE_WRITE && assetRawUpload.ok) {
-    if (assetRawUpload.written > 0x10000U ||
-        upload.currentSize > 0x10000U - assetRawUpload.written ||
-        mbedtls_sha256_update_ret(&assetRawUpload.sha, upload.buf,
-                                  upload.currentSize) != 0 ||
-        !debugStorage.writeRawAsset(assetRawUpload.written, upload.buf,
-                                    upload.currentSize)) {
-      assetRawUpload.ok = false;
-      assetRawUpload.error = "asset_write_failed";
-      return;
-    }
-    assetRawUpload.written += upload.currentSize;
+    writeAssetRawUpload(upload.buf, upload.currentSize);
   } else if (upload.status == UPLOAD_FILE_END && assetRawUpload.ok) {
-    uint8_t digest[32] = {};
-    const bool complete = assetRawUpload.written == 0x10000U;
-    const bool digestOk =
-        complete &&
-        mbedtls_sha256_finish_ret(&assetRawUpload.sha, digest) == 0 &&
-        constantTimeEqual(hexBytes(digest, sizeof(digest)),
-                          assetRawUpload.expectedSha256);
-    memset(digest, 0, sizeof(digest));
-    assetRawUpload.ok = digestOk;
-    if (!complete)
-      assetRawUpload.error = "asset_size_mismatch";
-    else if (!digestOk)
-      assetRawUpload.error = "asset_sha256_mismatch";
-    else if (!debugStorage.finishRawAssetUpdate(kFirmwareVersion)) {
-      assetRawUpload.ok = false;
-      assetRawUpload.error = debugStorage.assetManifestError();
-    }
+    finishAssetRawUpload();
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
     assetRawUpload.ok = false;
     assetRawUpload.error = "asset_upload_aborted";
@@ -141,7 +161,197 @@ void handleAssetPartitionUploadFinished() {
                "Webasset-Image ueber WLAN geprueft und installiert");
   server.send(200, "application/json",
               "{\"ok\":true,\"bytes\":65536,\"sha256\":\"" +
-                  assetRawUpload.expectedSha256 + "\"}");
+              assetRawUpload.expectedSha256 + "\"}");
+}
+
+void resetSignedOta();
+bool consumeSignedOta(const uint8_t *data, size_t length);
+bool verifySignedOta(const char *expectedSha256);
+bool commitVerifiedOta();
+
+constexpr size_t kCombinedPlanMaximumBytes = 1536;
+// IRUP200 is one signed stream: header, signature, manifest, app and 64 KiB
+// assets.  The inactive app slot is committed only after both payload hashes
+// have been checked successfully.
+struct CombinedBundleUploadState {
+  bool authorized = false;
+  bool ok = false;
+  bool manifestVerified = false;
+  uint8_t header[16] = {};
+  size_t headerRead = 0;
+  uint8_t signature[80] = {};
+  size_t signatureRead = 0;
+  uint8_t manifest[kCombinedPlanMaximumBytes] = {};
+  size_t manifestRead = 0;
+  uint32_t manifestSize = 0;
+  uint16_t signatureSize = 0;
+  size_t firmwareWritten = 0;
+  size_t assetsWritten = 0;
+  bool firmwareShaStarted = false;
+  mbedtls_sha256_context firmwareSha;
+  String error;
+} combinedBundleUpload;
+
+void resetCombinedBundleUpload() {
+  if (combinedBundleUpload.firmwareShaStarted)
+    mbedtls_sha256_free(&combinedBundleUpload.firmwareSha);
+  combinedBundleUpload = CombinedBundleUploadState{};
+  mbedtls_sha256_init(&combinedBundleUpload.firmwareSha);
+}
+
+bool validUpdateSha256(const char *value) {
+  if (!value || strlen(value) != 64) return false;
+  for (uint8_t index = 0; index < 64; ++index)
+    if (!isxdigit(static_cast<unsigned char>(value[index]))) return false;
+  return true;
+}
+
+bool verifySignedBundleManifest(const uint8_t *signature, size_t signatureSize,
+                                const uint8_t *manifest, size_t manifestSize,
+                                String &error) {
+  uint8_t digest[32] = {};
+  mbedtls_sha256_context sha;
+  mbedtls_sha256_init(&sha);
+  const bool hashOk = mbedtls_sha256_starts_ret(&sha, 0) == 0 &&
+      mbedtls_sha256_update_ret(&sha, manifest, manifestSize) == 0 &&
+      mbedtls_sha256_finish_ret(&sha, digest) == 0;
+  mbedtls_sha256_free(&sha);
+  mbedtls_pk_context key;
+  mbedtls_pk_init(&key);
+  const int parsed = mbedtls_pk_parse_public_key(
+      &key, reinterpret_cast<const unsigned char *>(kFirmwareSigningPublicKey),
+      strlen(kFirmwareSigningPublicKey) + 1);
+  const int verified = hashOk && parsed == 0
+      ? mbedtls_pk_verify(&key, MBEDTLS_MD_SHA256, digest, sizeof(digest), signature, signatureSize)
+      : -1;
+  mbedtls_pk_free(&key);
+  memset(digest, 0, sizeof(digest));
+  if (verified != 0) { error = "update_bundle_signature_invalid"; return false; }
+  StaticJsonDocument<768> document;
+  if (deserializeJson(document, manifest, manifestSize)) { error = "update_bundle_json_invalid"; return false; }
+  const char *version = document["version"] | "";
+  const char *firmwareSha = document["firmware"]["sha256"] | "";
+  const char *assetsSha = document["assets"]["sha256"] | "";
+  const uint32_t firmwareSize = document["firmware"]["size"] | 0U;
+  const uint32_t assetsSize = document["assets"]["size"] | 0U;
+  if ((document["schema"] | 0) != 2 || !version[0] ||
+      strlen(version) >= sizeof(combinedUpdate.version) ||
+      !validUpdateSha256(firmwareSha) || !validUpdateSha256(assetsSha) ||
+      firmwareSize < 1024 || firmwareSize > 0x150000U || assetsSize != 0x10000U) {
+    error = "update_bundle_content_invalid"; return false;
+  }
+  combinedUpdate = CombinedUpdatePlan{};
+  strlcpy(combinedUpdate.version, version, sizeof(combinedUpdate.version));
+  strlcpy(combinedUpdate.firmwareSha256, firmwareSha, sizeof(combinedUpdate.firmwareSha256));
+  strlcpy(combinedUpdate.assetsSha256, assetsSha, sizeof(combinedUpdate.assetsSha256));
+  combinedUpdate.firmwareSize = firmwareSize;
+  combinedUpdate.assetsSize = assetsSize;
+  combinedUpdate.valid = true;
+  return true;
+}
+
+bool beginCombinedBundlePayload(String &error) {
+  if (!debugStorage.fixedLayoutValid()) { error = debugStorage.fixedLayoutError(); return false; }
+  if (!Update.begin(combinedUpdate.firmwareSize, U_FLASH)) { error = "update_partition_unavailable"; return false; }
+  if (mbedtls_sha256_starts_ret(&combinedBundleUpload.firmwareSha, 0) != 0) {
+    Update.abort(); error = "sha256_initialization_failed"; return false;
+  }
+  combinedBundleUpload.firmwareShaStarted = true;
+  return true;
+}
+
+bool finishCombinedBundleFirmware(String &error) {
+  uint8_t digest[32] = {};
+  const bool valid = mbedtls_sha256_finish_ret(&combinedBundleUpload.firmwareSha, digest) == 0 &&
+      constantTimeEqual(hexBytes(digest, sizeof(digest)), combinedUpdate.firmwareSha256);
+  memset(digest, 0, sizeof(digest));
+  if (!valid) { error = "firmware_sha256_mismatch"; return false; }
+  combinedUpdate.firmwareStaged = true;
+  resetAssetRawUpload();
+  if (!beginAssetRawUpload(combinedUpdate.assetsSha256)) { error = assetRawUpload.error; return false; }
+  return true;
+}
+
+bool consumeCombinedBundle(const uint8_t *data, size_t length) {
+  size_t offset = 0;
+  while (offset < length) {
+    if (combinedBundleUpload.headerRead < sizeof(combinedBundleUpload.header)) {
+      const size_t count = std::min(length - offset, sizeof(combinedBundleUpload.header) - combinedBundleUpload.headerRead);
+      memcpy(combinedBundleUpload.header + combinedBundleUpload.headerRead, data + offset, count);
+      combinedBundleUpload.headerRead += count; offset += count;
+      if (combinedBundleUpload.headerRead == sizeof(combinedBundleUpload.header)) {
+        static const uint8_t magic[8] = {'I','R','U','P','2','0','0',0};
+        const uint8_t *h = combinedBundleUpload.header;
+        combinedBundleUpload.manifestSize = static_cast<uint32_t>(h[8]) | (static_cast<uint32_t>(h[9]) << 8) | (static_cast<uint32_t>(h[10]) << 16) | (static_cast<uint32_t>(h[11]) << 24);
+        combinedBundleUpload.signatureSize = static_cast<uint16_t>(h[12]) | (static_cast<uint16_t>(h[13]) << 8);
+        if (memcmp(h, magic, sizeof(magic)) || h[14] || h[15] || !combinedBundleUpload.manifestSize ||
+            combinedBundleUpload.manifestSize > kCombinedPlanMaximumBytes || combinedBundleUpload.signatureSize < 64 ||
+            combinedBundleUpload.signatureSize > sizeof(combinedBundleUpload.signature)) { combinedBundleUpload.error = "update_bundle_header_invalid"; return false; }
+      }
+      continue;
+    }
+    if (combinedBundleUpload.signatureRead < combinedBundleUpload.signatureSize) {
+      const size_t count = std::min(length - offset, static_cast<size_t>(combinedBundleUpload.signatureSize) - combinedBundleUpload.signatureRead);
+      memcpy(combinedBundleUpload.signature + combinedBundleUpload.signatureRead, data + offset, count);
+      combinedBundleUpload.signatureRead += count; offset += count; continue;
+    }
+    if (combinedBundleUpload.manifestRead < combinedBundleUpload.manifestSize) {
+      const size_t count = std::min(length - offset, static_cast<size_t>(combinedBundleUpload.manifestSize) - combinedBundleUpload.manifestRead);
+      memcpy(combinedBundleUpload.manifest + combinedBundleUpload.manifestRead, data + offset, count);
+      combinedBundleUpload.manifestRead += count; offset += count;
+      if (combinedBundleUpload.manifestRead == combinedBundleUpload.manifestSize) {
+        if (!verifySignedBundleManifest(combinedBundleUpload.signature, combinedBundleUpload.signatureSize,
+                                        combinedBundleUpload.manifest, combinedBundleUpload.manifestSize,
+                                        combinedBundleUpload.error) || !beginCombinedBundlePayload(combinedBundleUpload.error)) return false;
+        combinedBundleUpload.manifestVerified = true;
+      }
+      continue;
+    }
+    if (combinedBundleUpload.firmwareWritten < combinedUpdate.firmwareSize) {
+      const size_t count = std::min(length - offset, static_cast<size_t>(combinedUpdate.firmwareSize) - combinedBundleUpload.firmwareWritten);
+      if (!combinedBundleUpload.firmwareWritten && data[offset] != 0xE9) { combinedBundleUpload.error = "not_an_esp32_application"; return false; }
+      if (mbedtls_sha256_update_ret(&combinedBundleUpload.firmwareSha, data + offset, count) != 0 ||
+          Update.write(const_cast<uint8_t *>(data + offset), count) != count) { combinedBundleUpload.error = "firmware_write_failed"; return false; }
+      combinedBundleUpload.firmwareWritten += count; offset += count;
+      if (combinedBundleUpload.firmwareWritten == combinedUpdate.firmwareSize && !finishCombinedBundleFirmware(combinedBundleUpload.error)) return false;
+      continue;
+    }
+    if (combinedBundleUpload.assetsWritten < combinedUpdate.assetsSize) {
+      const size_t count = std::min(length - offset, static_cast<size_t>(combinedUpdate.assetsSize) - combinedBundleUpload.assetsWritten);
+      if (!writeAssetRawUpload(data + offset, count)) { combinedBundleUpload.error = assetRawUpload.error; return false; }
+      combinedBundleUpload.assetsWritten += count; offset += count; continue;
+    }
+    combinedBundleUpload.error = "update_bundle_trailing_data"; return false;
+  }
+  return true;
+}
+
+void handleCombinedBundleUpload() {
+  HTTPUpload &upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    resetSignedOta(); resetAssetRawUpload(); resetCombinedBundleUpload(); combinedUpdate = CombinedUpdatePlan{};
+    combinedBundleUpload.authorized = otaRequestAuthorized();
+    combinedBundleUpload.ok = combinedBundleUpload.authorized && upload.filename.endsWith(".irup") && assetBackupServed;
+    if (!combinedBundleUpload.ok) combinedBundleUpload.error = !combinedBundleUpload.authorized ? "unauthorized" : !assetBackupServed ? "asset_backup_required" : "signed_irup_bundle_required";
+  } else if (upload.status == UPLOAD_FILE_WRITE && combinedBundleUpload.ok) {
+    if (!consumeCombinedBundle(upload.buf, upload.currentSize)) { combinedBundleUpload.ok = false; Update.abort(); }
+  } else if (upload.status == UPLOAD_FILE_END && combinedBundleUpload.ok) {
+    combinedBundleUpload.ok = combinedBundleUpload.manifestVerified && combinedUpdate.firmwareStaged &&
+        combinedBundleUpload.assetsWritten == 0x10000U && finishAssetRawUpload();
+    if (combinedBundleUpload.ok) combinedUpdate.assetsStaged = true; else Update.abort();
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    combinedBundleUpload.ok = false; combinedBundleUpload.error = "update_bundle_upload_aborted"; Update.abort();
+  }
+}
+
+void handleCombinedBundleFinished() {
+  if (!combinedBundleUpload.authorized || !combinedBundleUpload.ok || !combinedUpdate.assetsStaged || !commitVerifiedOta()) {
+    const String error = combinedBundleUpload.error.length() ? combinedBundleUpload.error : otaUploadError.length() ? otaUploadError : "update_bundle_invalid";
+    server.send(400, "application/json", "{\"error\":\"" + jsonEscape(error) + "\"}"); return;
+  }
+  eventLog.add("WARN", "COMBINED_UPDATE", "Signiertes Gesamtupdate installiert: " + String(combinedUpdate.version));
+  server.send(200, "application/json", "{\"ok\":true,\"restart\":true}");
+  delay(500); ESP.restart();
 }
 
 void resetSignedOta() {
@@ -235,7 +445,7 @@ bool consumeSignedOta(const uint8_t *data, size_t length) {
   return true;
 }
 
-bool finishSignedOta() {
+bool verifySignedOta(const char *expectedSha256 = nullptr) {
   if (!signedOta.updateStarted ||
       signedOta.firmwareWritten != signedOta.firmwareSize ||
       signedOta.signatureRead != signedOta.signatureSize) {
@@ -260,11 +470,22 @@ bool finishSignedOta() {
                               signedOta.signatureSize)
           : parseResult;
   mbedtls_pk_free(&publicKey);
-  memset(digest, 0, sizeof(digest));
   if (verifyResult != 0) {
+    memset(digest, 0, sizeof(digest));
     otaUploadError = "firmware_signature_invalid";
     return false;
   }
+  if (expectedSha256 &&
+      !constantTimeEqual(hexBytes(digest, sizeof(digest)), expectedSha256)) {
+    memset(digest, 0, sizeof(digest));
+    otaUploadError = "firmware_sha256_mismatch";
+    return false;
+  }
+  memset(digest, 0, sizeof(digest));
+  return true;
+}
+
+bool commitVerifiedOta() {
   if (!history.flushPending(HistoryStore::Tier::Minute)) {
     otaUploadError = "history_flush_before_update_failed";
     eventLog.add("ERROR", "OTA_HISTORY_FLUSH",
@@ -278,6 +499,10 @@ bool finishSignedOta() {
     return false;
   }
   return true;
+}
+
+bool finishSignedOta() {
+  return verifySignedOta() && commitVerifiedOta();
 }
 
 #if IR_TRACKER_ENABLE_GITHUB_UPDATE
@@ -311,6 +536,8 @@ String githubUpdateJson() {
                 ",\"latest_version\":\"" + jsonEscape(githubUpdate.version) +
                 "\",\"asset_name\":\"" + jsonEscape(githubUpdate.assetName) +
                 "\",\"asset_size\":" + String(githubUpdate.assetSize) +
+                ",\"complete_package\":" +
+                String(githubUpdate.planUrl.length() && githubUpdate.webAssetUrl.length() ? "true" : "false") +
                 ",\"last_success\":" + String(static_cast<uint32_t>(githubUpdate.lastSuccess)) +
                 ",\"error\":\"" + jsonEscape(githubUpdate.error) + "\"}";
   return json;
@@ -326,6 +553,10 @@ bool checkGithubFirmwareUpdate() {
   githubUpdate.assetName = "";
   githubUpdate.assetUrl = "";
   githubUpdate.assetSize = 0;
+  githubUpdate.planUrl = "";
+  githubUpdate.webAssetUrl = "";
+  githubUpdate.planSize = 0;
+  githubUpdate.webAssetSize = 0;
   if (!networkConnected()) {
     githubUpdate.error = "network_not_connected";
     githubUpdate.checking = false;
@@ -360,10 +591,8 @@ bool checkGithubFirmwareUpdate() {
   StaticJsonDocument<512> filter;
   filter[0]["draft"] = true;
   filter[0]["tag_name"] = true;
-  filter[0]["assets"][0]["name"] = true;
-  filter[0]["assets"][0]["browser_download_url"] = true;
-  filter[0]["assets"][0]["size"] = true;
-  DynamicJsonDocument releases(12288);
+  filter[0]["assets"] = true;
+  DynamicJsonDocument releases(16384);
   const DeserializationError parseError = deserializeJson(
       releases, http.getStream(), DeserializationOption::Filter(filter));
   if (parseError) {
@@ -379,21 +608,38 @@ bool checkGithubFirmwareUpdate() {
     const String tag = release["tag_name"] | "";
     const uint64_t candidate = firmwareVersionNumber(tag);
     if (!candidate || candidate <= best) continue;
+    const String version = tag.startsWith("v") ? tag.substring(1) : tag;
+    String bundleName, bundleUrl, firmwareUrl;
+    size_t bundleSize = 0, firmwareSize = 0;
     for (JsonObject asset : release["assets"].as<JsonArray>()) {
       const String name = asset["name"] | "";
       const String url = asset["browser_download_url"] | "";
       const size_t size = asset["size"] | 0;
-      if (!name.startsWith("ir-tracker-custom-") || !name.endsWith(".irfw") ||
-          !url.startsWith(kGithubAssetPrefix) || size < 1024 ||
-          size > kGithubMaximumPackageBytes)
-        continue;
+      if (!url.startsWith(kGithubAssetPrefix)) continue;
+      if (name == "ir-tracker-update-" + version + ".irup" &&
+          size >= 0x11000U && size <= kGithubMaximumPackageBytes + 0x11000U) {
+        bundleName = name;
+        bundleUrl = url;
+        bundleSize = size;
+      } else if (name == "ir-tracker-custom-" + version + ".irfw" &&
+                 size >= 1024 && size <= kGithubMaximumPackageBytes) {
+        firmwareUrl = url;
+        firmwareSize = size;
+      }
+    }
+    // IRFW stays published for older/manual installs, but automatic updates
+    // deliberately accept only the one-file, asset-bound IRUP200 package.
+    if (bundleUrl.length() && firmwareUrl.length()) {
       best = candidate;
-      githubUpdate.version = tag.startsWith("v") ? tag.substring(1) : tag;
-      githubUpdate.assetName = name;
-      githubUpdate.assetUrl = url;
-      githubUpdate.assetSize = size;
+      githubUpdate.version = version;
+      githubUpdate.assetName = bundleName;
+      githubUpdate.assetUrl = bundleUrl;
+      githubUpdate.assetSize = bundleSize;
+      githubUpdate.planUrl = firmwareUrl;
+      githubUpdate.planSize = firmwareSize;
+      githubUpdate.webAssetUrl = "bundled";
+      githubUpdate.webAssetSize = 0x10000U;
       githubUpdate.available = true;
-      break;
     }
   }
   http.end();
@@ -410,8 +656,8 @@ bool checkGithubFirmwareUpdate() {
 bool installGithubFirmwareUpdate() {
   if (!githubUpdate.available || githubUpdate.installing ||
       !githubUpdate.assetUrl.startsWith(kGithubAssetPrefix) ||
-      githubUpdate.assetSize < 1024 ||
-      githubUpdate.assetSize > kGithubMaximumPackageBytes) {
+      githubUpdate.assetSize < 0x11000U ||
+      githubUpdate.assetSize > kGithubMaximumPackageBytes + 0x11000U) {
     githubUpdate.error = "no_valid_update_selected";
     return false;
   }
@@ -447,6 +693,9 @@ bool installGithubFirmwareUpdate() {
     return false;
   }
   resetSignedOta();
+  resetAssetRawUpload();
+  resetCombinedBundleUpload();
+  combinedUpdate = CombinedUpdatePlan{};
   otaUploadError = "";
   WiFiClient *stream = http.getStreamPtr();
   uint8_t buffer[1024];
@@ -461,27 +710,31 @@ bool installGithubFirmwareUpdate() {
           sizeof(buffer), std::min<size_t>(available,
                                            githubUpdate.assetSize - received));
       const int count = stream->readBytes(buffer, wanted);
-      if (count <= 0 || !consumeSignedOta(buffer, count)) {
+      if (count <= 0 || !consumeCombinedBundle(buffer, count)) {
         ok = false;
         break;
       }
       received += count;
       lastProgress = millis();
     } else if (!http.connected() || millis() - lastProgress > 12000) {
-      otaUploadError = "update_download_incomplete";
+      combinedBundleUpload.error = "update_bundle_download_incomplete";
       ok = false;
       break;
     } else {
       delay(2);
     }
   }
-  if (ok && received == githubUpdate.assetSize) ok = finishSignedOta();
-  if (!ok) Update.abort();
+  if (ok && received == githubUpdate.assetSize)
+    ok = combinedBundleUpload.manifestVerified && combinedUpdate.firmwareStaged &&
+         combinedBundleUpload.assetsWritten == 0x10000U && finishAssetRawUpload();
   http.end();
   memset(buffer, 0, sizeof(buffer));
+  if (ok) combinedUpdate.assetsStaged = true;
+  if (ok) ok = commitVerifiedOta();
+  if (!ok) Update.abort();
   githubUpdate.installing = false;
   if (!ok) {
-    githubUpdate.error = otaUploadError.length() ? otaUploadError : "update_failed";
+    githubUpdate.error = combinedBundleUpload.error.length() ? combinedBundleUpload.error : otaUploadError.length() ? otaUploadError : "update_failed";
     eventLog.add("ERROR", "GITHUB_UPDATE_FAILED", githubUpdate.error);
     return false;
   }

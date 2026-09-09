@@ -125,13 +125,27 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.7"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.8"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
         self.assertIn("URLSearchParams(location.search).get('lang')", I18N_SOURCE)
         self.assertIn('"Einstellungen":"Settings"', I18N_SOURCE)
         self.assertIn("Michael Roßmann", source)
+
+    def test_combined_update_requires_signed_plan_and_assets_before_commit(self):
+        update = (ROOT / "src/app/update/OtaManager.cpp").read_text(encoding="utf-8")
+        routes = (ROOT / "src/app/web/WebApi.cpp").read_text(encoding="utf-8")
+        self.assertIn("IRUP200", update)
+        self.assertIn("consumeCombinedBundle", update)
+        self.assertIn("combinedUpdate.firmwareStaged", update)
+        self.assertIn("combinedUpdate.assetsStaged", update)
+        self.assertIn("verifySignedBundleManifest", update)
+        self.assertIn("finishAssetRawUpload()", update)
+        self.assertIn("commitVerifiedOta()", update)
+        self.assertIn("ir-tracker-update-", update)
+        self.assertIn("/api/v1/update/bundle", routes)
+        self.assertTrue((ROOT / "tools/sign-update-manifest.py").is_file())
 
     def test_recurring_hotpaths_avoid_known_allocator_and_io_churn(self):
         self.assertIn("json.reserve(3000);", SOURCE)
@@ -162,11 +176,16 @@ class ProjectSecurityTests(unittest.TestCase):
             "rising CRC events with fresh valid data stay healthy",
             "stale valid data must remain a warning",
             "RX data without a valid telegram must be explicit",
-            "parse failures plus missing power must warn",
+            "fresh telegrams without fresh power must be restricted",
+            "stale telegram and power must report no signal, not restricted",
+            "fresh telegram and fresh power must remain OK",
         ):
             self.assertIn(case, diagnostics)
         self.assertIn("attempts >= 20U", diagnostics)
         self.assertIn("attempts) * 15U", diagnostics)
+        self.assertIn("powerUpdatedMs", diagnostics)
+        self.assertIn("meter.telegrams <= 1U", diagnostics)
+        self.assertIn('"Zähler erkannt – Leistungswert fehlt"', diagnostics)
         self.assertNotIn(
             "static_cast<uint64_t>(telegrams) +\n                                         parseErrors + crcErrors",
             diagnostics,

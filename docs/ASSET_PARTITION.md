@@ -2,7 +2,7 @@
 
 ## Deutsch
 
-Version 1.3.7 legt alle acht aktuellen statischen Webassets in der vorhandenen
+Version 1.3.8 legt alle acht aktuellen statischen Webassets in der vorhandenen
 64-kB-Partition `debugfs` beziehungsweise dem alten Label `coredump` ab. Ein
 kompakter Rohdatencontainer funktioniert unabhängig davon,
 ob die bestehende Partition den alten Core-Dump- oder den neuen SPIFFS-Subtype
@@ -17,7 +17,7 @@ Schnittstellen laufen dabei weiter.
 Der Container enthält `common.css.gz`, `common.js.gz`, `i18n.js.gz`,
 `dashboard.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
 `setup.html.gz` und `setup.js.gz`. Das Image ist immer exakt 65.536 Byte groß;
-36.360 Byte sind belegt und 29.176 Byte bleiben frei. Weder Partitionstabelle
+29.944 Byte sind belegt und 35.592 Byte bleiben frei. Weder Partitionstabelle
 noch History werden dafür verändert.
 
 Das signierte IRFW-Paket aktualisiert weiterhin ausschließlich die App. Das
@@ -33,7 +33,7 @@ Asset-Wiederherstellung und Neustart verfügbar.
 
 ## English
 
-Version 1.3.7 stores all eight current static web assets in the existing 64-kB
+Version 1.3.8 stores all eight current static web assets in the existing 64-kB
 partition labelled `debugfs`, with `coredump` retained as the legacy label. A
 compact raw container works with both the legacy core-dump subtype and
 the newer SPIFFS subtype. Firmware verifies the schema, required files, file
@@ -46,7 +46,7 @@ recovery UI. Meter acquisition, history and local interfaces continue running.
 The container holds `common.css.gz`, `common.js.gz`, `i18n.js.gz`,
 `dashboard.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
 `setup.html.gz` and `setup.js.gz`. The image is always exactly 65,536 bytes;
-36,360 bytes are used and 29,176 bytes remain free. Neither the partition table
+29,944 bytes are used and 35,592 bytes remain free. Neither the partition table
 nor history is changed.
 
 The signed IRFW package still updates the application only. The separate asset

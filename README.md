@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.7
+# IR Tracker Offline — 1.3.8
 
 **Deutsch** | [English](#english)
 
@@ -35,6 +35,7 @@ Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/O
 - eine Universal-Firmware für WLAN und optionales W5500-LAN; LAN wird bei
   vorhandenem Link bevorzugt, WLAN bleibt als automatischer Rückfall verbunden
 - signierte manuelle WLAN-Updates sowie sichere GitHub-Prüfung mit optionaler automatischer Installation
+- vollständige signierte Ein-Datei-Updates (`.irup`) für Firmware und Weboberfläche
 - Einstellungs-/Historienbackup, Selbsttest und Diagnose
 - geschützte GPIO-/Baudraten-Diagnose zur Unterstützung unterschiedlicher Hardware
 - browserlokale Farbauswahl und Sprache Deutsch/Englisch
@@ -93,6 +94,23 @@ Die Oberfläche verwendet HTTP und gehört ausschließlich in ein vertrauenswür
 
 Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständige Gerätesicherung, Einstellungen und Historie sichern. Die persönliche Original-Firmware darf nicht öffentlich verteilt werden.
 
+### Update auf 1.3.8 – richtige Reihenfolge
+
+- **Tracker mit „Vollständiges Update (.irup)“:** Direkt
+  `ir-tracker-update-1.3.8.irup` unter **Wartung** installieren. Firmware und
+  Weboberfläche werden gemeinsam geprüft und aktualisiert.
+- **Älterer Tracker, der nur `.irfw` anbietet:** Zuerst
+  `ir-tracker-custom-1.3.8.irfw` installieren und den Neustart abwarten. Danach
+  erneut **Wartung** öffnen und `ir-tracker-update-1.3.8.irup` installieren.
+  Dieser zweite Schritt ergänzt die passende Weboberfläche.
+- **Sehr alter Stand ohne signiertes WLAN-Update oder ohne kompatible
+  64-kB-Partition:** Zuerst den aktuellen USB-Installer verwenden. Er sichert
+  und prüft das Gerät, migriert ausschließlich den bisherigen 64-kB-
+  `coredump`-Bereich zu `debugfs` und erhält NVS, Einstellungen und Historie.
+
+Das einzelne Asset-Image ist nur für Diagnose und manuelle Wiederherstellung
+gedacht. Für normale Updates ab 1.3.8 wird ausschließlich die `.irup` benötigt.
+
 ## Dokumentation
 
 - [Installation und Rückkehr / Installation and recovery](docs/INSTALLATION.md)
@@ -111,7 +129,7 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 
 ## Projektstatus
 
-Version **1.3.7** akzeptiert beim signierten Firmwareupdate auch einen
+Version **1.3.8** akzeptiert beim signierten Firmwareupdate auch einen
 vollständig geprüften älteren Asset-Container. Dadurch bleibt ein Gerät nach
 einem normalen `.irfw`-Update bedienbar, auch wenn die separate 64-kB-
 Asset-Partition erst später aktualisiert wird. Fehlende oder manipulierte
@@ -244,7 +262,7 @@ See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the comple
 
 ### Project status
 
-Version **1.3.7** accepts a fully verified older asset container during a
+Version **1.3.8** accepts a fully verified older asset container during a
 signed firmware update. The tracker therefore remains usable after a normal
 `.irfw` update even when the separate 64-kB asset partition is updated later.
 Missing or modified required files still safely enter recovery. Interface
