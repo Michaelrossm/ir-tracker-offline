@@ -44,7 +44,11 @@
 #include <WebAssets.h>
 
 #if IR_TRACKER_ENABLE_MDNS
-#include <ESPmDNS.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <lwip/inet.h>
+#include <lwip/sockets.h>
+#include <strings.h>
 #endif
 
 #define IR_TRACKER_AMALGAMATED_BUILD 1
@@ -57,7 +61,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.8";
+constexpr char kFirmwareVersion[] = "1.3.9";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -156,6 +160,7 @@ bool accessPointAllowed = true;
 bool mdnsRunning = false;
 String mdnsAdvertisedIp;
 String mdnsAdvertisedTransport;
+bool mdnsAdvertisedModbus = false;
 #endif
 uint32_t lastWifiAttemptMs = 0;
 uint32_t lastMqttAttemptMs = 0;
@@ -167,9 +172,7 @@ uint8_t wifiCandidate = 0;
 uint8_t wifiTried = 0;
 uint32_t wifiCandidateStartedMs = 0;
 bool ntpConfigured = false;
-bool otaUploadAuthorized = false;
-bool otaUploadOk = false;
-String otaUploadError;
+String updateCommitError;
 bool autoPinAttempted = false;
 uint32_t lastHistorySampleMs = 0;
 uint32_t lastLiveSampleMs = 0;
@@ -205,18 +208,13 @@ struct GithubUpdateState {
   String version;
   String assetName;
   String assetUrl;
-  String planUrl;
-  String webAssetUrl;
   String error;
   size_t assetSize = 0;
-  size_t planSize = 0;
-  size_t webAssetSize = 0;
   uint32_t lastAttemptMs = 0;
   time_t lastSuccess = 0;
 } githubUpdate;
 
 struct CombinedUpdatePlan {
-  bool valid = false;
   bool firmwareStaged = false;
   bool assetsStaged = false;
   char version[32] = {};
@@ -224,10 +222,8 @@ struct CombinedUpdatePlan {
   char assetsSha256[65] = {};
   uint32_t firmwareSize = 0;
   uint32_t assetsSize = 0;
-  String error;
 } combinedUpdate;
 
-bool assetBackupServed = false;
 
 // DE: Die gefuehrte GPIO-Suche veraendert nur die laufende UART-Konfiguration.
 // Sie speichert nichts und stellt die normale Konfiguration nach Erfolg, Fehler
@@ -295,19 +291,6 @@ struct LoginGuard {
 };
 constexpr size_t kLoginGuardSlots = 8;
 LoginGuard loginGuards[kLoginGuardSlots];
-
-struct SignedOtaState {
-  uint8_t header[16] = {};
-  size_t headerRead = 0;
-  uint32_t firmwareSize = 0;
-  uint16_t signatureSize = 0;
-  uint8_t signature[80] = {};
-  size_t signatureRead = 0;
-  size_t firmwareWritten = 0;
-  bool updateStarted = false;
-  bool firstFirmwareByteChecked = false;
-  mbedtls_sha256_context sha;
-} signedOta;
 
 struct LiveSample {
   uint32_t timestamp = 0;
@@ -386,6 +369,10 @@ uint32_t loopStackHighWaterMarkBytes();
 #include "app/web/MaintenanceWeb.cpp"
 
 #include "app/meter/IrControl.cpp"
+
+#if IR_TRACKER_ENABLE_MDNS
+#include "app/network/MinimalMdns.cpp"
+#endif
 
 #include "app/network/NetworkManager.cpp"
 

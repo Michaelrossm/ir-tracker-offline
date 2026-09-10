@@ -36,8 +36,13 @@ void handleRoot() {
       <div class='chart-controls'>
         <div><label for='dashRange'>Zeitraum</label><select id='dashRange'>
           <option value='hour'>1 Stunde</option><option value='day' selected>Kalendertag (00:00–24:00)</option>
+          <option value='two_days'>2 Kalendertage</option>
           <option value='week'>Kalenderwoche (Mo–So)</option><option value='month'>Kalendermonat</option>
           <option value='year'>Kalenderjahr</option>
+        </select></div>
+        <div id='dashResolutionBox'><label for='dashResolution'>Anzeigeintervall</label><select id='dashResolution'>
+          <option value='60'>1 Minute</option><option value='300'>5 Minuten</option>
+          <option value='600'>10 Minuten</option><option value='900'>15 Minuten</option>
         </select></div>
       </div>
       <div id='dashDateNav' class='date-nav'>
@@ -184,7 +189,9 @@ HistoryQuery calendarHistoryQuery(const String &range, uint32_t now) {
   } else {
     start.tm_hour = 0;
     start.tm_min = 0;
-    if (range == "week")
+    if (range == "two_days")
+      start.tm_mday -= 1;
+    else if (range == "week")
       start.tm_mday -= (start.tm_wday + 6) % 7;  // DE: Montag | EN: Monday
     else if (range == "month")
       start.tm_mday = 1;
@@ -204,6 +211,8 @@ HistoryQuery calendarHistoryQuery(const String &range, uint32_t now) {
     end.tm_mon += 1;
   else if (range == "year")
     end.tm_year += 1;
+  else if (range == "two_days")
+    end.tm_mday += 2;
   else
     end.tm_mday += 1;
   end.tm_isdst = -1;
@@ -250,7 +259,7 @@ HistoryQuery historyQuery() {
     return {HistoryStore::Tier::Day, 0, now};
   if (range == "compare")
     return {HistoryStore::Tier::QuarterHour, now - 3 * 86400, now};
-  if (range == "hour" || range == "day" || range == "week" ||
+  if (range == "hour" || range == "day" || range == "two_days" || range == "week" ||
       range == "month" || range == "year")
     return calendarHistoryQuery(range, now);
   return {HistoryStore::Tier::Day, 0, now};
@@ -390,6 +399,72 @@ void handleDashboardSummary() {
   server.send(200, "application/json", json);
 }
 
+void streamMinuteGapDetails(const HistoryQuery &query, uint32_t now,
+                            bool enabled, WiFiClient &responseClient) {
+  uint32_t oldestMinute = 0;
+  const bool oldestRead =
+      enabled && history.forEach(HistoryStore::Tier::Minute, 0, 0xffffffffUL,
+                                 [&](const HistoryStore::Record &record) {
+                                   oldestMinute = record.timestamp;
+                                   return false;
+                                 });
+  const uint32_t precisionEnd = std::min(query.until, now);
+  if (!oldestRead || !oldestMinute || oldestMinute >= precisionEnd) {
+    server.sendContent(
+        "],\"gap_precision_from\":null,\"gaps\":[]}");
+    return;
+  }
+
+  const uint32_t precisionFrom = std::max(query.since, oldestMinute);
+  if (precisionFrom >= precisionEnd) {
+    server.sendContent(
+        "],\"gap_precision_from\":null,\"gaps\":[]}");
+    return;
+  }
+
+  server.sendContent("],\"gap_precision_from\":" + String(precisionFrom) +
+                     ",\"gaps\":[");
+  String chunk;
+  chunk.reserve(512);
+  bool firstGap = true;
+  uint32_t previousTimestamp = 0;
+  const auto appendGap = [&](uint32_t start, uint32_t end) {
+    if (end <= start) return;
+    if (!firstGap) chunk += ',';
+    firstGap = false;
+    chunk += "{\"start\":" + String(start) + ",\"end\":" + String(end) +
+             "}";
+    if (chunk.length() >= 480) {
+      server.sendContent(chunk);
+      chunk = "";
+    }
+  };
+
+  history.forEach(HistoryStore::Tier::Minute, precisionFrom, precisionEnd,
+                  [&](const HistoryStore::Record &record) {
+                    if (!responseClient.connected()) return false;
+                    if (!previousTimestamp) {
+                      if (record.timestamp - precisionFrom > 90U)
+                        appendGap(precisionFrom, record.timestamp);
+                    } else if (record.timestamp - previousTimestamp > 90U) {
+                      appendGap(previousTimestamp + 60U, record.timestamp);
+                    }
+                    previousTimestamp = record.timestamp;
+                    return true;
+                  });
+
+  const bool currentRange = query.until >= now - 60U;
+  const uint32_t trailingLimit = currentRange ? 150U : 90U;
+  if (!previousTimestamp) {
+    if (precisionEnd - precisionFrom > trailingLimit)
+      appendGap(precisionFrom, precisionEnd);
+  } else if (precisionEnd - previousTimestamp > trailingLimit) {
+    appendGap(previousTimestamp + 60U, precisionEnd);
+  }
+  if (responseClient.connected() && chunk.length()) server.sendContent(chunk);
+  if (responseClient.connected()) server.sendContent("]}");
+}
+
 void handleHistoryJson() {
   if (!requireAdmin()) return;
   WiFiClient responseClient = server.client();
@@ -476,7 +551,10 @@ void handleHistoryJson() {
                      return true;
                    });
   if (responseClient.connected() && chunk.length()) server.sendContent(chunk);
-  if (responseClient.connected()) server.sendContent("]}");
+  if (responseClient.connected())
+    streamMinuteGapDetails(query, now,
+                           range == "day" || range == "two_days",
+                           responseClient);
 }
 
 void handleHistoryCsv() {

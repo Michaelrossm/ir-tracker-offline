@@ -7,44 +7,25 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import struct
 import zipfile
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-IRFW_MAGIC = b"IRFW100\0"
 APP_PARTITION_BYTES = 0x150000
 
 
-def validate_firmware_pair(package_path: Path, usb_path: Path) -> None:
-    package = package_path.read_bytes()
-    if len(package) < 16:
-        raise SystemExit("IRFW-Paket ist zu kurz. / IRFW package is too short.")
-    magic, firmware_size, signature_size, reserved = struct.unpack(
-        "<8sIHH", package[:16]
-    )
-    expected_size = 16 + signature_size + firmware_size
-    if (
-        magic != IRFW_MAGIC
-        or reserved != 0
-        or not 64 <= signature_size <= 80
-        or len(package) != expected_size
-    ):
-        raise SystemExit("IRFW-Struktur ist ungültig. / Invalid IRFW structure.")
-    firmware = package[16 + signature_size :]
-    usb_firmware = usb_path.read_bytes()
-    if firmware != usb_firmware:
+def validate_firmware(usb_path: Path) -> None:
+    firmware = usb_path.read_bytes()
+    if len(firmware) < 1024 or firmware[:1] != b"\xE9":
+        raise SystemExit("Ungültiges ESP32-App-Image. / Invalid ESP32 app image.")
+    if len(firmware) > APP_PARTITION_BYTES:
         raise SystemExit(
-            "IRFW und USB-BIN stimmen nicht überein. / IRFW and USB BIN differ."
-        )
-    if firmware_size > APP_PARTITION_BYTES:
-        raise SystemExit(
-            f"Firmware ist {firmware_size - APP_PARTITION_BYTES} Byte zu groß. / "
-            f"Firmware exceeds the app partition by {firmware_size - APP_PARTITION_BYTES} bytes."
+            f"Firmware ist {len(firmware) - APP_PARTITION_BYTES} Byte zu groß. / "
+            f"Firmware exceeds the app partition by {len(firmware) - APP_PARTITION_BYTES} bytes."
         )
     print(
-        f"App reserve / App-Reserve: {APP_PARTITION_BYTES - firmware_size} bytes"
+        f"App reserve / App-Reserve: {APP_PARTITION_BYTES - len(firmware)} bytes"
     )
 
 
@@ -56,7 +37,6 @@ def main() -> None:
     release = ROOT / "release"
     firmware_files = [
         release / f"ir-tracker-update-{version}.irup",
-        release / f"ir-tracker-custom-{version}.irfw",
         release / f"ir-tracker-custom-{version}-usb.bin",
         release / f"partitions-{version}.bin",
         release / f"ir-tracker-assets-{version}.bin",
@@ -92,7 +72,6 @@ def main() -> None:
         ROOT / "tests" / "http_security_test.py",
         ROOT / "tests" / "test_asset_partition.py",
         release / f"RELEASE_NOTES-{version}.md",
-        release / f"ir-tracker-assets-{version}.report.json",
     ]
     license_files = sorted((ROOT / "licenses").glob("*"))
     files = firmware_files + documents + license_files
@@ -103,12 +82,12 @@ def main() -> None:
         lowered = str(path).lower()
         if "original bin" in lowered or "signing/private" in lowered:
             raise SystemExit(f"Private/proprietäre Datei abgewiesen / Private/proprietary file rejected: {path}")
-    validate_firmware_pair(firmware_files[1], firmware_files[2])
-    if firmware_files[3].stat().st_size != 3072:
+    validate_firmware(firmware_files[1])
+    if firmware_files[2].stat().st_size != 3072:
         raise SystemExit(
             "Unerwartete Partitionstabellengröße. / Unexpected partition-table size."
         )
-    if firmware_files[4].stat().st_size != 0x10000:
+    if firmware_files[3].stat().st_size != 0x10000:
         raise SystemExit(
             "Unerwartete Asset-Partitionsgröße. / Unexpected asset-partition size."
         )

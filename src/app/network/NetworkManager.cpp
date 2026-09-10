@@ -111,55 +111,33 @@ bool beginNextKnownWifi() {
 #if IR_TRACKER_ENABLE_MDNS
 void stopMdnsDiscovery() {
   if (!mdnsRunning) return;
-  MDNS.end();
+  MinimalMdns::end();
   mdnsRunning = false;
   mdnsAdvertisedIp = "";
   mdnsAdvertisedTransport = "";
+  mdnsAdvertisedModbus = false;
 }
 
 bool startMdnsDiscovery() {
   if (!networkConnected()) return false;
   const String activeIp = primaryNetworkIp();
-  if (!MDNS.begin(config.hostname.c_str())) {
+  const IPAddress ip = ethernet.connected() ? ethernet.localIP() : WiFi.localIP();
+  if (!MinimalMdns::begin(
+          config.hostname.c_str(), deviceIdentity.instance,
+          deviceIdentity.serial, DeviceIdentity::kModel,
+          DeviceIdentity::kShellyApiModel, deviceIdentity.hostname,
+          deviceIdentity.suffix, ip, config.modbusTcp)) {
     eventLog.add("WARN", "MDNS_FAILED", "mDNS konnte nicht gestartet werden");
     return false;
   }
-  MDNS.setInstanceName(deviceIdentity.instance);
-  MDNS.addService("http", "tcp", 80);
-  MDNS.addServiceTxt("http", "tcp", "model", DeviceIdentity::kModel);
-  MDNS.addServiceTxt("http", "tcp", "serial",
-                     static_cast<const char *>(deviceIdentity.serial));
-  MDNS.addService("irtracker", "tcp", 80);
-  MDNS.addServiceTxt("irtracker", "tcp", "model", DeviceIdentity::kModel);
-  MDNS.addServiceTxt("irtracker", "tcp", "serial",
-                     static_cast<const char *>(deviceIdentity.serial));
-  MDNS.addServiceTxt("irtracker", "tcp", "api", "/api/v1/meter");
-  if (config.modbusTcp) {
-    MDNS.addService("modbus", "tcp", 502);
-    MDNS.addServiceTxt("modbus", "tcp", "schema", "irtracker.meter.v1");
-    MDNS.addServiceTxt("modbus", "tcp", "model", DeviceIdentity::kModel);
-  }
-
-  // Protocol-compatible discovery with the tracker's own neutral identity.
-  MDNS.addService("shelly", "tcp", 80);
-  MDNS.addServiceTxt("shelly", "tcp", "id",
-                     static_cast<const char *>(deviceIdentity.hostname));
-  MDNS.addServiceTxt("shelly", "tcp", "model",
-                     DeviceIdentity::kShellyApiModel);
-  MDNS.addServiceTxt("shelly", "tcp", "gen", "2");
-  MDNS.addService("everhome", "tcp", 80);
-  MDNS.addServiceTxt("everhome", "tcp", "serial-number",
-                     static_cast<const char *>(deviceIdentity.serial));
-  MDNS.addServiceTxt("everhome", "tcp", "product", DeviceIdentity::kModel);
-  MDNS.addServiceTxt("everhome", "tcp", "product-id", "IRT1000");
-  MDNS.addServiceTxt("everhome", "tcp", "ip", activeIp.c_str());
 
   mdnsRunning = true;
   mdnsAdvertisedIp = activeIp;
   mdnsAdvertisedTransport = primaryTransportName();
+  mdnsAdvertisedModbus = config.modbusTcp;
   eventLog.add("INFO", "MDNS_STARTED",
-               config.hostname + ".local auf " + mdnsAdvertisedTransport +
-                   " (" + activeIp + ")");
+               String(MinimalMdns::effectiveHostname()) + ".local auf " +
+                   mdnsAdvertisedTransport + " (" + activeIp + ")");
   return true;
 }
 
@@ -172,10 +150,12 @@ void syncMdnsDiscovery() {
     stopMdnsDiscovery();
     return;
   }
+  if (mdnsRunning) MinimalMdns::loop();
   const String activeIp = primaryNetworkIp();
   const String activeTransport = primaryTransportName();
   if (mdnsRunning && activeIp == mdnsAdvertisedIp &&
-      activeTransport == mdnsAdvertisedTransport)
+      activeTransport == mdnsAdvertisedTransport &&
+      config.modbusTcp == mdnsAdvertisedModbus)
     return;
   const bool replacingActiveDiscovery = mdnsRunning;
   stopMdnsDiscovery();

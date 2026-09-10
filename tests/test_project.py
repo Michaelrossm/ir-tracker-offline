@@ -61,6 +61,9 @@ ETHERNET_SOURCE = (ROOT / "src/app/network/EthernetManager.cpp").read_text(encod
 LEGACY_METER_HEADER = (METER_DIR / "D0Parser.h").read_text(encoding="utf-8")
 LEGACY_METER_SOURCE = (METER_DIR / "D0Parser.cpp").read_text(encoding="utf-8")
 WEB_ASSET_SCRIPT = (ROOT / "tools/embed_web_assets.py").read_text(encoding="utf-8")
+RELEASE_PACKAGE_SCRIPT = (ROOT / "tools/build-release-package.py").read_text(
+    encoding="utf-8"
+)
 PLATFORMIO = (ROOT / "platformio.ini").read_text(encoding="utf-8")
 PARTITIONS = (ROOT / "partitions.csv").read_text(encoding="utf-8")
 
@@ -125,7 +128,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.8"', source)
+        self.assertIn('kFirmwareVersion[] = "1.3.9"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -144,7 +147,11 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("finishAssetRawUpload()", update)
         self.assertIn("commitVerifiedOta()", update)
         self.assertIn("ir-tracker-update-", update)
+        self.assertNotIn('name == "ir-tracker-custom-"', update)
+        self.assertIn('release["prerelease"]', update)
         self.assertIn("/api/v1/update/bundle", routes)
+        self.assertNotIn("/system/update", routes)
+        self.assertNotIn("/api/v1/asset-partition/update", routes)
         self.assertTrue((ROOT / "tools/sign-update-manifest.py").is_file())
 
     def test_recurring_hotpaths_avoid_known_allocator_and_io_churn(self):
@@ -399,7 +406,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "esp_task_wdt_init",
             "kHeapWarningBytes",
             "config.autoPin = false",
-            "firmware_signature_invalid",
+            "update_bundle_signature_invalid",
             "constexpr size_t kLiveSamples = 840",
             "history.flushPending(HistoryStore::Tier::Minute)",
             "history_flush_before_update_failed",
@@ -451,7 +458,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "window.irGapEdges",
             "current=to>=now-step",
             "Math.max(step*2.5,15)",
-            "irGapCount(dd,dFrom,dTo,dStep())",
+            "const dGapCount=()=>dGapRegionsCache.length",
             "requestedHistoryAnchor",
             "historyTierSeconds",
             "kHistoryJsonChunkBytes = 12 * 1024",
@@ -490,7 +497,7 @@ class ProjectSecurityTests(unittest.TestCase):
             "prefs.getBool(\"eco_mode\", true)",
             'name="eco_mode"',
             "requestCpuBoost(\"history_export\")",
-            "requestCpuBoost(\"firmware_update\")",
+            "requestCpuBoost(\"asset_update\")",
             "requestCpuBoost(\"wifi_connect\")",
             "requestCpuBoost(\"lan_fallback\")",
             "requestCpuBoost(\"factory_test\")",
@@ -508,10 +515,10 @@ class ProjectSecurityTests(unittest.TestCase):
             "WiFi.softAPdisconnect(true)",
             "WiFi.mode(WIFI_STA)",
             "esp_wifi_set_ps(WIFI_PS_MIN_MODEM)",
-            "#include <ESPmDNS.h>",
-            "MDNS.begin(config.hostname.c_str())",
-            'MDNS.addService("http", "tcp", 80)',
-            "MDNS.end()",
+            "namespace MinimalMdns",
+            "MinimalMdns::begin(",
+            '"_http._tcp.local"',
+            "MinimalMdns::end()",
             "mdns_running",
             "IR_TRACKER_ENABLE_MDNS",
             "trackerGpioAvailable(pin)",
@@ -706,6 +713,8 @@ class ProjectSecurityTests(unittest.TestCase):
             encoding="utf-8")
         network = (ROOT / "src/app/network/NetworkManager.cpp").read_text(
             encoding="utf-8")
+        mdns = (ROOT / "src/app/network/MinimalMdns.cpp").read_text(
+            encoding="utf-8")
         security = (ROOT / "src/app/core/SecurityManager.cpp").read_text(
             encoding="utf-8")
         shelly = (ROOT / "src/app/web/ShellyEmulation.cpp").read_text(
@@ -723,11 +732,14 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn('prefs.getBool("storage_compat", false)', SOURCE)
         self.assertIn("localCompatibilityClient()", security)
         self.assertIn("requireStorageCompatibilityAccess()", routes)
-        self.assertIn('MDNS.addService("shelly", "tcp", 80)', network)
-        self.assertIn('MDNS.addService("everhome", "tcp", 80)', network)
-        self.assertIn('MDNS.addService("irtracker", "tcp", 80)', network)
-        self.assertIn('"product-id", "IRT1000"', network)
-        self.assertIn('"serial-number"', network)
+        for service in ('_http._tcp.local', '_irtracker._tcp.local',
+                        '_modbus._tcp.local', '_shelly._tcp.local',
+                        '_everhome._tcp.local'):
+            self.assertIn(service, mdns)
+        self.assertIn('"product-id", "IRT1000"', mdns)
+        self.assertIn('"serial-number"', mdns)
+        self.assertIn("config.modbusTcp == mdnsAdvertisedModbus", network)
+        self.assertNotIn("ESPmDNS", MAIN_SOURCE + network + mdns)
         self.assertIn("deviceIdentity.mac", shelly)
         compat_id = shelly[shelly.index("String shellyCompatId()"):
                            shelly.index("String shellyMac()")]
@@ -736,10 +748,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn('\\"energyCounterInT1\\":null', eco)
         self.assertIn('\\"energyCounterInT2\\":null', eco)
         self.assertIn("/ 1000U", eco)
-        for protected in ('/system/update', '/api/v1/gpio-scan/start',
+        for protected in ('/api/v1/update/bundle', '/api/v1/gpio-scan/start',
                           '/api/v1/history/clear',
-                          '/api/v1/asset-partition/backup',
-                          '/api/v1/asset-partition/update'):
+                          '/api/v1/asset-partition/backup'):
             self.assertIn(protected, routes)
 
     def test_neutral_meter_interfaces_share_one_schema(self) -> None:
@@ -795,7 +806,8 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn('server.on("/interfaces/save"', SOURCE)
         self.assertIn("Content-Encoding", SOURCE)
         self.assertIn("String recoveryPage()", SOURCE)
-        self.assertIn("Asset-Image installieren", SOURCE)
+        self.assertIn("Signiertes Gesamtupdate (.irup)", SOURCE)
+        self.assertNotIn("accept='.irfw", SOURCE)
         self.assertIn("servePartitionAsset", SOURCE)
         self.assertNotIn("kDashboardJsGzip", SOURCE)
         self.assertNotIn("kHistoryJsGzip", SOURCE)
@@ -808,6 +820,26 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertNotIn("Apator vollständig freischalten", SOURCE)
         self.assertNotIn("LEPUS-Spannung", SOURCE)
 
+    def test_dashboard_two_day_resolution_is_browser_only(self) -> None:
+        dashboard = (ROOT / "src/app/web/DashboardHistory.cpp").read_text(
+            encoding="utf-8"
+        )
+        for value in ("two_days", "dashResolution", "300", "600", "900"):
+            self.assertIn(value, dashboard + DASHBOARD_JS_SOURCE)
+        self.assertIn("function dAggregate(values,step)", DASHBOARD_JS_SOURCE)
+        self.assertIn("function dUpdateSummary()", DASHBOARD_JS_SOURCE)
+        self.assertIn("dargestellte Punkte aus", DASHBOARD_JS_SOURCE)
+        self.assertIn("dRaw=j.values||[]", DASHBOARD_JS_SOURCE)
+        self.assertIn("dGapRegionsCache=irRefineGapRegions(", DASHBOARD_JS_SOURCE)
+        self.assertNotIn("HistoryStore::Tier::FiveMinute", SOURCE)
+        self.assertNotIn("HistoryStore::Tier::TenMinute", SOURCE)
+
+    def test_release_contains_only_combined_update_and_no_asset_report(self) -> None:
+        self.assertIn('f"ir-tracker-update-{version}.irup"', RELEASE_PACKAGE_SCRIPT)
+        self.assertIn('f"ir-tracker-custom-{version}-usb.bin"', RELEASE_PACKAGE_SCRIPT)
+        self.assertNotIn('.irfw"', RELEASE_PACKAGE_SCRIPT)
+        self.assertNotIn(".report.json", RELEASE_PACKAGE_SCRIPT)
+
     def test_update_check_uses_maintenance_status_instead_of_raw_json(self) -> None:
         route_start = SOURCE.index('server.on("/api/v1/update/check"')
         route_end = SOURCE.index('server.on("/api/v1/update/install"', route_start)
@@ -817,7 +849,7 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertNotIn("githubUpdateJson()", check_route)
         self.assertNotIn("<pre>", check_route)
         self.assertIn("async function loadUpdate()", MAINTENANCE_JS_SOURCE)
-        self.assertIn("Die installierte Firmware ist aktuell.", MAINTENANCE_JS_SOURCE)
+        self.assertIn("Das installierte vollständige Update ist aktuell.", MAINTENANCE_JS_SOURCE)
         self.assertIn("Technischer Fehlercode", SOURCE)
 
     def test_first_access_password_is_prominent_in_readme(self) -> None:
@@ -837,11 +869,8 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("validWifiPassword", SOURCE)
         self.assertIn('maxlength="32"', SETUP_JS_SOURCE)
         self.assertIn('maxlength="64" autocomplete="off"', SETUP_JS_SOURCE)
-        ota_start = SOURCE.index("void handleOtaFinished()")
-        ota_end = SOURCE.index("void handleSafeShutdown()", ota_start)
-        ota_handler = SOURCE[ota_start:ota_end]
-        self.assertIn("Firmwareupdate abgelehnt", ota_handler)
-        self.assertNotIn('"application/json"', ota_handler)
+        self.assertNotIn("void handleOtaFinished()", SOURCE)
+        self.assertNotIn("void handleOtaUpload()", SOURCE)
 
     def test_external_asset_pipeline_is_reproducible_gzip(self) -> None:
         assets = {

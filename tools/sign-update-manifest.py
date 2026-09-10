@@ -16,7 +16,6 @@ from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 
 ROOT = Path(__file__).resolve().parents[1]
 MAGIC = b"IRUP200\0"
-IRFW_MAGIC = b"IRFW100\0"
 HEADER = struct.Struct("<8sIHH")
 PRIVATE_KEY = ROOT / "signing" / "private" / "firmware-signing-key.pem"
 
@@ -33,19 +32,15 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     firmware, assets = args.firmware.resolve(), args.assets.resolve()
-    if not firmware.is_file() or firmware.stat().st_size < 1024:
-        raise SystemExit("Invalid firmware package")
+    if (not firmware.is_file() or firmware.stat().st_size < 1024 or
+            firmware.stat().st_size > 0x150000 or firmware.read_bytes()[:1] != b"\xE9"):
+        raise SystemExit("Invalid ESP32 application image")
     if not assets.is_file() or assets.stat().st_size != 0x10000:
         raise SystemExit("Asset image must be exactly 65536 bytes")
     if not PRIVATE_KEY.is_file():
         raise SystemExit("Private signing key missing")
-    # IRFW remains the separately published legacy/app-only package.  IRUP200
-    # carries its verified raw ESP app plus the exact asset image in one file.
-    package = firmware.read_bytes()
-    magic, firmware_size, signature_size, reserved = HEADER.unpack_from(package)
-    if magic != IRFW_MAGIC or reserved or len(package) != HEADER.size + signature_size + firmware_size:
-        raise SystemExit("Invalid IRFW package")
-    app = package[HEADER.size + signature_size:]
+    app = firmware.read_bytes()
+    firmware_size = len(app)
     manifest = json.dumps(
         {"schema": 2, "version": args.version,
          "firmware": {"size": firmware_size,

@@ -2,6 +2,48 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 1.3.9 - 2026-09-10
+
+### Deutsch
+
+- Anzeigeintervalle werden an Datenlücken getrennt. Kurze vorhandene Abschnitte
+  behalten ihren echten Zeitbeginn; die Kurve reicht bis zum Ende des letzten
+  verfügbaren Messintervalls vor der Lücke.
+- IRUP-Updates benötigen keinen automatischen Asset-Backup-Download und keine
+  Bestätigungscheckbox mehr, auch in Recovery. Signatur- und Layoutprüfung bleiben aktiv.
+- Nach erfolgreichem Upload wartet die Oberfläche auf den Tracker und lädt sich
+  automatisch neu. Bei ausbleibender Verbindung wird eine Meldung angezeigt.
+
+### Weitere Aenderungen aus den 1.3.9-Betas
+
+- Ausfallflächen verwenden innerhalb der noch vorhandenen Minutenhistorie
+  minutengenaue Grenzen. Ein zweiminütiger Ausfall wird dadurch nur noch als
+  zweiminütige Fläche dargestellt; ältere Bereiche bleiben ehrlich auf die
+  jeweils noch gespeicherte Historienstufe begrenzt.
+- Der bisherige ESPmDNS-Unterbau wurde durch einen kleinen, fest auf die
+  vorhandenen IR-Tracker-Dienste zugeschnittenen IPv4-mDNS-Responder ersetzt.
+  Hostname, HTTP, IR-Tracker, optionales Modbus, Shelly- und Everhome-Discovery
+  sowie WLAN/LAN-Wechsel bleiben erhalten.
+
+### Dashboard und Update
+
+- Neue Asset-Version erzwingt nach dem Update einen frischen Browserabruf des
+  Dashboard-Skripts statt eines noch gecachten Beta-1-Stands.
+- Das gewählte Anzeigeintervall aktualisiert jetzt zusätzlich die sichtbare
+  Zusammenfassung mit Intervall, dargestellten Punkten und Rohmesswertanzahl.
+
+### Updateformat
+
+- Dashboard bietet für einen und zwei Kalendertage eine rein browserseitige
+  Anzeigeauflösung von 1, 5, 10 oder 15 Minuten. Es entstehen keine neuen
+  Flash-Historienstufen und keine zusätzlichen Schreibvorgänge.
+- Manuelle, automatische und Recovery-Updates verwenden ausschließlich das
+  signierte Gesamtpaket `.irup` mit Firmware und Webassets.
+- App-only-Uploads per `.irfw` und einzelne Webasset-Uploads wurden aus der
+  Firmwareoberfläche und den öffentlich erreichbaren Routen entfernt.
+- Technische Asset-Berichte bleiben lokale Buildartefakte und werden künftig
+  weder einzeln noch im öffentlichen Release-ZIP ausgeliefert.
+
 ## 1.3.8 — 2026-09-09
 
 ### Deutsch

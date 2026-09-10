@@ -15,9 +15,8 @@ void servePartitionAsset(const char *path, const char *contentType) {
 
 void setupRoutes() {
   const char *securityHeaders[] = {
-      "Origin", "Referer", "Authorization", "X-CSRF-Token", "Cookie",
-      "X-Asset-SHA256", "X-Asset-Confirm"};
-  server.collectHeaders(securityHeaders, 7);
+      "Origin", "Referer", "Authorization", "X-CSRF-Token", "Cookie"};
+  server.collectHeaders(securityHeaders, 5);
   server.on("/assets/common.css", HTTP_GET, [] {
     servePartitionAsset("/assets/common.css", "text/css; charset=utf-8");
   });
@@ -260,8 +259,6 @@ void setupRoutes() {
   server.on("/ir/pin/forget", HTTP_POST, handleForgetPin);
   server.on("/ir/pulse", HTTP_POST, handleIrPulse);
   server.on("/ir/stop", HTTP_POST, handleIrStop);
-  server.on("/system/update", HTTP_POST, handleOtaFinished,
-            handleOtaUpload);
   server.on("/api/v1/update/bundle", HTTP_POST,
             handleCombinedBundleFinished, handleCombinedBundleUpload);
   server.on("/system/restart", HTTP_POST, handleRestart);
@@ -271,9 +268,6 @@ void setupRoutes() {
   });
   server.on("/api/v1/asset-partition/backup", HTTP_GET,
             handleAssetPartitionBackup);
-  server.on("/api/v1/asset-partition/update", HTTP_POST,
-            handleAssetPartitionUploadFinished,
-            handleAssetPartitionUpload);
   server.on("/system/shutdown", HTTP_POST, handleSafeShutdown);
   server.onNotFound([] {
     if (accessPointMode) {

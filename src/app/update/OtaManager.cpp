@@ -10,7 +10,6 @@ bool otaRequestAuthorized() {
 }
 
 struct AssetRawUploadState {
-  bool authorized = false;
   bool ok = false;
   bool shaStarted = false;
   size_t written = 0;
@@ -74,7 +73,6 @@ bool finishAssetRawUpload() {
     assetRawUpload.ok = false;
     assetRawUpload.error = debugStorage.assetManifestError();
   }
-  if (assetRawUpload.ok) assetBackupServed = false;
   return assetRawUpload.ok;
 }
 
@@ -113,60 +111,8 @@ void handleAssetPartitionBackup() {
       return;
     delay(0);
   }
-  assetBackupServed = true;
 }
 
-void handleAssetPartitionUpload() {
-  HTTPUpload &upload = server.upload();
-  if (upload.status == UPLOAD_FILE_START) {
-    resetAssetRawUpload();
-    assetRawUpload.authorized = otaRequestAuthorized();
-    assetRawUpload.ok = assetRawUpload.authorized &&
-                        server.header("X-Asset-Confirm") ==
-                            "BACKUP-VERIFIED-0x2B0000-0x10000" &&
-                        debugStorage.fixedLayoutValid();
-    if (!assetRawUpload.ok) {
-      assetRawUpload.error = !assetRawUpload.authorized
-                                 ? "unauthorized"
-                                 : !debugStorage.fixedLayoutValid()
-                                       ? debugStorage.fixedLayoutError()
-                                       : "backup_or_sha_confirmation_missing";
-      return;
-    }
-    assetRawUpload.ok = beginAssetRawUpload(server.header("X-Asset-SHA256"));
-  } else if (upload.status == UPLOAD_FILE_WRITE && assetRawUpload.ok) {
-    writeAssetRawUpload(upload.buf, upload.currentSize);
-  } else if (upload.status == UPLOAD_FILE_END && assetRawUpload.ok) {
-    finishAssetRawUpload();
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    assetRawUpload.ok = false;
-    assetRawUpload.error = "asset_upload_aborted";
-  }
-}
-
-void handleAssetPartitionUploadFinished() {
-  if (!assetRawUpload.authorized) {
-    server.send(401, "application/json", "{\"error\":\"unauthorized\"}");
-    return;
-  }
-  if (!assetRawUpload.ok) {
-    if (assetRawUpload.written)
-      debugStorage.finishRawAssetUpdate(kFirmwareVersion);
-    server.send(400, "application/json",
-                "{\"error\":\"" + jsonEscape(assetRawUpload.error) +
-                    "\",\"layout\":" + assetPartitionLayoutJson() + "}");
-    return;
-  }
-  eventLog.add("INFO", "ASSET_UPDATE",
-               "Webasset-Image ueber WLAN geprueft und installiert");
-  server.send(200, "application/json",
-              "{\"ok\":true,\"bytes\":65536,\"sha256\":\"" +
-              assetRawUpload.expectedSha256 + "\"}");
-}
-
-void resetSignedOta();
-bool consumeSignedOta(const uint8_t *data, size_t length);
-bool verifySignedOta(const char *expectedSha256);
 bool commitVerifiedOta();
 
 constexpr size_t kCombinedPlanMaximumBytes = 1536;
@@ -246,7 +192,6 @@ bool verifySignedBundleManifest(const uint8_t *signature, size_t signatureSize,
   strlcpy(combinedUpdate.assetsSha256, assetsSha, sizeof(combinedUpdate.assetsSha256));
   combinedUpdate.firmwareSize = firmwareSize;
   combinedUpdate.assetsSize = assetsSize;
-  combinedUpdate.valid = true;
   return true;
 }
 
@@ -329,10 +274,11 @@ bool consumeCombinedBundle(const uint8_t *data, size_t length) {
 void handleCombinedBundleUpload() {
   HTTPUpload &upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
-    resetSignedOta(); resetAssetRawUpload(); resetCombinedBundleUpload(); combinedUpdate = CombinedUpdatePlan{};
+    resetAssetRawUpload(); resetCombinedBundleUpload(); combinedUpdate = CombinedUpdatePlan{};
+    updateCommitError = "";
     combinedBundleUpload.authorized = otaRequestAuthorized();
-    combinedBundleUpload.ok = combinedBundleUpload.authorized && upload.filename.endsWith(".irup") && assetBackupServed;
-    if (!combinedBundleUpload.ok) combinedBundleUpload.error = !combinedBundleUpload.authorized ? "unauthorized" : !assetBackupServed ? "asset_backup_required" : "signed_irup_bundle_required";
+    combinedBundleUpload.ok = combinedBundleUpload.authorized && upload.filename.endsWith(".irup");
+    if (!combinedBundleUpload.ok) combinedBundleUpload.error = !combinedBundleUpload.authorized ? "unauthorized" : "signed_irup_bundle_required";
   } else if (upload.status == UPLOAD_FILE_WRITE && combinedBundleUpload.ok) {
     if (!consumeCombinedBundle(upload.buf, upload.currentSize)) { combinedBundleUpload.ok = false; Update.abort(); }
   } else if (upload.status == UPLOAD_FILE_END && combinedBundleUpload.ok) {
@@ -346,7 +292,7 @@ void handleCombinedBundleUpload() {
 
 void handleCombinedBundleFinished() {
   if (!combinedBundleUpload.authorized || !combinedBundleUpload.ok || !combinedUpdate.assetsStaged || !commitVerifiedOta()) {
-    const String error = combinedBundleUpload.error.length() ? combinedBundleUpload.error : otaUploadError.length() ? otaUploadError : "update_bundle_invalid";
+    const String error = combinedBundleUpload.error.length() ? combinedBundleUpload.error : updateCommitError.length() ? updateCommitError : "update_bundle_invalid";
     server.send(400, "application/json", "{\"error\":\"" + jsonEscape(error) + "\"}"); return;
   }
   eventLog.add("WARN", "COMBINED_UPDATE", "Signiertes Gesamtupdate installiert: " + String(combinedUpdate.version));
@@ -354,140 +300,9 @@ void handleCombinedBundleFinished() {
   delay(500); ESP.restart();
 }
 
-void resetSignedOta() {
-  if (signedOta.updateStarted) Update.abort();
-  mbedtls_sha256_free(&signedOta.sha);
-  signedOta = SignedOtaState{};
-  mbedtls_sha256_init(&signedOta.sha);
-}
-
-bool beginSignedOtaImage() {
-  static const uint8_t magic[8] = {'I', 'R', 'F', 'W', '1', '0', '0', 0};
-  if (memcmp(signedOta.header, magic, sizeof(magic)) != 0) {
-    otaUploadError = "invalid_package_magic";
-    return false;
-  }
-  signedOta.firmwareSize =
-      static_cast<uint32_t>(signedOta.header[8]) |
-      (static_cast<uint32_t>(signedOta.header[9]) << 8) |
-      (static_cast<uint32_t>(signedOta.header[10]) << 16) |
-      (static_cast<uint32_t>(signedOta.header[11]) << 24);
-  signedOta.signatureSize =
-      static_cast<uint16_t>(signedOta.header[12]) |
-      (static_cast<uint16_t>(signedOta.header[13]) << 8);
-  if (signedOta.firmwareSize < 1024 ||
-      signedOta.firmwareSize > ESP.getFreeSketchSpace() ||
-      signedOta.signatureSize < 64 ||
-      signedOta.signatureSize > sizeof(signedOta.signature)) {
-    otaUploadError = "invalid_package_sizes";
-    return false;
-  }
-  if (!Update.begin(signedOta.firmwareSize, U_FLASH)) {
-    otaUploadError = "update_partition_unavailable";
-    return false;
-  }
-  signedOta.updateStarted = true;
-  if (mbedtls_sha256_starts_ret(&signedOta.sha, 0) != 0) {
-    otaUploadError = "sha256_initialization_failed";
-    return false;
-  }
-  return true;
-}
-
-bool consumeSignedOta(const uint8_t *data, size_t length) {
-  size_t offset = 0;
-  while (offset < length) {
-    if (signedOta.headerRead < sizeof(signedOta.header)) {
-      const size_t count =
-          std::min(length - offset,
-                   sizeof(signedOta.header) - signedOta.headerRead);
-      memcpy(signedOta.header + signedOta.headerRead, data + offset, count);
-      signedOta.headerRead += count;
-      offset += count;
-      if (signedOta.headerRead == sizeof(signedOta.header) &&
-          !beginSignedOtaImage())
-        return false;
-      continue;
-    }
-    if (signedOta.signatureRead < signedOta.signatureSize) {
-      const size_t count =
-          std::min(length - offset,
-                   static_cast<size_t>(signedOta.signatureSize) -
-                       signedOta.signatureRead);
-      memcpy(signedOta.signature + signedOta.signatureRead, data + offset,
-             count);
-      signedOta.signatureRead += count;
-      offset += count;
-      continue;
-    }
-    const size_t remaining =
-        signedOta.firmwareSize - signedOta.firmwareWritten;
-    if (!remaining) {
-      otaUploadError = "package_has_trailing_data";
-      return false;
-    }
-    const size_t count = std::min(length - offset, remaining);
-    if (!signedOta.firstFirmwareByteChecked) {
-      signedOta.firstFirmwareByteChecked = true;
-      if (data[offset] != 0xE9) {
-        otaUploadError = "not_an_esp32_application";
-        return false;
-      }
-    }
-    if (mbedtls_sha256_update_ret(&signedOta.sha, data + offset, count) != 0 ||
-        Update.write(const_cast<uint8_t *>(data + offset), count) != count) {
-      otaUploadError = "firmware_write_failed";
-      return false;
-    }
-    signedOta.firmwareWritten += count;
-    offset += count;
-  }
-  return true;
-}
-
-bool verifySignedOta(const char *expectedSha256 = nullptr) {
-  if (!signedOta.updateStarted ||
-      signedOta.firmwareWritten != signedOta.firmwareSize ||
-      signedOta.signatureRead != signedOta.signatureSize) {
-    otaUploadError = "incomplete_signed_package";
-    return false;
-  }
-  uint8_t digest[32];
-  if (mbedtls_sha256_finish_ret(&signedOta.sha, digest) != 0) {
-    otaUploadError = "sha256_finalization_failed";
-    return false;
-  }
-  mbedtls_pk_context publicKey;
-  mbedtls_pk_init(&publicKey);
-  const int parseResult = mbedtls_pk_parse_public_key(
-      &publicKey,
-      reinterpret_cast<const unsigned char *>(kFirmwareSigningPublicKey),
-      strlen(kFirmwareSigningPublicKey) + 1);
-  const int verifyResult =
-      parseResult == 0
-          ? mbedtls_pk_verify(&publicKey, MBEDTLS_MD_SHA256, digest,
-                              sizeof(digest), signedOta.signature,
-                              signedOta.signatureSize)
-          : parseResult;
-  mbedtls_pk_free(&publicKey);
-  if (verifyResult != 0) {
-    memset(digest, 0, sizeof(digest));
-    otaUploadError = "firmware_signature_invalid";
-    return false;
-  }
-  if (expectedSha256 &&
-      !constantTimeEqual(hexBytes(digest, sizeof(digest)), expectedSha256)) {
-    memset(digest, 0, sizeof(digest));
-    otaUploadError = "firmware_sha256_mismatch";
-    return false;
-  }
-  memset(digest, 0, sizeof(digest));
-  return true;
-}
-
 bool commitVerifiedOta() {
   if (!history.flushPending(HistoryStore::Tier::Minute)) {
-    otaUploadError = "history_flush_before_update_failed";
+    updateCommitError = "history_flush_before_update_failed";
     eventLog.add("ERROR", "OTA_HISTORY_FLUSH",
                  "Update abgebrochen: Minutenpuffer nicht speicherbar");
     return false;
@@ -495,14 +310,10 @@ bool commitVerifiedOta() {
   eventLog.add("INFO", "OTA_HISTORY_FLUSH",
                "Offenen Minutenblock vor Update gespeichert");
   if (!Update.end(true)) {
-    otaUploadError = "firmware_image_validation_failed";
+    updateCommitError = "firmware_image_validation_failed";
     return false;
   }
   return true;
-}
-
-bool finishSignedOta() {
-  return verifySignedOta() && commitVerifiedOta();
 }
 
 #if IR_TRACKER_ENABLE_GITHUB_UPDATE
@@ -537,7 +348,7 @@ String githubUpdateJson() {
                 "\",\"asset_name\":\"" + jsonEscape(githubUpdate.assetName) +
                 "\",\"asset_size\":" + String(githubUpdate.assetSize) +
                 ",\"complete_package\":" +
-                String(githubUpdate.planUrl.length() && githubUpdate.webAssetUrl.length() ? "true" : "false") +
+                String(githubUpdate.available ? "true" : "false") +
                 ",\"last_success\":" + String(static_cast<uint32_t>(githubUpdate.lastSuccess)) +
                 ",\"error\":\"" + jsonEscape(githubUpdate.error) + "\"}";
   return json;
@@ -553,10 +364,6 @@ bool checkGithubFirmwareUpdate() {
   githubUpdate.assetName = "";
   githubUpdate.assetUrl = "";
   githubUpdate.assetSize = 0;
-  githubUpdate.planUrl = "";
-  githubUpdate.webAssetUrl = "";
-  githubUpdate.planSize = 0;
-  githubUpdate.webAssetSize = 0;
   if (!networkConnected()) {
     githubUpdate.error = "network_not_connected";
     githubUpdate.checking = false;
@@ -590,6 +397,7 @@ bool checkGithubFirmwareUpdate() {
   }
   StaticJsonDocument<512> filter;
   filter[0]["draft"] = true;
+  filter[0]["prerelease"] = true;
   filter[0]["tag_name"] = true;
   filter[0]["assets"] = true;
   DynamicJsonDocument releases(16384);
@@ -604,13 +412,14 @@ bool checkGithubFirmwareUpdate() {
   const uint64_t current = firmwareVersionNumber(kFirmwareVersion);
   uint64_t best = current;
   for (JsonObject release : releases.as<JsonArray>()) {
-    if (release["draft"] | true) continue;
+    if ((release["draft"] | true) || (release["prerelease"] | false))
+      continue;
     const String tag = release["tag_name"] | "";
     const uint64_t candidate = firmwareVersionNumber(tag);
     if (!candidate || candidate <= best) continue;
     const String version = tag.startsWith("v") ? tag.substring(1) : tag;
-    String bundleName, bundleUrl, firmwareUrl;
-    size_t bundleSize = 0, firmwareSize = 0;
+    String bundleName, bundleUrl;
+    size_t bundleSize = 0;
     for (JsonObject asset : release["assets"].as<JsonArray>()) {
       const String name = asset["name"] | "";
       const String url = asset["browser_download_url"] | "";
@@ -621,24 +430,15 @@ bool checkGithubFirmwareUpdate() {
         bundleName = name;
         bundleUrl = url;
         bundleSize = size;
-      } else if (name == "ir-tracker-custom-" + version + ".irfw" &&
-                 size >= 1024 && size <= kGithubMaximumPackageBytes) {
-        firmwareUrl = url;
-        firmwareSize = size;
       }
     }
-    // IRFW stays published for older/manual installs, but automatic updates
-    // deliberately accept only the one-file, asset-bound IRUP200 package.
-    if (bundleUrl.length() && firmwareUrl.length()) {
+    // Automatic updates accept only the signed, asset-bound IRUP200 package.
+    if (bundleUrl.length()) {
       best = candidate;
       githubUpdate.version = version;
       githubUpdate.assetName = bundleName;
       githubUpdate.assetUrl = bundleUrl;
       githubUpdate.assetSize = bundleSize;
-      githubUpdate.planUrl = firmwareUrl;
-      githubUpdate.planSize = firmwareSize;
-      githubUpdate.webAssetUrl = "bundled";
-      githubUpdate.webAssetSize = 0x10000U;
       githubUpdate.available = true;
     }
   }
@@ -692,11 +492,10 @@ bool installGithubFirmwareUpdate() {
     githubUpdate.installing = false;
     return false;
   }
-  resetSignedOta();
   resetAssetRawUpload();
   resetCombinedBundleUpload();
   combinedUpdate = CombinedUpdatePlan{};
-  otaUploadError = "";
+  updateCommitError = "";
   WiFiClient *stream = http.getStreamPtr();
   uint8_t buffer[1024];
   size_t received = 0;
@@ -734,7 +533,7 @@ bool installGithubFirmwareUpdate() {
   if (!ok) Update.abort();
   githubUpdate.installing = false;
   if (!ok) {
-    githubUpdate.error = combinedBundleUpload.error.length() ? combinedBundleUpload.error : otaUploadError.length() ? otaUploadError : "update_failed";
+    githubUpdate.error = combinedBundleUpload.error.length() ? combinedBundleUpload.error : updateCommitError.length() ? updateCommitError : "update_failed";
     eventLog.add("ERROR", "GITHUB_UPDATE_FAILED", githubUpdate.error);
     return false;
   }
@@ -769,67 +568,3 @@ bool checkGithubFirmwareUpdate() { return false; }
 bool installGithubFirmwareUpdate() { return false; }
 void manageGithubFirmwareUpdate() {}
 #endif
-
-void handleOtaUpload() {
-  HTTPUpload &upload = server.upload();
-  if (upload.status == UPLOAD_FILE_START) {
-    resetSignedOta();
-    otaUploadError = "";
-    otaUploadAuthorized = otaRequestAuthorized();
-    if (otaUploadAuthorized) requestCpuBoost("firmware_update");
-    otaUploadOk = otaUploadAuthorized &&
-                  upload.filename.endsWith(".irfw");
-    if (!otaUploadAuthorized) otaUploadError = "unauthorized";
-    if (otaUploadAuthorized && !upload.filename.endsWith(".irfw"))
-      otaUploadError = "signed_irfw_package_required";
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (otaUploadOk &&
-        !consumeSignedOta(upload.buf, upload.currentSize)) {
-      otaUploadOk = false;
-      Update.abort();
-    }
-  } else if (upload.status == UPLOAD_FILE_END) {
-    if (otaUploadOk) otaUploadOk = finishSignedOta();
-    if (!otaUploadOk) Update.abort();
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    otaUploadOk = false;
-    otaUploadError = "upload_aborted";
-    Update.abort();
-  }
-}
-
-void handleOtaFinished() {
-  if (!otaUploadAuthorized) {
-    server.send(
-        401, "text/html; charset=utf-8",
-        page("Firmwareupdate nicht möglich",
-             "<div class='error'><strong>Anmeldung oder Sicherheitsprüfung "
-             "abgelaufen.</strong><p>Wartungsseite neu laden, erneut anmelden "
-             "und das signierte IRFW-Paket noch einmal auswählen.</p></div>"
-             "<p><a href='/maintenance#firmware-update'>Zurück zur Wartung</a></p>"));
-    return;
-  }
-  if (!otaUploadOk) {
-    const String technicalCode =
-        otaUploadError.length() ? otaUploadError : "invalid_signed_firmware";
-    server.send(
-        400, "text/html; charset=utf-8",
-        page("Firmwareupdate abgelehnt",
-             "<div class='error'><strong>Das Firmwarepaket konnte nicht sicher "
-             "installiert werden.</strong><p>Nur ein vollständiges, für diesen "
-             "Tracker signiertes IRFW-Paket verwenden.</p><details><summary>"
-             "Technischer Fehlercode</summary><code>" +
-                 htmlEscape(technicalCode) +
-                 "</code></details></div><p><a href='/maintenance#firmware-update'>"
-                 "Zurück zur Wartung</a></p>"));
-    return;
-  }
-  eventLog.add("WARN", "OTA_UPDATE",
-               "Kryptografisch signierte Custom-Firmware installiert");
-  server.send(200, "text/html; charset=utf-8",
-              page("Update erfolgreich",
-                   "<div class='card'><h2>Firmware geprüft und installiert</h2>"
-                   "<p>Der Tracker startet jetzt mit dem neuen Custom-Slot.</p></div>"));
-  delay(800);
-  ESP.restart();
-}

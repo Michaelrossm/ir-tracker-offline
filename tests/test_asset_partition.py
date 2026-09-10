@@ -133,7 +133,9 @@ class AssetPartitionScenarioTests(unittest.TestCase):
         web_ui = (ROOT / "src/app/web/WebUi.cpp").read_text(encoding="utf-8")
         self.assertIn("debugStorage.noteAssetServed(compressedPath.c_str(), false)", security)
         self.assertIn("String recoveryPage()", web_ui)
-        self.assertIn("Asset-Image installieren", web_ui)
+        self.assertIn("Signiertes Gesamtupdate (.irup)", web_ui)
+        self.assertNotIn("accept='.irfw", web_ui)
+        self.assertNotIn("64-kB-Asset-Image", web_ui)
 
     def test_raw_image_is_exactly_64_kb_and_validated(self):
         image = self.write_raw_image()
@@ -166,10 +168,10 @@ class AssetPartitionScenarioTests(unittest.TestCase):
                       storage)
         self.assertIn("esp_partition_erase_range(assetPartition_", storage)
         self.assertNotIn("0x8000", updater)
-        self.assertIn("BACKUP-VERIFIED-0x2B0000-0x10000", updater)
         self.assertIn("assetRawUpload.written == 0x10000U", updater)
-        self.assertIn("X-Asset-SHA256", routes)
         self.assertIn("X-CSRF-Token", routes)
+        self.assertIn('/api/v1/update/bundle', routes)
+        self.assertNotIn('/api/v1/asset-partition/update', routes)
 
 
 if __name__ == "__main__":

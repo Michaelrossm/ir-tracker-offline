@@ -280,10 +280,9 @@ bool DebugStorage::loadRawAssetManifest(const char *firmwareVersion) {
   }
   strncpy(assetVersion_, header.version, sizeof(assetVersion_) - 1U);
   assetVersion_[sizeof(assetVersion_) - 1U] = '\0';
-  // A signed IRFW updates only the application OTA slot. Keep a verified
-  // older asset bundle usable across app updates so a version change never
-  // turns a healthy tracker into the recovery page. Newer bundles may also
-  // contain retired files; they are ignored and never served.
+  // Keep a verified older asset bundle usable until a complete IRUP update
+  // replaces it, so an interrupted update can still reach recovery. Retired
+  // files are ignored and never served.
   for (uint8_t fileIndex = 0; fileIndex < header.fileCount; ++fileIndex) {
     const RawAssetEntry &entry = header.files[fileIndex];
     if (!memchr(entry.name, '\0', sizeof(entry.name))) {
