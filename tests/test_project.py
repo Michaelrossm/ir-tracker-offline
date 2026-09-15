@@ -69,6 +69,18 @@ PARTITIONS = (ROOT / "partitions.csv").read_text(encoding="utf-8")
 
 
 class ProjectSecurityTests(unittest.TestCase):
+    def test_nvs_keys_fit_and_wifi_schedule_roundtrips(self):
+        config_source = (ROOT / "src/app/core/ConfigManager.cpp").read_text(encoding="utf-8")
+        for key in re.findall(r'prefs\.(?:get\w+|put\w+|isKey)\("([^"]+)"', SOURCE):
+            self.assertLessEqual(len(key.encode("utf-8")), 15, key)
+        self.assertIn("sizeof(kWifiScheduleOffKey) <= 16", config_source)
+        self.assertIn("prefs.getBool(kWifiScheduleOffKey, true)", config_source)
+        self.assertIn("prefs.putBool(kWifiScheduleOffKey, config.wifiScheduleOff)", config_source)
+        settings = (ROOT / "src/app/web/SettingsApi.cpp").read_text(encoding="utf-8")
+        for key in ("wifi_schedule_off", "wifi_schedule_start_minutes", "wifi_schedule_end_minutes"):
+            self.assertIn(f'device["{key}"] = config.', settings)
+            self.assertIn(f'device["{key}"] | config.', settings)
+
     def test_source_tree_and_meter_model_are_consistent(self):
         expected = (
             "app/core/EventLog.cpp",
@@ -128,7 +140,7 @@ class ProjectSecurityTests(unittest.TestCase):
 
     def test_release_version_and_bilingual_ui_are_embedded(self):
         source = SOURCE
-        self.assertIn('kFirmwareVersion[] = "1.3.9"', source)
+        self.assertIn('kFirmwareVersion[] = "2.0.0"', source)
         self.assertIn("id='langToggle'", source)
         self.assertIn("/assets/i18n.js", source)
         self.assertIn("irtracker-language-v1", I18N_SOURCE)
@@ -155,7 +167,7 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertTrue((ROOT / "tools/sign-update-manifest.py").is_file())
 
     def test_recurring_hotpaths_avoid_known_allocator_and_io_churn(self):
-        self.assertIn("json.reserve(3000);", SOURCE)
+        self.assertIn("json.reserve(4096);", SOURCE)
         self.assertIn("char topic[96];", SOURCE)
         self.assertIn("char value[40];", SOURCE)
         self.assertIn("void serviceMeterInput()", SOURCE)
@@ -532,7 +544,7 @@ class ProjectSecurityTests(unittest.TestCase):
             'name="wifi_power_auto"',
             "prefs.getBool(\"wifi_ps\", false)",
             'name="wifi_ps"',
-            "prefs.getBool(\"wifi_schedule_off\", true)",
+            "prefs.getBool(kWifiScheduleOffKey, true)",
             'name="wifi_schedule_off"',
             "parseClockMinutes",
             "wifiOffScheduleActive()",
@@ -572,7 +584,9 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("(first + logical) % tier.capacity", HISTORY_SOURCE)
         self.assertIn("(recordsRead & 0x7fU) == 0", HISTORY_SOURCE)
         self.assertIn("kReadBatchRecords = 32", HISTORY_SOURCE)
-        self.assertEqual(HISTORY_SOURCE.count("delay(0)"), 2)
+        legacy_reader = HISTORY_SOURCE.split("bool HistoryStore::forEach(", 1)[1].split(
+            "bool HistoryStore::clear(", 1)[0]
+        self.assertEqual(legacy_reader.count("delay(0)"), 2)
         self.assertIn("kMaximumPlausiblePowerW", HISTORY_HEADER)
         self.assertIn("file.size() < requiredSize", HISTORY_SOURCE)
         self.assertNotIn("server.enableCORS(true)", SOURCE)
@@ -820,7 +834,7 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertNotIn("Apator vollständig freischalten", SOURCE)
         self.assertNotIn("LEPUS-Spannung", SOURCE)
 
-    def test_dashboard_two_day_resolution_is_browser_only(self) -> None:
+    def test_dashboard_resolution_and_five_minute_retention(self) -> None:
         dashboard = (ROOT / "src/app/web/DashboardHistory.cpp").read_text(
             encoding="utf-8"
         )
@@ -831,7 +845,8 @@ class ProjectSecurityTests(unittest.TestCase):
         self.assertIn("dargestellte Punkte aus", DASHBOARD_JS_SOURCE)
         self.assertIn("dRaw=j.values||[]", DASHBOARD_JS_SOURCE)
         self.assertIn("dGapRegionsCache=irRefineGapRegions(", DASHBOARD_JS_SOURCE)
-        self.assertNotIn("HistoryStore::Tier::FiveMinute", SOURCE)
+        self.assertIn("HistoryStore::Tier::FiveMinute", SOURCE)
+        self.assertIn('range == "five_all"', dashboard)
         self.assertNotIn("HistoryStore::Tier::TenMinute", SOURCE)
 
     def test_release_contains_only_combined_update_and_no_asset_report(self) -> None:

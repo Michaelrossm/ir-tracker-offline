@@ -115,8 +115,10 @@ bool cpuBoostActive() {
 }
 
 uint32_t cpuBoostRemainingSeconds() {
-  if (!cpuBoostActive()) return 0;
-  return (static_cast<uint32_t>(cpuBoostUntilMs - millis()) + 999U) / 1000U;
+  const uint32_t now = millis();
+  if (!config.ecoMode || cpuEcoRuntimeFault || !cpuBoostUntilMs ||
+      static_cast<int32_t>(cpuBoostUntilMs - now) <= 0) return 0;
+  return (cpuBoostUntilMs - now + 999U) / 1000U;
 }
 
 bool switchCpuFrequency(uint32_t targetMhz) {

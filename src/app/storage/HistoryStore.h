@@ -16,8 +16,12 @@ class HistoryStore {
     float exportKwh;
   };
 
-  enum class Tier : uint8_t { Minute, QuarterHour, Hour, Day };
+  enum class Tier : uint8_t { Minute, QuarterHour, Hour, Day, HalfHour, FiveMinute };
   using RecordCallback = std::function<bool(const Record &)>;
+  using RetainedCallback = std::function<bool(const Record &, uint32_t)>;
+  bool forEachRetained(uint32_t since, uint32_t until, const RetainedCallback &callback);
+  bool compactActive() const;
+  bool migrateCompact();
 
   bool begin();
   void update(uint32_t epoch, double powerW, double importKwh, double exportKwh);
@@ -30,6 +34,15 @@ class HistoryStore {
   size_t usedBytes() const;
   size_t totalBytes() const;
   bool ready() const { return mounted_; }
+  // Transitional IRH2 reader: never apply the IRH1 writer to compact data.
+  bool readOnly() const;
+  // Prepare and verify a separate snapshot. Never activates it or removes IRH1.
+  // Existing stage files (including interrupted attempts) are never overwritten.
+  bool stageCompactCopy(Tier tier);
+  // Resume preparation after reboot. Does not activate or delete the source.
+  bool resumeCompactCopy(Tier tier);
+  static const char *compactStagePath(Tier tier);
+  void setServiceHook(void (*hook)()) { serviceHook_ = hook; }
 
  private:
   struct __attribute__((packed)) Header {
@@ -58,6 +71,8 @@ class HistoryStore {
     Header header;
     Aggregate aggregate;
     uint32_t lastWrittenBucket;
+    bool orderKnown;
+    bool ordered;
   };
 
   static constexpr uint32_t kMagic = 0x49524831;  // IRH1
@@ -66,18 +81,32 @@ class HistoryStore {
   // installations; corrupt floating-point payloads must never reach charts or statistics.
   static constexpr float kMaximumPlausiblePowerW = 100000.0f;
   static constexpr float kMaximumPlausibleEnergyKwh = 1000000000.0f;
-  TierState tiers_[4] = {
-      {"/minute.bin", 60, 2880, {}, {}, 0},
-      {"/quarter.bin", 900, 17280, {}, {}, 0},
-      {"/hour.bin", 3600, 17520, {}, {}, 0},
-      {"/day.bin", 86400, 7300, {}, {}, 0}};
+  TierState tiers_[6] = {
+      {"/minute.bin", 60, 2880, {}, {}, 0, false, false},
+      {"/quarter.bin", 900, 17280, {}, {}, 0, false, false},
+      {"/hour.bin", 3600, 17520, {}, {}, 0, false, false},
+      {"/day.bin", 86400, 7300, {}, {}, 0, false, false},
+      {"/half.bin", 1800, 17568, {}, {}, 0, false, false},
+      {"/five.bin", 300, 288, {}, {}, 0, false, false}};
   bool mounted_ = false;
+  void (*serviceHook_)() = nullptr;
 
   TierState &state(Tier tier) { return tiers_[static_cast<uint8_t>(tier)]; }
   const TierState &state(Tier tier) const {
     return tiers_[static_cast<uint8_t>(tier)];
   }
   bool loadHeader(TierState &tier);
+  bool promoteRetained(Tier source, Tier target, uint32_t cutoff);
+  bool recoverCompactWrite();
+  bool recoverCompactShrink();
+  bool pruneCompactHour(uint32_t cutoff);
+  bool pruneCompactMinute(uint32_t cutoff);
+  bool writeCompact(TierState &tier, const Record &record);
+  bool commitCompactBlock(TierState &tier, uint32_t block, const uint8_t *data);
+  bool verifyCompactCopy(Tier tier);
+  bool forEachMigrationRecord(Tier tier, const RecordCallback &callback);
+  bool forEachCompact(TierState &tier, uint32_t since, uint32_t until,
+                      const RecordCallback &callback);
   bool validHeader(const Header &header, uint32_t capacity) const;
   bool validRecord(const Record &record) const;
   uint32_t headerChecksum(const Header &header) const;

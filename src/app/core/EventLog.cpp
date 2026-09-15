@@ -157,17 +157,19 @@ bool EventLog::writePersistent(const Record &record) {
     file.close();
     return false;
   }
-  fileHeader_.writeIndex = (fileHeader_.writeIndex + 1) % kCapacity;
-  fileHeader_.count = std::min(fileHeader_.count + 1, kCapacity);
-  ++fileHeader_.generation;
-  fileHeader_.checksum = checksum(fileHeader_);
+  Header next = fileHeader_;
+  next.writeIndex = (next.writeIndex + 1) % kCapacity;
+  next.count = std::min(next.count + 1, kCapacity);
+  ++next.generation;
+  next.checksum = checksum(next);
   const size_t headerOffset =
-      (fileHeader_.generation & 1U) ? sizeof(Header) : 0;
+      (next.generation & 1U) ? sizeof(Header) : 0;
   const bool ok =
       file.seek(headerOffset, SeekSet) &&
-      file.write(reinterpret_cast<const uint8_t *>(&fileHeader_),
+      file.write(reinterpret_cast<const uint8_t *>(&next),
                  sizeof(Header)) == sizeof(Header);
   file.close();
+  if (ok) fileHeader_ = next;
   return ok;
 }
 

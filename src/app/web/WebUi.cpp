@@ -91,7 +91,7 @@ String recoveryPage() {
 
 String page(const String &title, const String &body,
             const String &script = "", const String &assetPath = "") {
-  if (!debugStorage.assetManifestReady()) return recoveryPage();
+  if (assetRollbackBlocked || !debugStorage.assetManifestReady()) return recoveryPage();
   String html;
   html.reserve(body.length() + script.length() + 3600);
   html += F("<!doctype html><html lang='de'><head><meta charset='utf-8'>"
@@ -125,7 +125,7 @@ bool sendPageStreamed(const String &title, const String &body,
   // DE: Der gemeinsame Rahmen bleibt klein. Seitentext und komprimiertes
   // JavaScript werden getrennt übertragen. | EN: The common shell remains
   // small. Page markup and compressed JavaScript are transferred separately.
-  if (!debugStorage.assetManifestReady()) {
+  if (assetRollbackBlocked || !debugStorage.assetManifestReady()) {
     server.send(200, "text/html; charset=utf-8", recoveryPage());
     return true;
   }

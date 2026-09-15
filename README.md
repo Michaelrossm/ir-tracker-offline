@@ -1,4 +1,4 @@
-# IR Tracker Offline — 1.3.8
+# IR Tracker Offline — 2.0.0
 
 **Deutsch** | [English](#english)
 
@@ -94,15 +94,16 @@ Die Oberfläche verwendet HTTP und gehört ausschließlich in ein vertrauenswür
 
 Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständige Gerätesicherung, Einstellungen und Historie sichern. Die persönliche Original-Firmware darf nicht öffentlich verteilt werden.
 
-### Update auf 1.3.8 – richtige Reihenfolge
+### Update auf 2.0.0 – richtige Reihenfolge
 
 - **Tracker mit „Vollständiges Update (.irup)“:** Direkt
-  `ir-tracker-update-1.3.8.irup` unter **Wartung** installieren. Firmware und
-  Weboberfläche werden gemeinsam geprüft und aktualisiert.
-- **Älterer Tracker, der nur `.irfw` anbietet:** Zuerst
-  `ir-tracker-custom-1.3.8.irfw` installieren und den Neustart abwarten. Danach
-  erneut **Wartung** öffnen und `ir-tracker-update-1.3.8.irup` installieren.
-  Dieser zweite Schritt ergänzt die passende Weboberfläche.
+  `ir-tracker-update-2.0.0.irup` unter **Wartung** installieren. Firmware und
+  Weboberfläche werden gemeinsam geprüft und aktualisiert. Nach dem Neustart
+  dieselbe Datei ein zweites Mal manuell installieren: Erst wenn beide App-Slots
+  dieselbe geprüfte Firmware enthalten, beginnt die automatische History-Migration.
+- **Älterer Tracker, der nur `.irfw` anbietet:** IRUP nicht umbenennen oder als
+  IRFW hochladen. Eine passende ältere Brückenversion oder ein vorher geprüftes,
+  datenerhaltendes USB-Update ist erforderlich; siehe Installationsanleitung.
 - **Sehr alter Stand ohne signiertes WLAN-Update oder ohne kompatible
   64-kB-Partition:** Zuerst den aktuellen USB-Installer verwenden. Er sichert
   und prüft das Gerät, migriert ausschließlich den bisherigen 64-kB-
@@ -110,6 +111,12 @@ Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständ
 
 Das einzelne Asset-Image ist nur für Diagnose und manuelle Wiederherstellung
 gedacht. Für normale Updates ab 1.3.8 wird ausschließlich die `.irup` benötigt.
+
+Die neue Compact-Historie hält 24 Stunden mit Minutenwerten, den zweiten Tag mit
+5-Minuten-Werten, 460 Tage mit Viertelstundenwerten und anschließend je 365 Tage
+mit Halbstunden- und Stundenwerten. Der Tagesring fasst 3.650 Einträge. Ringblöcke
+können etwas zusätzliche Randabdeckung enthalten. Mehrdeutige Altarchive bleiben
+unverändert; die neue Staffel gilt erst nach erfolgreicher Umwandlung.
 
 ## Dokumentation
 

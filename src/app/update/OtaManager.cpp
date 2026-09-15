@@ -9,6 +9,13 @@ bool otaRequestAuthorized() {
   return requireAdmin();
 }
 
+void abortCombinedUpdate() {
+  Update.abort();
+  if (!assetRollback.idle()) {
+    if (recoverAssetTransaction()) debugStorage.finishRawAssetUpdate(kFirmwareVersion);
+  }
+}
+
 struct AssetRawUploadState {
   bool ok = false;
   bool shaStarted = false;
@@ -183,7 +190,7 @@ bool verifySignedBundleManifest(const uint8_t *signature, size_t signatureSize,
   if ((document["schema"] | 0) != 2 || !version[0] ||
       strlen(version) >= sizeof(combinedUpdate.version) ||
       !validUpdateSha256(firmwareSha) || !validUpdateSha256(assetsSha) ||
-      firmwareSize < 1024 || firmwareSize > 0x150000U || assetsSize != 0x10000U) {
+      firmwareSize < 1024 || firmwareSize > AssetRollback::kAppLimit || assetsSize != 0x10000U) {
     error = "update_bundle_content_invalid"; return false;
   }
   combinedUpdate = CombinedUpdatePlan{};
@@ -197,6 +204,15 @@ bool verifySignedBundleManifest(const uint8_t *signature, size_t signatureSize,
 
 bool beginCombinedBundlePayload(String &error) {
   if (!debugStorage.fixedLayoutValid()) { error = debugStorage.fixedLayoutError(); return false; }
+  if (!recoverAssetTransaction() || !assetRollback.idle() || !assetRollbackIo.updateTargetValid()) {
+    error = "asset_rollback_pending"; return false;
+  }
+  if (!history.ready() || !history.flushPending(HistoryStore::Tier::Minute)) {
+    error = "history_flush_before_update_failed"; return false;
+  }
+  if (combinedUpdate.firmwareSize > AssetRollback::kAppLimit) {
+    error = "firmware_overlaps_rollback_reserve"; return false;
+  }
   if (!Update.begin(combinedUpdate.firmwareSize, U_FLASH)) { error = "update_partition_unavailable"; return false; }
   if (mbedtls_sha256_starts_ret(&combinedBundleUpload.firmwareSha, 0) != 0) {
     Update.abort(); error = "sha256_initialization_failed"; return false;
@@ -211,6 +227,18 @@ bool finishCombinedBundleFirmware(String &error) {
       constantTimeEqual(hexBytes(digest, sizeof(digest)), combinedUpdate.firmwareSha256);
   memset(digest, 0, sizeof(digest));
   if (!valid) { error = "firmware_sha256_mismatch"; return false; }
+  uint8_t appHash[32], assetsHash[32];
+  for (size_t i = 0; i < 32; ++i) {
+    char pair[3] = {combinedUpdate.firmwareSha256[i * 2], combinedUpdate.firmwareSha256[i * 2 + 1], 0};
+    appHash[i] = static_cast<uint8_t>(strtoul(pair, nullptr, 16));
+    pair[0] = combinedUpdate.assetsSha256[i * 2]; pair[1] = combinedUpdate.assetsSha256[i * 2 + 1];
+    assetsHash[i] = static_cast<uint8_t>(strtoul(pair, nullptr, 16));
+  }
+  const uint8_t running = assetRollbackIo.running();
+  if (!assetRollback.prepare(running, running ^ 1U, combinedUpdate.firmwareSize, appHash, assetsHash)) {
+    error = "asset_backup_or_journal_failed"; return false;
+  }
+  assetRollbackStatus = "backup_ready";
   combinedUpdate.firmwareStaged = true;
   resetAssetRawUpload();
   if (!beginAssetRawUpload(combinedUpdate.assetsSha256)) { error = assetRawUpload.error; return false; }
@@ -280,18 +308,19 @@ void handleCombinedBundleUpload() {
     combinedBundleUpload.ok = combinedBundleUpload.authorized && upload.filename.endsWith(".irup");
     if (!combinedBundleUpload.ok) combinedBundleUpload.error = !combinedBundleUpload.authorized ? "unauthorized" : "signed_irup_bundle_required";
   } else if (upload.status == UPLOAD_FILE_WRITE && combinedBundleUpload.ok) {
-    if (!consumeCombinedBundle(upload.buf, upload.currentSize)) { combinedBundleUpload.ok = false; Update.abort(); }
+    if (!consumeCombinedBundle(upload.buf, upload.currentSize)) { combinedBundleUpload.ok = false; abortCombinedUpdate(); }
   } else if (upload.status == UPLOAD_FILE_END && combinedBundleUpload.ok) {
     combinedBundleUpload.ok = combinedBundleUpload.manifestVerified && combinedUpdate.firmwareStaged &&
         combinedBundleUpload.assetsWritten == 0x10000U && finishAssetRawUpload();
-    if (combinedBundleUpload.ok) combinedUpdate.assetsStaged = true; else Update.abort();
+    if (combinedBundleUpload.ok) combinedUpdate.assetsStaged = true; else abortCombinedUpdate();
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    combinedBundleUpload.ok = false; combinedBundleUpload.error = "update_bundle_upload_aborted"; Update.abort();
+    combinedBundleUpload.ok = false; combinedBundleUpload.error = "update_bundle_upload_aborted"; abortCombinedUpdate();
   }
 }
 
 void handleCombinedBundleFinished() {
   if (!combinedBundleUpload.authorized || !combinedBundleUpload.ok || !combinedUpdate.assetsStaged || !commitVerifiedOta()) {
+    if (combinedBundleUpload.authorized) abortCombinedUpdate();
     const String error = combinedBundleUpload.error.length() ? combinedBundleUpload.error : updateCommitError.length() ? updateCommitError : "update_bundle_invalid";
     server.send(400, "application/json", "{\"error\":\"" + jsonEscape(error) + "\"}"); return;
   }
@@ -301,6 +330,12 @@ void handleCombinedBundleFinished() {
 }
 
 bool commitVerifiedOta() {
+  if (!combinedUpdate.assetsStaged ||
+      !assetRollback.verifyAssets(assetRollbackIo.running() ^ 1U)) {
+    updateCommitError = "asset_flash_verification_failed";
+    return false;
+  }
+  assetRollbackStatus = "assets_verified";
   if (!history.flushPending(HistoryStore::Tier::Minute)) {
     updateCommitError = "history_flush_before_update_failed";
     eventLog.add("ERROR", "OTA_HISTORY_FLUSH",
@@ -309,7 +344,7 @@ bool commitVerifiedOta() {
   }
   eventLog.add("INFO", "OTA_HISTORY_FLUSH",
                "Offenen Minutenblock vor Update gespeichert");
-  if (!Update.end(true)) {
+  if (!Update.end()) {
     updateCommitError = "firmware_image_validation_failed";
     return false;
   }
@@ -375,11 +410,14 @@ bool checkGithubFirmwareUpdate() {
     return false;
   }
   requestCpuBoost("github_update_check");
-  WiFiClientSecure client;
+  ServicedNetworkClient<WiFiClientSecure, serviceMeterInput> client;
   client.setCACert(kGithubRootCertificates);
+  client.setHandshakeTimeout(5);
   HTTPClient http;
   http.setConnectTimeout(7000);
   http.setTimeout(9000);
+  // ArduinoJson reads the raw stream; HTTP/1.0 avoids chunk framing there.
+  http.useHTTP10(true);
   if (!http.begin(client, kGithubReleasesApi)) {
     githubUpdate.error = "github_connection_initialization_failed";
     githubUpdate.checking = false;
@@ -399,7 +437,9 @@ bool checkGithubFirmwareUpdate() {
   filter[0]["draft"] = true;
   filter[0]["prerelease"] = true;
   filter[0]["tag_name"] = true;
-  filter[0]["assets"] = true;
+  filter[0]["assets"][0]["name"] = true;
+  filter[0]["assets"][0]["browser_download_url"] = true;
+  filter[0]["assets"][0]["size"] = true;
   DynamicJsonDocument releases(16384);
   const DeserializationError parseError = deserializeJson(
       releases, http.getStream(), DeserializationOption::Filter(filter));
@@ -464,8 +504,9 @@ bool installGithubFirmwareUpdate() {
   githubUpdate.installing = true;
   githubUpdate.error = "";
   requestCpuBoost("github_update_install");
-  WiFiClientSecure client;
+  ServicedNetworkClient<WiFiClientSecure, serviceMeterInput> client;
   client.setCACert(kGithubRootCertificates);
+  client.setHandshakeTimeout(5);
   HTTPClient http;
   http.setConnectTimeout(8000);
   http.setTimeout(12000);
@@ -503,6 +544,7 @@ bool installGithubFirmwareUpdate() {
   bool ok = true;
   while (received < githubUpdate.assetSize) {
     esp_task_wdt_reset();
+    serviceMeterInput();
     const int available = stream->available();
     if (available > 0) {
       const size_t wanted = std::min<size_t>(
@@ -530,7 +572,7 @@ bool installGithubFirmwareUpdate() {
   memset(buffer, 0, sizeof(buffer));
   if (ok) combinedUpdate.assetsStaged = true;
   if (ok) ok = commitVerifiedOta();
-  if (!ok) Update.abort();
+  if (!ok) abortCombinedUpdate();
   githubUpdate.installing = false;
   if (!ok) {
     githubUpdate.error = combinedBundleUpload.error.length() ? combinedBundleUpload.error : updateCommitError.length() ? updateCommitError : "update_failed";

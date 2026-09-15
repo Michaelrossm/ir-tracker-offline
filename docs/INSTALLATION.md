@@ -2,6 +2,39 @@
 
 ## Deutsch
 
+### Aktuelles Update auf 2.0.0
+
+1. Einstellungen und vollständige Historie lokal sichern; Stromversorgung stabil halten.
+2. Bei vorhandenem **Vollständiges Update (.irup)** die Datei
+   `ir-tracker-update-2.0.0.irup` hochladen. Keine separate Asset-Datei ist nötig.
+3. Neustart abwarten, Weboberfläche und Messung prüfen.
+4. Dieselbe IRUP-Datei noch einmal manuell installieren. Das ist für die History-
+   Umstellung nötig: Beide App-Slots müssen dieselbe validierte neue Firmware
+   enthalten, damit kein alter Reader nach einem Rückfall Compact-Daten öffnet.
+   Ein GitHub-Update allein befüllt zunächst nur einen Slot.
+5. Nach dem zweiten Neustart prüft und konvertiert der Tracker die Archive.
+   Plausibel eindeutige Duplikate werden aufgelöst; mehrdeutige Archive bleiben
+   original. Zeitstempel und Energiezählerstände der übernommenen Werte werden
+   nicht verändert; Leistung wird auf 0,1 W verdichtet. Nicht währenddessen abschalten.
+
+Nachweislich beschädigte Datensätze werden nicht übernommen. Deshalb das Backup
+aufbewahren; es enthält die Originaldaten vor dieser Bereinigung. Bei fehlendem
+Arbeitsspeicher oder Lesefehlern wird nicht blind gelöscht. Große Archive können
+beim ersten Konvertieren die Weboberfläche vorübergehend verzögern.
+
+Bei nur IRFW-fähiger Firmware ist zuerst eine nachweislich passende Brückenversion
+oder ein datenerhaltender USB-Installer nötig. IRUP niemals in IRFW umbenennen.
+Ein echter Coredump-Partitionssubtyp ist für Assets ungeeignet und muss vorab per
+geprüfter USB-Migration korrigiert werden. Das alte Label `coredump` mit bereits
+passendem SPIFFS-Subtyp ist dagegen zulässig. WLAN ändert keine Partitionstabelle.
+
+Der erste Übergang von alter Firmware besitzt noch nicht rückwirkend den neuen
+Asset-Rollback-Schutz. Auch nach Einführung ersetzen Simulationen keinen Nachweis
+echter Stromunterbrechungen auf jeder Hardware. Backups daher aufbewahren.
+
+Die folgenden 1.3.8-Anweisungen beschreiben den historischen Übergang; für 2.0.0
+gilt der Ablauf oben. Ein USB-Erstflash ist kein datenerhaltendes Bestandsupdate.
+
 ### Vorher sichern
 
 1. Persönliche vollständige 4-MiB-Gerätesicherung lokal aufbewahren und SHA-256 notieren.
@@ -59,6 +92,20 @@ powershell -ExecutionPolicy Bypass -File .\tools\restore-original.ps1 -Port COM3
 Dies überschreibt bewusst den vollständigen Flash und entfernt Custom-Firmware, Einstellungen und Historie.
 
 ## English
+
+### Current 2.0.0 upgrade
+
+Back up settings and all history first. Upload `ir-tracker-update-2.0.0.irup`
+through **Complete update**, wait for a successful reboot, then manually upload
+the same file again. History migration starts only when both validated app slots
+contain identical firmware. GitHub update alone initially replaces one slot.
+Firmware and assets are included in the single signed file; no partition table
+is changed over Wi-Fi. Ambiguous old records remain untouched, and the new
+retention policy applies only after successful conversion. Never rename IRUP to
+IRFW. Older IRFW-only devices need a verified compatible bridge or a data-preserving
+USB migration. A true coredump subtype must be migrated over USB first.
+The initial upgrade from old firmware is not retroactively power-cut protected.
+The 1.3.8 instructions below are historical, not the current 2.0.0 procedure.
 
 ### Back up first
 

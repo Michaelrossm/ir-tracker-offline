@@ -14,6 +14,8 @@
 #include <Update.h>
 #include <esp_heap_caps.h>
 #include <esp_ota_ops.h>
+#include <esp_flash.h>
+#include <esp_image_format.h>
 #include <esp_sleep.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
@@ -32,12 +34,14 @@
 #include "app/storage/DebugStorage.h"
 #include "app/hardware/HardwareProfile.h"
 #include "app/network/EthernetManager.h"
+#include "app/network/ServicedNetworkClient.h"
 #include "app/meter/MeterData.h"
 #include "app/meter/D0Parser.h"
 #include "app/meter/SmlParser.h"
 #include "app/core/EventLog.h"
 #include "app/core/DeviceIdentity.h"
 #include "app/update/FirmwareSigningPublicKey.h"
+#include "app/update/AssetRollback.h"
 #if IR_TRACKER_ENABLE_GITHUB_UPDATE
 #include "app/update/GithubRootCertificates.h"
 #endif
@@ -61,7 +65,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.9";
+constexpr char kFirmwareVersion[] = "2.0.0";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -98,7 +102,8 @@ WebSocketsServer bridgeSocket(82);
 DNSServer dns;
 Preferences prefs;
 HardwareSerial meterSerial(1);
-WiFiClient mqttNetwork;
+void serviceMeterInput();
+ServicedNetworkClient<WiFiClient, serviceMeterInput> mqttNetwork;
 PubSubClient mqtt(mqttNetwork);
 HistoryStore history;
 DebugStorage debugStorage;
@@ -293,10 +298,12 @@ constexpr size_t kLoginGuardSlots = 8;
 LoginGuard loginGuards[kLoginGuardSlots];
 
 struct LiveSample {
-  uint32_t timestamp = 0;
-  float powerW = NAN;
-  float importKwh = NAN;
-  float exportKwh = NAN;
+  // Only slots below liveCount are read; each is fully written before use.
+  // Zero initialization keeps the unused ring in BSS, not in the BIN image.
+  uint32_t timestamp;
+  float powerW;
+  float importKwh;
+  float exportKwh;
 };
 constexpr size_t kLiveSamples = 840;  // DE: 70 Minuten bei 5 s | EN: 70 minutes at 5 s
 LiveSample liveSamples[kLiveSamples];
@@ -323,6 +330,8 @@ struct ApatorUnlockJob {
   uint32_t nextMs = 0;
   uint32_t verifyUntilMs = 0;
 } apatorUnlock;
+
+#include "app/update/AssetRollbackEsp.cpp"
 
 #include "app/core/SecurityManager.cpp"
 
@@ -435,7 +444,7 @@ void setup() {
   if (watchdogInit == ESP_OK || watchdogInit == ESP_ERR_INVALID_STATE)
     esp_task_wdt_add(nullptr);
   const esp_partition_t *running = esp_ota_get_running_partition();
-  esp_ota_mark_app_valid_cancel_rollback();
+  const bool assetRecoveryReady = recoverAssetTransaction();
   deviceIdentity.begin();
   deviceId = deviceIdentity.mqttId;
   loadConfig();
@@ -449,7 +458,7 @@ void setup() {
                   ethernet.lastError().c_str());
   }
   normalizeHardwarePins();
-  const bool debugStorageReady = debugStorage.begin(kFirmwareVersion);
+  const bool debugStorageReady = assetRecoveryReady && debugStorage.begin(kFirmwareVersion);
   if (!debugStorageReady) {
     Serial.printf("Debug storage disabled (%s): using embedded web assets\n",
                   debugStorage.lastError());
@@ -470,6 +479,11 @@ void setup() {
                    ", Ursache: " + bootResetReason);
   meterSerial.setRxBufferSize(2048);
   restoreConfiguredMeterSerial();
+  assetRollbackIo.uartReady = true;
+  history.setServiceHook([]() {
+    esp_task_wdt_reset();
+    serviceMeterInput();
+  });
   if (config.ledPin >= 0) {
     pinMode(config.ledPin, OUTPUT);
     digitalWrite(config.ledPin, config.ledInverted);
@@ -484,14 +498,32 @@ void setup() {
   wifiTried = 0;
   beginNextKnownWifi();
   mqtt.setServer(config.mqttHost.c_str(), config.mqttPort);
-  // The retained state contains all values plus per-value age information.
-  // Keep enough packet space so MQTT never silently drops the complete JSON.
-  mqtt.setBufferSize(4096);
+  // Larger telemetry is streamed by publishMqttValues; discovery and CONNECT
+  // fit this buffer. Keep PubSubClient's original buffer if allocation fails.
+  mqtt.setBufferSize(1024);
   mqtt.setSocketTimeout(1);
   setupRoutes();
+  if (assetRecoveryReady && debugStorageReady) {
+    // Confirm the pair only after local initialization, never on MQTT/Internet availability.
+    if (esp_ota_mark_app_valid_cancel_rollback() == ESP_OK &&
+        (strcmp(assetRollbackStatus, "new_ready") != 0 ||
+         assetRollback.confirm(assetRollbackIo.running()))) {
+      assetRollbackStatus = "ready";
+    } else {
+      assetRollbackStatus = "confirmation_failed";
+      assetRollbackBlocked = true;
+    }
+  }
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
   setupWebSockets();
 #endif
+  // A rollback must never boot a firmware unable to read the new history.
+  // First install the bridge into one slot; a second identical IRUP puts the
+  // same verified reader/writer into the other slot before conversion starts.
+  if (history.ready() && !history.compactActive() && !assetRollbackBlocked &&
+      assetRecoveryReady && debugStorageReady &&
+      assetRollback.sameVerifiedAppPair(assetRollbackIo.running()))
+    history.migrateCompact();
   Serial.printf("Offline firmware %s, partition=%s, RX=GPIO%u @ %lu baud\n",
                 kFirmwareVersion, running ? running->label : "?", config.rxPin, config.baud);
   Serial.printf("Open http://%s/\n", primaryNetworkIp().c_str());
@@ -506,6 +538,7 @@ void loop() {
   manageModbusMeterServer();
   manageAdaptiveWifiPower();
   manageMqtt();
+  serviceMeterInput();
   manageGithubFirmwareUpdate();
   if (accessPointMode) dns.processNextRequest();
   server.handleClient();

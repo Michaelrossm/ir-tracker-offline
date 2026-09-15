@@ -1,4 +1,5 @@
 #include "DebugStorage.h"
+#include "PartitionSafety.h"
 
 #include <ArduinoJson.h>
 #include <esp_partition.h>
@@ -77,19 +78,6 @@ bool exactPartition(const esp_partition_t *partition, uint32_t address,
   return partition && partition->address == address && partition->size == size;
 }
 
-bool partitionIsBlank(const esp_partition_t *partition) {
-  if (!partition) return false;
-  uint8_t buffer[256];
-  for (size_t offset = 0; offset < partition->size; offset += sizeof(buffer)) {
-    const size_t length = std::min<size_t>(
-        sizeof(buffer), static_cast<size_t>(partition->size) - offset);
-    if (esp_partition_read(partition, offset, buffer, length) != ESP_OK)
-      return false;
-    for (size_t index = 0; index < length; ++index)
-      if (buffer[index] != 0xff) return false;
-  }
-  return true;
-}
 }  // namespace
 
 void DebugStorage::inspectFixedLayout() {
@@ -98,6 +86,7 @@ void DebugStorage::inspectFixedLayout() {
   observedTarget_ = findPartitionAt(kAssetAddress);
   if (!observedTarget_) return;
   if (observedTarget_->type != ESP_PARTITION_TYPE_DATA ||
+      observedTarget_->subtype != ESP_PARTITION_SUBTYPE_DATA_SPIFFS ||
       (strcmp(observedTarget_->label, "debugfs") != 0 &&
        strcmp(observedTarget_->label, "coredump") != 0)) {
     fixedLayoutError_ = "asset_label_invalid";

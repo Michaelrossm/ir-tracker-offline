@@ -300,9 +300,11 @@ String selfTestJson() {
       phaseCount ? String(phaseCount) + " Phasen vom Zähler geliefert"
                  : "Zähler liefert keine einzelnen Phasenwerte",
       first);
-  add("history", "Lokale Historie", history.ready() ? "ok" : "error",
+  add("history", "Lokale Historie",
+      !history.ready() ? "error" : history.readOnly() ? "warn" : "ok",
       history.ready()
-          ? String(history.usedBytes()) + " von " +
+          ? (history.readOnly() ? String("Nur lesbar; Migration nicht aktiviert. ") : String()) +
+                String(history.usedBytes()) + " von " +
                 String(history.totalBytes()) + " Bytes verwendet"
           : "Historien-Dateisystem nicht verfügbar",
       first);
@@ -538,7 +540,8 @@ String supportReportText(bool technical) {
   report += "\n\n=== SYSTEM ===\n";
   report += "Freier Heap: " + String(ESP.getFreeHeap()) + " Bytes\n";
   report += "Minimaler Heap: " + String(ESP.getMinFreeHeap()) + " Bytes\n";
-  report += "Historie: " + String(history.ready() ? "bereit" : "Fehler") +
+  report += "Historie: " + String(!history.ready() ? "Fehler" :
+                                  history.readOnly() ? "nur lesbar" : "bereit") +
             "\n";
   report += "Asset-Partition: " +
             String(debugStorage.ready() ? "bereit" : "nicht verfÃ¼gbar") +
@@ -552,6 +555,7 @@ String supportReportText(bool technical) {
                        ? debugStorage.assetVersion()
                        : "nicht verfÃ¼gbar") +
             "\n";
+  report += "Asset-Rollback: " + String(assetRollbackStatus) + "\n";
   report += "maintenance.js Quelle: " +
             String(!strcmp(debugStorage.maintenanceAssetSource(), "partition")
                        ? "debugfs"

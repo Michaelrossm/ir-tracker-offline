@@ -5,6 +5,11 @@
 #error "Compile this module through main.cpp"
 #endif
 
+// NVS permits at most 15 key characters, plus the terminating zero.
+// The previous 17-character key could never be persisted by ESP-IDF.
+constexpr char kWifiScheduleOffKey[] = "wifi_sched_off";
+static_assert(sizeof(kWifiScheduleOffKey) <= 16, "NVS key too long");
+
 void createCsrfToken() {
   uint8_t randomBytes[32];
   esp_fill_random(randomBytes, sizeof(randomBytes));
@@ -83,7 +88,7 @@ void loadConfig() {
   config.ecoLedOff = prefs.getBool("eco_led_off", true);
   config.adaptiveWifiPower = prefs.getBool("wifi_power_auto", true);
   config.wifiPowerSave = prefs.getBool("wifi_ps", false);
-  config.wifiScheduleOff = prefs.getBool("wifi_schedule_off", true);
+  config.wifiScheduleOff = prefs.getBool(kWifiScheduleOffKey, true);
   config.wifiScheduleStartMinutes =
       prefs.getUShort("wifi_off_start", 0);
   config.wifiScheduleEndMinutes = prefs.getUShort("wifi_off_end", 5 * 60);
@@ -158,7 +163,7 @@ void saveConfig() {
   prefs.putBool("eco_led_off", config.ecoLedOff);
   prefs.putBool("wifi_power_auto", config.adaptiveWifiPower);
   prefs.putBool("wifi_ps", config.wifiPowerSave);
-  prefs.putBool("wifi_schedule_off", config.wifiScheduleOff);
+  prefs.putBool(kWifiScheduleOffKey, config.wifiScheduleOff);
   prefs.putUShort("wifi_off_start", config.wifiScheduleStartMinutes);
   prefs.putUShort("wifi_off_end", config.wifiScheduleEndMinutes);
   prefs.putBool("gh_check", config.githubUpdateCheck);

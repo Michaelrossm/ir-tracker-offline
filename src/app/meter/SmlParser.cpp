@@ -20,7 +20,8 @@ SmlNumber readSmlNumber(const std::vector<uint8_t> &data, size_t pos) {
   const uint8_t tl = data[pos];
   const uint8_t type = tl & 0x70;
   const uint8_t len = tl & 0x0f;
-  if ((type != 0x50 && type != 0x60) || len < 2 || pos + len > data.size()) {
+  if ((tl & 0x80) || (type != 0x50 && type != 0x60) || len < 2 ||
+      len > 9 || pos + len > data.size()) {
     return {};
   }
 
@@ -83,8 +84,13 @@ bool decodeLegacyWindow(const std::vector<uint8_t> &data, size_t obisPos,
 
   double value = last.value;
   if (count >= 2 && previous.valid) {
-    const int scaler = static_cast<int>(previous.value);
-    if (scaler >= -9 && scaler <= 9) value *= pow(10.0, scaler);
+    // SML scalers are small integers; a fixed table avoids general-purpose
+    // double pow() for every value and bounds the conversion before casting.
+    static constexpr double powers[] = {
+        1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1,
+        1.0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9};
+    if (previous.value >= -9 && previous.value <= 9)
+      value *= powers[static_cast<int>(previous.value) + 9];
   }
   target = value;
   return true;
@@ -141,6 +147,10 @@ void captureOnePass(const std::vector<uint8_t> &data,
   if (data.size() < 6) return;
   uint8_t unresolved = kSlotCount;
   for (size_t pos = 0; pos + 6 <= data.size() && unresolved; ++pos) {
+    // All supported OBIS codes share these bytes. Reject non-candidates once
+    // instead of comparing every one of the 24 codes at every frame byte.
+    if (data[pos] != 1 || data[pos + 1] != 0 || data[pos + 5] != 0xff)
+      continue;
     for (const auto &spec : kSpecs) {
       Captured &slot = output[spec.slot];
       if (slot.found) continue;
@@ -462,6 +472,12 @@ MeterParseStatus SmlParser::consumeByte(uint8_t value,
     }
     return MeterParseStatus::None;
   }
+  // Check before growing: malformed input must not double the vector's
+  // allocation from 2048 to 4096 bytes, including inside the trailer.
+  if (frame_.size() >= kMaximumFrame) {
+    reset();
+    return MeterParseStatus::InvalidFrame;
+  }
   frame_.push_back(value);
   if (trailerRemaining_) {
     if (--trailerRemaining_ == 0) {
@@ -470,10 +486,6 @@ MeterParseStatus SmlParser::consumeByte(uint8_t value,
       return status;
     }
     return MeterParseStatus::None;
-  }
-  if (frame_.size() > kMaximumFrame) {
-    reset();
-    return MeterParseStatus::InvalidFrame;
   }
   if (frame_.size() >= sizeof(kSmlEnd) &&
       matchAt(frame_, frame_.size() - sizeof(kSmlEnd), kSmlEnd,

@@ -162,7 +162,7 @@ struct Builder {
 
   explicit Builder(uint8_t *buffer, size_t size, uint16_t id = 0)
       : data(buffer), capacity(size) {
-    memset(data, 0, capacity);
+    memset(data, 0, 12);  // Only the DNS header needs initialization.
     put16(data, id);
     put16(data + 2, kFlagResponseAuthoritative);
   }
@@ -399,7 +399,7 @@ static void announceAll(uint32_t ptrTtl, uint32_t uniqueTtl) {
 
 static void sendProbe() {
   if (state.socket < 0) return;
-  memset(txPacket, 0, sizeof(txPacket));
+  memset(txPacket, 0, 12);
   put16(txPacket + 4, 1);
   size_t length = 12;
   const char *cursor = state.hostFqdn;
@@ -559,7 +559,8 @@ static void receivePackets() {
       useConflictFallback();
       continue;
     }
-    handleQuery(rxPacket, static_cast<size_t>(received), source);
+    if (!state.probing)
+      handleQuery(rxPacket, static_cast<size_t>(received), source);
   }
 }
 
@@ -597,7 +598,10 @@ static bool openSocket(const IPAddress &ip) {
   setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, &loopback,
              sizeof(loopback));
   const int flags = fcntl(sock, F_GETFL, 0);
-  if (flags >= 0) fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+  if (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+    close(sock);
+    return false;
+  }
   state.socket = sock;
   return true;
 }

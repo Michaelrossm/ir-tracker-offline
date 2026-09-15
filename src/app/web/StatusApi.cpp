@@ -9,67 +9,115 @@ String statusJson() {
   const bool fresh = valueFresh(meter.powerUpdatedMs);
   const MeterDiagnosis meterHealth = meterDiagnosis();
   const bool browserSessionValid = validBrowserSession();
-  // The complete status is currently about 2.6 kB. Reserving once avoids the
+  // The complete status is currently about 3.5 kB. Reserving once avoids the
   // allocator churn caused by growing Arduino String in 16-byte steps. Keep
   // the payload and the shared Web/MQTT status source unchanged.
   String json;
-  json.reserve(3000);
+  json.reserve(4096);
+  // Rollback status uses a constant label, not a second diagnostics object.
   json = "{";
-  json += "\"firmware\":\"offline-" + String(kFirmwareVersion) + "\",";
+  json += "\"asset_rollback_status\":\"";
+  json += assetRollbackStatus;
+  json += "\",";
+  json += "\"firmware\":\"offline-";
+  json += String(kFirmwareVersion);
+  json += "\",";
   json += "\"hardware_profile\":\"universal\",";
-  json += "\"device_model\":\"" + String(DeviceIdentity::kModel) + "\",";
-  json += "\"device_serial\":\"" + String(deviceIdentity.serial) + "\",";
-  json += "\"device_mac\":\"" + String(deviceIdentity.mac) + "\",";
-  json += "\"w5500_gpio_reserved\":" +
-          String(HardwareProfile::kLanPrepared ? "true" : "false") + ",";
+  json += "\"device_model\":\"";
+  json += String(DeviceIdentity::kModel);
+  json += "\",";
+  json += "\"device_serial\":\"";
+  json += String(deviceIdentity.serial);
+  json += "\",";
+  json += "\"device_mac\":\"";
+  json += String(deviceIdentity.mac);
+  json += "\",";
+  json += "\"w5500_gpio_reserved\":";
+  json += String(HardwareProfile::kLanPrepared ? "true" : "false");
+  json += ",";
   json += "\"installer_wifi_ota\":true,";
   json += "\"installer_gpio_tx_scan\":true,";
-  json += "\"author\":\"" + String(kFirmwareAuthor) + "\",";
-  json += "\"license\":\"" + String(kFirmwareLicense) + "\",";
+  json += "\"author\":\"";
+  json += String(kFirmwareAuthor);
+  json += "\",";
+  json += "\"license\":\"";
+  json += String(kFirmwareLicense);
+  json += "\",";
   json += "\"transport_security\":\"http_local_trusted_network_only\",";
-  json += "\"browser_session_valid\":" +
-          String(browserSessionValid ? "true" : "false") + ",";
-  json += "\"browser_session_state\":\"" +
-          String(browserSessionState) + "\",";
-  json += "\"mode\":\"" + String(primaryTransportName()) + "\",";
-  json += "\"hostname\":\"" + jsonEscape(config.hostname) + "\",";
-  json += "\"storage_compatibility_mode\":" +
-          String(config.storageCompatibilityMode ? "true" : "false") + ",";
-  json += "\"modbus_tcp_enabled\":" +
-          String(config.modbusTcp ? "true" : "false") + ",";
-  json += "\"modbus_tcp_running\":" +
-          String(modbusMeterRunning() ? "true" : "false") + ",";
-  json += "\"modbus_connections\":" + String(modbusMeterConnections()) + ",";
-  json += "\"modbus_valid_requests\":" +
-          String(modbusMeterValidRequests()) + ",";
-  json += "\"modbus_invalid_requests\":" +
-          String(modbusMeterInvalidRequests()) + ",";
+  json += "\"browser_session_valid\":";
+  json += String(browserSessionValid ? "true" : "false");
+  json += ",";
+  json += "\"browser_session_state\":\"";
+  json += String(browserSessionState);
+  json += "\",";
+  json += "\"mode\":\"";
+  json += String(primaryTransportName());
+  json += "\",";
+  json += "\"hostname\":\"";
+  json += jsonEscape(config.hostname);
+  json += "\",";
+  json += "\"storage_compatibility_mode\":";
+  json += String(config.storageCompatibilityMode ? "true" : "false");
+  json += ",";
+  json += "\"modbus_tcp_enabled\":";
+  json += String(config.modbusTcp ? "true" : "false");
+  json += ",";
+  json += "\"modbus_tcp_running\":";
+  json += String(modbusMeterRunning() ? "true" : "false");
+  json += ",";
+  json += "\"modbus_connections\":";
+  json += String(modbusMeterConnections());
+  json += ",";
+  json += "\"modbus_valid_requests\":";
+  json += String(modbusMeterValidRequests());
+  json += ",";
+  json += "\"modbus_invalid_requests\":";
+  json += String(modbusMeterInvalidRequests());
+  json += ",";
   const String modbusLastClient = modbusMeterLastClient();
   json += "\"modbus_last_client\":";
   json += modbusLastClient.length()
               ? "\"" + jsonEscape(modbusLastClient) + "\""
               : "null";
   json += ",";
-  json += "\"ip\":\"" + primaryNetworkIp() + "\",";
-  json += "\"ethernet_initialized\":" +
-          String(ethernet.initialized() ? "true" : "false") + ",";
-  json += "\"ethernet_detected\":" +
-          String(ethernet.hardwareDetected() ? "true" : "false") + ",";
-  json += "\"ethernet_link\":" +
-          String(ethernet.linkUp() ? "true" : "false") + ",";
-  json += "\"ethernet_connected\":" +
-          String(ethernet.connected() ? "true" : "false") + ",";
-  json += "\"ethernet_ip\":\"" + ethernet.localIP().toString() + "\",";
-  json += "\"ethernet_error\":\"" + jsonEscape(ethernet.lastError()) + "\",";
+  json += "\"ip\":\"";
+  json += primaryNetworkIp();
+  json += "\",";
+  json += "\"ethernet_initialized\":";
+  json += String(ethernet.initialized() ? "true" : "false");
+  json += ",";
+  json += "\"ethernet_detected\":";
+  json += String(ethernet.hardwareDetected() ? "true" : "false");
+  json += ",";
+  json += "\"ethernet_link\":";
+  json += String(ethernet.linkUp() ? "true" : "false");
+  json += ",";
+  json += "\"ethernet_connected\":";
+  json += String(ethernet.connected() ? "true" : "false");
+  json += ",";
+  json += "\"ethernet_ip\":\"";
+  json += ethernet.localIP().toString();
+  json += "\",";
+  json += "\"ethernet_error\":\"";
+  json += jsonEscape(ethernet.lastError());
+  json += "\",";
   json += "\"ethernet_controller\":\"w5500_spi\",";
   json += "\"poe_power_detectable\":false,";
-  json += "\"wifi_connected\":" +
-          String(wifiConnected() ? "true" : "false") + ",";
-  json += "\"wifi_ip\":\"" + WiFi.localIP().toString() + "\",";
-  json += "\"wifi_rssi\":" + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + ",";
-  json += "\"wifi_ssid\":\"" + jsonEscape(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "") + "\",";
-  json += "\"setup_ap_active\":" +
-          String(accessPointMode ? "true" : "false") + ",";
+  json += "\"wifi_connected\":";
+  json += String(wifiConnected() ? "true" : "false");
+  json += ",";
+  json += "\"wifi_ip\":\"";
+  json += WiFi.localIP().toString();
+  json += "\",";
+  json += "\"wifi_rssi\":";
+  json += String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0);
+  json += ",";
+  json += "\"wifi_ssid\":\"";
+  json += jsonEscape(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "");
+  json += "\",";
+  json += "\"setup_ap_active\":";
+  json += String(accessPointMode ? "true" : "false");
+  json += ",";
   json += "\"mdns_running\":";
 #if IR_TRACKER_ENABLE_MDNS
   json += String(mdnsRunning ? "true" : "false");
@@ -78,150 +126,277 @@ String statusJson() {
 #endif
   json += ",\"mdns_name\":\"";
 #if IR_TRACKER_ENABLE_MDNS
-  json += jsonEscape(config.hostname) + ".local";
+  json += jsonEscape(config.hostname);
+  json += ".local";
 #endif
   json += "\",";
-  json += "\"wifi_sta_only\":" +
-          String(WiFi.getMode() == WIFI_STA ? "true" : "false") + ",";
-  json += "\"wifi_min_modem_sleep\":" +
-          String(wifiMinModemSleepActive ? "true" : "false") + ",";
-  json += "\"wifi_power_save_configured\":" +
-          String(config.wifiPowerSave ? "true" : "false") + ",";
-  json += "\"adaptive_wifi_power\":" +
-          String(config.adaptiveWifiPower ? "true" : "false") + ",";
-  json += "\"wifi_tx_profile\":\"" + String(wifiTxProfileName()) + "\",";
-  json += "\"wifi_tx_power_dbm\":" + String(wifiTxPowerDbm(), 1) + ",";
-  json += "\"wifi_tx_power_changes\":" + String(wifiTxPowerChanges) + ",";
-  json += "\"wifi_tx_power_errors\":" + String(wifiTxPowerErrors) + ",";
-  json += "\"wifi_mode_errors\":" + String(wifiModeErrors) + ",";
-  json += "\"wifi_tx_runtime_fault\":" +
-          String(wifiTxPowerRuntimeFault ? "true" : "false") + ",";
-  json += "\"mqtt_connected\":" + String(mqtt.connected() ? "true" : "false") + ",";
-  json += "\"meter_fresh\":" + String(fresh ? "true" : "false") + ",";
-  json += "\"meter_status\":\"" +
-          String(meterDiagnosisCodeName(meterHealth.code)) + "\",";
-  json += "\"meter_protocol\":\"" +
-          String(meterProtocolName(meter.detectedProtocol)) + "\",";
-  json += "\"configured_meter_protocol\":\"" +
-          String(meterProtocolName(config.meterProtocol)) + "\",";
-  json += "\"telegram_age_s\":" + ageOrNull(meter.lastTelegramMs) + ",";
-  json += "\"power_w\":" + numberOrNull(meter.powerW) + ",";
-  json += "\"power_age_s\":" + ageOrNull(meter.powerUpdatedMs) + ",";
-  json += "\"import_kwh\":" + numberOrNull(meter.importKwh) + ",";
-  json += "\"import_age_s\":" + ageOrNull(meter.importUpdatedMs) + ",";
-  json += "\"export_kwh\":" + numberOrNull(meter.exportKwh) + ",";
-  json += "\"export_age_s\":" + ageOrNull(meter.exportUpdatedMs) + ",";
+  json += "\"wifi_sta_only\":";
+  json += String(WiFi.getMode() == WIFI_STA ? "true" : "false");
+  json += ",";
+  json += "\"wifi_min_modem_sleep\":";
+  json += String(wifiMinModemSleepActive ? "true" : "false");
+  json += ",";
+  json += "\"wifi_power_save_configured\":";
+  json += String(config.wifiPowerSave ? "true" : "false");
+  json += ",";
+  json += "\"adaptive_wifi_power\":";
+  json += String(config.adaptiveWifiPower ? "true" : "false");
+  json += ",";
+  json += "\"wifi_tx_profile\":\"";
+  json += String(wifiTxProfileName());
+  json += "\",";
+  json += "\"wifi_tx_power_dbm\":";
+  json += String(wifiTxPowerDbm(), 1);
+  json += ",";
+  json += "\"wifi_tx_power_changes\":";
+  json += String(wifiTxPowerChanges);
+  json += ",";
+  json += "\"wifi_tx_power_errors\":";
+  json += String(wifiTxPowerErrors);
+  json += ",";
+  json += "\"wifi_mode_errors\":";
+  json += String(wifiModeErrors);
+  json += ",";
+  json += "\"wifi_tx_runtime_fault\":";
+  json += String(wifiTxPowerRuntimeFault ? "true" : "false");
+  json += ",";
+  json += "\"mqtt_connected\":";
+  json += String(mqtt.connected() ? "true" : "false");
+  json += ",";
+  json += "\"meter_fresh\":";
+  json += String(fresh ? "true" : "false");
+  json += ",";
+  json += "\"meter_status\":\"";
+  json += String(meterDiagnosisCodeName(meterHealth.code));
+  json += "\",";
+  json += "\"meter_protocol\":\"";
+  json += String(meterProtocolName(meter.detectedProtocol));
+  json += "\",";
+  json += "\"configured_meter_protocol\":\"";
+  json += String(meterProtocolName(config.meterProtocol));
+  json += "\",";
+  json += "\"telegram_age_s\":";
+  json += ageOrNull(meter.lastTelegramMs);
+  json += ",";
+  json += "\"power_w\":";
+  json += numberOrNull(meter.powerW);
+  json += ",";
+  json += "\"power_age_s\":";
+  json += ageOrNull(meter.powerUpdatedMs);
+  json += ",";
+  json += "\"import_kwh\":";
+  json += numberOrNull(meter.importKwh);
+  json += ",";
+  json += "\"import_age_s\":";
+  json += ageOrNull(meter.importUpdatedMs);
+  json += ",";
+  json += "\"export_kwh\":";
+  json += numberOrNull(meter.exportKwh);
+  json += ",";
+  json += "\"export_age_s\":";
+  json += ageOrNull(meter.exportUpdatedMs);
+  json += ",";
   json += "\"phases\":[";
   for (uint8_t phase = 0; phase < 3; ++phase) {
     if (phase) json += ",";
-    json += "{\"phase\":\"L" + String(phase + 1) +
-            "\",\"power_w\":" + numberOrNull(meter.phasePowerW[phase]) +
-            ",\"power_age_s\":" + ageOrNull(meter.phasePowerUpdatedMs[phase]) +
-            ",\"voltage_v\":" + numberOrNull(meter.phaseVoltageV[phase]) +
-            ",\"voltage_age_s\":" + ageOrNull(meter.phaseVoltageUpdatedMs[phase]) +
-            ",\"current_a\":" + numberOrNull(meter.phaseCurrentA[phase]) +
-            ",\"current_age_s\":" + ageOrNull(meter.phaseCurrentUpdatedMs[phase]) +
-            "}";
+    json += "{\"phase\":\"L";
+    json += String(phase + 1);
+    json += "\",\"power_w\":";
+    json += numberOrNull(meter.phasePowerW[phase]);
+    json += ",\"power_age_s\":";
+    json += ageOrNull(meter.phasePowerUpdatedMs[phase]);
+    json += ",\"voltage_v\":";
+    json += numberOrNull(meter.phaseVoltageV[phase]);
+    json += ",\"voltage_age_s\":";
+    json += ageOrNull(meter.phaseVoltageUpdatedMs[phase]);
+    json += ",\"current_a\":";
+    json += numberOrNull(meter.phaseCurrentA[phase]);
+    json += ",\"current_age_s\":";
+    json += ageOrNull(meter.phaseCurrentUpdatedMs[phase]);
+    json += "}";
   }
   json += "],";
-  json += "\"telegrams\":" + String(meter.telegrams) + ",";
-  json += "\"received_bytes\":" + String(meter.bytes) + ",";
-  json += "\"parse_errors\":" + String(meter.parseErrors) + ",";
-  json += "\"crc_errors\":" + String(meter.crcErrors) + ",";
-  json += "\"sml_crc_errors\":" + String(meter.smlCrcErrors) + ",";
-  json += "\"d0_bcc_errors\":" + String(d0BccErrors()) + ",";
-  json += "\"meter_reinitializations\":" +
-          String(meterReinitializations) + ",";
-  json += "\"last_crc_valid\":" + String(meter.lastCrcValid ? "true" : "false") + ",";
-  json += "\"last_integrity_present\":" +
-          String(meter.lastIntegrityPresent ? "true" : "false") + ",";
-  json += "\"rx_gpio\":" + String(config.rxPin) + ",";
-  json += "\"tx_gpio\":" + String(config.txPin) + ",";
-  json += "\"ir_transmitting\":" + String(irPulse.active ? "true" : "false") + ",";
-  json += "\"apator_unlock_active\":" +
-          String(apatorUnlock.active ? "true" : "false") + ",";
-  json += "\"apator_unlock_phase\":" + String(apatorUnlock.phase) + ",";
-  json += "\"history_ready\":" + String(history.ready() ? "true" : "false") + ",";
-  json += "\"debug_storage_ready\":" +
-          String(debugStorage.ready() ? "true" : "false") + ",";
-  json += "\"debug_storage_label\":\"" +
-          jsonEscape(debugStorage.partitionLabel()
+  json += "\"telegrams\":";
+  json += String(meter.telegrams);
+  json += ",";
+  json += "\"received_bytes\":";
+  json += String(meter.bytes);
+  json += ",";
+  json += "\"parse_errors\":";
+  json += String(meter.parseErrors);
+  json += ",";
+  json += "\"crc_errors\":";
+  json += String(meter.crcErrors);
+  json += ",";
+  json += "\"sml_crc_errors\":";
+  json += String(meter.smlCrcErrors);
+  json += ",";
+  json += "\"d0_bcc_errors\":";
+  json += String(d0BccErrors());
+  json += ",";
+  json += "\"meter_reinitializations\":";
+  json += String(meterReinitializations);
+  json += ",";
+  json += "\"last_crc_valid\":";
+  json += String(meter.lastCrcValid ? "true" : "false");
+  json += ",";
+  json += "\"last_integrity_present\":";
+  json += String(meter.lastIntegrityPresent ? "true" : "false");
+  json += ",";
+  json += "\"rx_gpio\":";
+  json += String(config.rxPin);
+  json += ",";
+  json += "\"tx_gpio\":";
+  json += String(config.txPin);
+  json += ",";
+  json += "\"ir_transmitting\":";
+  json += String(irPulse.active ? "true" : "false");
+  json += ",";
+  json += "\"apator_unlock_active\":";
+  json += String(apatorUnlock.active ? "true" : "false");
+  json += ",";
+  json += "\"apator_unlock_phase\":";
+  json += String(apatorUnlock.phase);
+  json += ",";
+  json += "\"history_ready\":";
+  json += String(history.ready() ? "true" : "false");
+  json += ",\"history_read_only\":";
+  json += history.readOnly() ? "true" : "false";
+  json += ",";
+  json += "\"debug_storage_ready\":";
+  json += String(debugStorage.ready() ? "true" : "false");
+  json += ",";
+  json += "\"debug_storage_label\":\"";
+  json += jsonEscape(debugStorage.partitionLabel()
                          ? String(debugStorage.partitionLabel())
-                         : String()) +
-          "\",";
-  json += "\"debug_storage_legacy\":" +
-          String(debugStorage.usingLegacyLabel() ? "true" : "false") + ",";
-  json += "\"asset_manifest_ready\":" +
-          String(debugStorage.assetManifestReady() ? "true" : "false") + ",";
-  json += "\"asset_manifest_error\":\"" +
-          jsonEscape(debugStorage.assetManifestError()) + "\",";
-  json += "\"asset_partition_mounted\":" +
-          String(debugStorage.ready() ? "true" : "false") + ",";
-  json += "\"asset_manifest_valid\":" +
-          String(debugStorage.assetManifestReady() ? "true" : "false") + ",";
-  json += "\"asset_version\":\"" +
-          jsonEscape(debugStorage.assetVersion()) + "\",";
-  json += "\"asset_source_maintenance_js\":\"" +
-          String(debugStorage.maintenanceAssetSource()) + "\",";
-  json += "\"asset_last_error\":\"" +
-          jsonEscape(debugStorage.assetManifestError()) + "\",";
-  json += "\"asset_fixed_layout_valid\":" +
-          String(debugStorage.fixedLayoutValid() ? "true" : "false") + ",";
-  json += "\"asset_fixed_layout_error\":\"" +
-          jsonEscape(debugStorage.fixedLayoutError()) + "\",";
-  json += "\"asset_observed_label\":\"" +
-          jsonEscape(debugStorage.observedTargetLabel()) + "\",";
-  json += "\"asset_observed_offset\":" +
-          String(debugStorage.observedTargetAddress()) + ",";
-  json += "\"asset_observed_size\":" +
-          String(debugStorage.observedTargetSize()) + ",";
+                         : String());
+  json += "\",";
+  json += "\"debug_storage_legacy\":";
+  json += String(debugStorage.usingLegacyLabel() ? "true" : "false");
+  json += ",";
+  json += "\"asset_manifest_ready\":";
+  json += String(debugStorage.assetManifestReady() ? "true" : "false");
+  json += ",";
+  json += "\"asset_manifest_error\":\"";
+  json += jsonEscape(debugStorage.assetManifestError());
+  json += "\",";
+  json += "\"asset_partition_mounted\":";
+  json += String(debugStorage.ready() ? "true" : "false");
+  json += ",";
+  json += "\"asset_manifest_valid\":";
+  json += String(debugStorage.assetManifestReady() ? "true" : "false");
+  json += ",";
+  json += "\"asset_version\":\"";
+  json += jsonEscape(debugStorage.assetVersion());
+  json += "\",";
+  json += "\"asset_source_maintenance_js\":\"";
+  json += String(debugStorage.maintenanceAssetSource());
+  json += "\",";
+  json += "\"asset_last_error\":\"";
+  json += jsonEscape(debugStorage.assetManifestError());
+  json += "\",";
+  json += "\"asset_fixed_layout_valid\":";
+  json += String(debugStorage.fixedLayoutValid() ? "true" : "false");
+  json += ",";
+  json += "\"asset_fixed_layout_error\":\"";
+  json += jsonEscape(debugStorage.fixedLayoutError());
+  json += "\",";
+  json += "\"asset_observed_label\":\"";
+  json += jsonEscape(debugStorage.observedTargetLabel());
+  json += "\",";
+  json += "\"asset_observed_offset\":";
+  json += String(debugStorage.observedTargetAddress());
+  json += ",";
+  json += "\"asset_observed_size\":";
+  json += String(debugStorage.observedTargetSize());
+  json += ",";
   json += "\"live_history_minutes\":70,";
-  json += "\"time_valid\":" + String(time(nullptr) >= 1700000000 ? "true" : "false") + ",";
-  json += "\"event_count\":" + String(eventLog.count()) + ",";
-  json += "\"event_log_persistent\":" +
-          String(eventLog.persistent() ? "true" : "false") + ",";
-  json += "\"eco_mode_enabled\":" +
-          String(config.ecoMode ? "true" : "false") + ",";
-  json += "\"eco_led_idle_off\":" +
-          String(config.ecoLedOff ? "true" : "false") + ",";
-  json += "\"wifi_schedule_off_enabled\":" +
-          String(config.wifiScheduleOff ? "true" : "false") + ",";
-  json += "\"wifi_schedule_start_minutes\":" +
-          String(config.wifiScheduleStartMinutes) + ",";
-  json += "\"wifi_schedule_end_minutes\":" +
-          String(config.wifiScheduleEndMinutes) + ",";
-  json += "\"wifi_scheduled_off\":" +
-          String(wifiScheduledOff ? "true" : "false") + ",";
-  json += "\"led_fault_active\":" +
-          String(trackerFaultActive() ? "true" : "false") + ",";
-  json += "\"led_suppressed\":" +
-          String(ecoLedSuppressed() ? "true" : "false") + ",";
-  json += "\"eco_runtime_fault\":" +
-          String(cpuEcoRuntimeFault ? "true" : "false") + ",";
-  json += "\"cpu_frequency_mhz\":" + String(getCpuFrequencyMhz()) + ",";
-  json += "\"cpu_boost_active\":" +
-          String(cpuBoostActive() ? "true" : "false") + ",";
-  json += "\"cpu_boost_remaining_s\":" +
-          String(cpuBoostRemainingSeconds()) + ",";
-  json += "\"cpu_boost_reason\":\"" + jsonEscape(cpuBoostReason) + "\",";
-  json += "\"cpu_frequency_switches\":" + String(cpuFrequencySwitches) + ",";
-  json += "\"cpu_frequency_errors\":" + String(cpuFrequencyErrors) + ",";
-  json += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
-  json += "\"heap_warning\":" +
-          String(heapWarningActive ? "true" : "false") + ",";
-  json += "\"restart_reason\":\"" + bootResetReason + "\",";
-  json += "\"led_gpio\":" + String(config.ledPin) + ",";
-  json += "\"baud\":" + String(meterBaud()) + ",";
-  json += "\"configured_baud\":" + String(config.baud) + ",";
-  json += "\"github_update_check\":" +
-          String(config.githubUpdateCheck ? "true" : "false") + ",";
-  json += "\"github_auto_install\":" +
-          String(config.githubAutoInstall ? "true" : "false") + ",";
-  json += "\"github_update_available\":" +
-          String(githubUpdate.available ? "true" : "false") + ",";
-  json += "\"github_update_version\":\"" +
-          jsonEscape(githubUpdate.version) + "\",";
-  json += "\"uptime_s\":" + String(millis() / 1000);
+  json += "\"time_valid\":";
+  json += String(time(nullptr) >= 1700000000 ? "true" : "false");
+  json += ",";
+  json += "\"event_count\":";
+  json += String(eventLog.count());
+  json += ",";
+  json += "\"event_log_persistent\":";
+  json += String(eventLog.persistent() ? "true" : "false");
+  json += ",";
+  json += "\"eco_mode_enabled\":";
+  json += String(config.ecoMode ? "true" : "false");
+  json += ",";
+  json += "\"eco_led_idle_off\":";
+  json += String(config.ecoLedOff ? "true" : "false");
+  json += ",";
+  json += "\"wifi_schedule_off_enabled\":";
+  json += String(config.wifiScheduleOff ? "true" : "false");
+  json += ",";
+  json += "\"wifi_schedule_start_minutes\":";
+  json += String(config.wifiScheduleStartMinutes);
+  json += ",";
+  json += "\"wifi_schedule_end_minutes\":";
+  json += String(config.wifiScheduleEndMinutes);
+  json += ",";
+  json += "\"wifi_scheduled_off\":";
+  json += String(wifiScheduledOff ? "true" : "false");
+  json += ",";
+  json += "\"led_fault_active\":";
+  json += String(trackerFaultActive() ? "true" : "false");
+  json += ",";
+  json += "\"led_suppressed\":";
+  json += String(ecoLedSuppressed() ? "true" : "false");
+  json += ",";
+  json += "\"eco_runtime_fault\":";
+  json += String(cpuEcoRuntimeFault ? "true" : "false");
+  json += ",";
+  json += "\"cpu_frequency_mhz\":";
+  json += String(getCpuFrequencyMhz());
+  json += ",";
+  json += "\"cpu_boost_active\":";
+  json += String(cpuBoostActive() ? "true" : "false");
+  json += ",";
+  json += "\"cpu_boost_remaining_s\":";
+  json += String(cpuBoostRemainingSeconds());
+  json += ",";
+  json += "\"cpu_boost_reason\":\"";
+  json += jsonEscape(cpuBoostReason);
+  json += "\",";
+  json += "\"cpu_frequency_switches\":";
+  json += String(cpuFrequencySwitches);
+  json += ",";
+  json += "\"cpu_frequency_errors\":";
+  json += String(cpuFrequencyErrors);
+  json += ",";
+  json += "\"free_heap\":";
+  json += String(ESP.getFreeHeap());
+  json += ",";
+  json += "\"heap_warning\":";
+  json += String(heapWarningActive ? "true" : "false");
+  json += ",";
+  json += "\"restart_reason\":\"";
+  json += bootResetReason;
+  json += "\",";
+  json += "\"led_gpio\":";
+  json += String(config.ledPin);
+  json += ",";
+  json += "\"baud\":";
+  json += String(meterBaud());
+  json += ",";
+  json += "\"configured_baud\":";
+  json += String(config.baud);
+  json += ",";
+  json += "\"github_update_check\":";
+  json += String(config.githubUpdateCheck ? "true" : "false");
+  json += ",";
+  json += "\"github_auto_install\":";
+  json += String(config.githubAutoInstall ? "true" : "false");
+  json += ",";
+  json += "\"github_update_available\":";
+  json += String(githubUpdate.available ? "true" : "false");
+  json += ",";
+  json += "\"github_update_version\":\"";
+  json += jsonEscape(githubUpdate.version);
+  json += "\",";
+  json += "\"uptime_s\":";
+  json += String(millis() / 1000);
   json += "}";
   return json;
 }

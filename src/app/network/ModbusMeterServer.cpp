@@ -30,14 +30,14 @@ uint32_t scaledModbusSigned(const double value, const double scale) {
   if (!std::isfinite(value)) return 0x80000000U;
   const double scaled = value * scale;
   if (scaled > 2147483647.0) return 0x7fffffffU;
-  if (scaled < -2147483648.0) return 0x80000001U;
+  if (scaled <= -2147483647.0) return 0x80000001U;
   return static_cast<uint32_t>(static_cast<int32_t>(std::lround(scaled)));
 }
 
 uint32_t scaledModbusUnsigned(const double value, const double scale) {
   if (!std::isfinite(value) || value < 0.0) return 0xffffffffU;
   const double scaled = value * scale;
-  if (scaled >= 4294967295.0) return 0xfffffffeU;
+  if (scaled >= 4294967294.0) return 0xfffffffeU;
   return static_cast<uint32_t>(std::llround(scaled));
 }
 
@@ -161,25 +161,35 @@ void manageModbusMeterServer() {
     }
     modbusClientLastDataMs = millis();
   }
-  while (modbusMeterClient.available() &&
-         modbusRequestLength < sizeof(modbusRequest)) {
-    modbusRequest[modbusRequestLength++] =
-        static_cast<uint8_t>(modbusMeterClient.read());
-    modbusClientLastDataMs = millis();
-  }
-  if (modbusRequestLength >= 6U) {
-    const size_t expected =
+  // Read the MBAP header first, then exactly its payload. Additional TCP
+  // requests stay in the socket for the next loop, including coalesced ones.
+  for (uint8_t stage = 0; stage < 2; ++stage) {
+    const size_t expected = modbusRequestLength < 6U ? 6U :
         6U + (static_cast<size_t>(modbusRequest[4]) << 8U) + modbusRequest[5];
-    if (expected < 8U || expected > sizeof(modbusRequest)) {
+    if (expected > sizeof(modbusRequest) ||
+        (modbusRequestLength >= 6U && expected < 8U)) {
       ++modbusInvalidRequestCount;
       modbusMeterClient.stop();
       modbusRequestLength = 0;
       return;
     }
-    if (modbusRequestLength >= expected) {
-      modbusRequestLength = expected;
+    const int available = modbusMeterClient.available();
+    const size_t count = available > 0
+        ? std::min<size_t>(available, expected - modbusRequestLength) : 0;
+    if (count) {
+      const int received = modbusMeterClient.read(
+          modbusRequest + modbusRequestLength, count);
+      if (received > 0) {
+        modbusRequestLength += static_cast<size_t>(received);
+        modbusClientLastDataMs = millis();
+      }
+    }
+    if (modbusRequestLength < 6U) break;
+    if (expected == 6U) continue;
+    if (modbusRequestLength == expected) {
       processModbusRequest();
       modbusRequestLength = 0;
+      break;
     }
   }
   if (modbusMeterClient &&

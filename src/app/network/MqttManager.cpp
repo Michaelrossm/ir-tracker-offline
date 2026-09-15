@@ -90,13 +90,40 @@ void publishMqttValues() {
         snprintf(topic, sizeof(topic), "%s%s", prefix, suffix);
     if (length <= 0 || static_cast<size_t>(length) >= sizeof(topic))
       return false;
-    return mqtt.publish(topic, payload, true);
+    // Use the existing streaming API for JSON larger than the packet buffer.
+    // Close a partial packet so the next publish cannot corrupt its framing.
+    serviceMeterInput();
+    const size_t payloadLength = strlen(payload);
+    if (MQTT_MAX_HEADER_SIZE + 2U + length + payloadLength <=
+        mqtt.getBufferSize())
+      return mqtt.publish(topic, payload, true);
+    if (MQTT_MAX_HEADER_SIZE + 2U + length > mqtt.getBufferSize())
+      return false;
+    if (!mqtt.beginPublish(topic, payloadLength, true)) {
+      mqttNetwork.stop();
+      return false;
+    }
+    for (size_t offset = 0; offset < payloadLength;) {
+      const size_t count = std::min<size_t>(512, payloadLength - offset);
+      if (mqtt.write(reinterpret_cast<const uint8_t *>(payload + offset),
+                     count) != count) {
+        mqttNetwork.stop();
+        return false;
+      }
+      offset += count;
+      serviceMeterInput();
+    }
+    return mqtt.endPublish() != 0;
   };
   const bool fresh = meter.lastTelegramMs && millis() - meter.lastTelegramMs < kReadingStaleMs;
-  const String status = statusJson();
-  publish(base, "/state", status.c_str());
-  const String neutralMeter = neutralMeterJson();
-  publish(base, "/meter", neutralMeter.c_str());
+  {
+    const String status = statusJson();
+    publish(base, "/state", status.c_str());
+  }
+  {
+    const String neutralMeter = neutralMeterJson();
+    publish(base, "/meter", neutralMeter.c_str());
+  }
   if (std::isfinite(meter.powerW)) {
     snprintf(value, sizeof(value), "%.3f", meter.powerW);
     publish(base, "/power_w", value);

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import struct
+from update_limits import APP_MAX_BYTES
 from pathlib import Path
 
 from cryptography.hazmat.primitives import hashes, serialization
@@ -33,7 +34,7 @@ def main() -> None:
     args = parser.parse_args()
     firmware, assets = args.firmware.resolve(), args.assets.resolve()
     if (not firmware.is_file() or firmware.stat().st_size < 1024 or
-            firmware.stat().st_size > 0x150000 or firmware.read_bytes()[:1] != b"\xE9"):
+            firmware.stat().st_size > APP_MAX_BYTES or firmware.read_bytes()[:1] != b"\xE9"):
         raise SystemExit("Invalid ESP32 application image")
     if not assets.is_file() or assets.stat().st_size != 0x10000:
         raise SystemExit("Asset image must be exactly 65536 bytes")

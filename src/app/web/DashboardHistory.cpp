@@ -1,4 +1,5 @@
 // This module is included by main.cpp inside its private namespace.
+#include "../storage/HistoryRetention.h"
 // It is excluded from standalone PlatformIO compilation to preserve the exact
 // firmware behavior and memory layout while keeping responsibilities separate.
 #ifndef IR_TRACKER_AMALGAMATED_BUILD
@@ -155,12 +156,18 @@ struct HistoryQuery {
   HistoryStore::Tier tier;
   uint32_t since;
   uint32_t until;
+  bool rawTier;
+  HistoryQuery(HistoryStore::Tier valueTier, uint32_t valueSince,
+               uint32_t valueUntil, bool valueRawTier = false)
+      : tier(valueTier), since(valueSince), until(valueUntil), rawTier(valueRawTier) {}
 };
 
 uint32_t historyTierSeconds(HistoryStore::Tier tier) {
   switch (tier) {
     case HistoryStore::Tier::Minute: return 60;
+    case HistoryStore::Tier::FiveMinute: return 300;
     case HistoryStore::Tier::QuarterHour: return 900;
+    case HistoryStore::Tier::HalfHour: return 1800;
     case HistoryStore::Tier::Hour: return 3600;
     case HistoryStore::Tier::Day: return 86400;
   }
@@ -177,6 +184,25 @@ uint32_t requestedHistoryAnchor(uint32_t now) {
   return parsed >= 1577836800ULL && parsed <= now
              ? static_cast<uint32_t>(parsed)
              : now;
+}
+
+HistoryQuery retainedHistoryQuery(HistoryQuery query) {
+  if (!history.compactActive() || query.rawTier ||
+      query.tier == HistoryStore::Tier::Day) return query;
+  // Old backups can have hourly records where no 15-minute originals exist.
+  // Report their actual resolution instead of presenting invented fine data.
+  history.forEachRetained(query.since, query.until,
+      [&](const HistoryStore::Record &, uint32_t resolution) {
+        if (resolution > historyTierSeconds(query.tier)) {
+          query.tier = resolution == 86400 ? HistoryStore::Tier::Day
+                     : resolution == 3600 ? HistoryStore::Tier::Hour
+                     : resolution == 1800 ? HistoryStore::Tier::HalfHour
+                     : resolution == 300 ? HistoryStore::Tier::FiveMinute
+                                          : HistoryStore::Tier::QuarterHour;
+        }
+        return false;
+      });
+  return query;
 }
 
 HistoryQuery calendarHistoryQuery(const String &range, uint32_t now) {
@@ -228,7 +254,17 @@ HistoryQuery calendarHistoryQuery(const String &range, uint32_t now) {
                            ? now - static_cast<uint32_t>(since)
                            : 0;
   HistoryStore::Tier tier;
-  if (range == "year") {
+  if (history.compactActive()) {
+    tier = range == "year" ? HistoryStore::Tier::Day
+           : age < HistoryRetention::kMinuteSeconds && range != "week" && range != "month"
+               ? HistoryStore::Tier::Minute
+           : age < HistoryRetention::kFiveMinuteSeconds && range != "week" && range != "month"
+               ? HistoryStore::Tier::FiveMinute
+           : age < HistoryRetention::kQuarterSeconds ? HistoryStore::Tier::QuarterHour
+           : age < HistoryRetention::kHalfSeconds ? HistoryStore::Tier::HalfHour
+           : age < HistoryRetention::kHourSeconds ? HistoryStore::Tier::Hour
+                                                    : HistoryStore::Tier::Day;
+  } else if (range == "year") {
     tier = HistoryStore::Tier::Day;
   } else if (range == "week" || range == "month") {
     tier = age < 179UL * 86400UL
@@ -243,26 +279,73 @@ HistoryQuery calendarHistoryQuery(const String &range, uint32_t now) {
                      : age < 729UL * 86400UL ? HistoryStore::Tier::Hour
                                              : HistoryStore::Tier::Day;
   }
-  return {tier, static_cast<uint32_t>(since), static_cast<uint32_t>(until)};
+  return retainedHistoryQuery({tier, static_cast<uint32_t>(since),
+                               static_cast<uint32_t>(until)});
 }
 
 HistoryQuery historyQuery() {
   const uint32_t now = time(nullptr);
   const String range = server.arg("range");
   if (range == "minute_all")
-    return {HistoryStore::Tier::Minute, 0, now};
+    return {HistoryStore::Tier::Minute, 0, now, true};
+  if (range == "five_all")
+    return {HistoryStore::Tier::FiveMinute, 0, now, true};
   if (range == "quarter_all")
-    return {HistoryStore::Tier::QuarterHour, 0, now};
+    return {HistoryStore::Tier::QuarterHour, 0, now, true};
+  if (range == "half_all")
+    return {HistoryStore::Tier::HalfHour, 0, now, true};
   if (range == "hour_all")
-    return {HistoryStore::Tier::Hour, 0, now};
+    return {HistoryStore::Tier::Hour, 0, now, true};
   if (range == "day_all")
-    return {HistoryStore::Tier::Day, 0, now};
+    return {HistoryStore::Tier::Day, 0, now, true};
   if (range == "compare")
     return {HistoryStore::Tier::QuarterHour, now - 3 * 86400, now};
   if (range == "hour" || range == "day" || range == "two_days" || range == "week" ||
       range == "month" || range == "year")
     return calendarHistoryQuery(range, now);
   return {HistoryStore::Tier::Day, 0, now};
+}
+
+// Coarser tiers contain aged values, not duplicate live data. Merge the retained
+// ranges before downsampling, so a week crossing an age boundary stays complete.
+bool forEachHistoryQuery(const HistoryQuery &query,
+                         const HistoryStore::RecordCallback &callback) {
+  if (!history.compactActive() || query.rawTier ||
+      query.tier == HistoryStore::Tier::Day)
+    return history.forEach(query.tier, query.since, query.until, callback);
+  const uint32_t step = historyTierSeconds(query.tier);
+  HistoryStore::Record combined{};
+  double sum = 0;
+  uint32_t weight = 0, previousEnd = 0;
+  bool stopped = false;
+  const auto flush = [&]() {
+    if (!weight) return true;
+    combined.averageW = static_cast<float>(sum / weight);
+    weight = 0;
+    sum = 0;
+    return callback(combined);
+  };
+  const bool ok = history.forEachRetained(query.since, query.until,
+      [&](const HistoryStore::Record &record, uint32_t resolution) {
+        const uint32_t bucket = record.timestamp - record.timestamp % step;
+        if (weight && (combined.timestamp / step != bucket / step ||
+                       record.timestamp > previousEnd)) {
+          if (!flush()) { stopped = true; return false; }
+        }
+        if (!weight) {
+          combined = record;  // Keep the real first timestamp of a partial bin.
+        } else {
+          combined.minimumW = std::min(combined.minimumW, record.minimumW);
+          combined.maximumW = std::max(combined.maximumW, record.maximumW);
+          combined.importKwh = record.importKwh;
+          combined.exportKwh = record.exportKwh;
+        }
+        sum += static_cast<double>(record.averageW) * resolution;
+        weight += resolution;
+        previousEnd = record.timestamp + resolution;
+        return true;
+      });
+  return ok && (stopped || flush());
 }
 
 struct EnergyDelta {
@@ -279,7 +362,7 @@ EnergyDelta storedEnergyDelta(HistoryStore::Tier tier, uint32_t since,
   double lastImport = NAN;
   double lastExport = NAN;
   EnergyDelta result;
-  history.forEach(tier, since, until,
+  forEachHistoryQuery(retainedHistoryQuery({tier, since, until}),
                   [&](const HistoryStore::Record &record) {
                     if (!result.firstTimestamp &&
                         (std::isfinite(record.importKwh) ||
@@ -401,6 +484,39 @@ void handleDashboardSummary() {
 
 void streamMinuteGapDetails(const HistoryQuery &query, uint32_t now,
                             bool enabled, WiFiClient &responseClient) {
+  if (enabled && history.compactActive()) {
+    const uint32_t end = std::min(query.until, now);
+    server.sendContent("],\"gap_precision_from\":" + String(query.since) +
+                       ",\"gaps\":[");
+    String chunk;
+    chunk.reserve(512);
+    bool first = true;
+    uint32_t coveredUntil = query.since;
+    uint32_t resolution = historyTierSeconds(query.tier);
+    const auto gap = [&](uint32_t start, uint32_t stop) {
+      if (stop <= start) return;
+      if (!first) chunk += ',';
+      first = false;
+      chunk += "{\"start\":" + String(start) + ",\"end\":" + String(stop) + "}";
+      if (chunk.length() >= 480) { server.sendContent(chunk); chunk = ""; }
+    };
+    history.forEachRetained(query.since, end,
+        [&](const HistoryStore::Record &record, uint32_t seconds) {
+          if (!responseClient.connected()) return false;
+          gap(coveredUntil, record.timestamp);
+          coveredUntil = std::max(coveredUntil, record.timestamp + seconds);
+          resolution = seconds;
+          return true;
+        });
+    // The latest still-open storage bucket is not an outage. Historical gaps
+    // retain their true extent, independent of the selected display interval.
+    if (query.until < now || (end > coveredUntil &&
+                             end - coveredUntil > resolution + resolution / 2))
+      gap(coveredUntil, end);
+    if (responseClient.connected() && chunk.length()) server.sendContent(chunk);
+    if (responseClient.connected()) server.sendContent("]}");
+    return;
+  }
   uint32_t oldestMinute = 0;
   const bool oldestRead =
       enabled && history.forEach(HistoryStore::Tier::Minute, 0, 0xffffffffUL,
@@ -521,8 +637,10 @@ void handleHistoryJson() {
   // 12 KiB keeps transient heap use bounded while cutting TCP round trips.
   constexpr size_t kHistoryJsonChunkBytes = 12 * 1024;
   chunk.reserve(kHistoryJsonChunkBytes + 256);
-  history.forEach(query.tier, query.since, query.until,
+  forEachHistoryQuery(query,
                    [&](const HistoryStore::Record &record) {
+                     if ((streamedRecords & 0x3fU) == 0)
+                       serviceMeterInput();
                      if ((streamedRecords & 0x3fU) == 0 &&
                          !responseClient.connected())
                        return false;
@@ -588,6 +706,9 @@ void handleHistoryCsv() {
           }
           return true;
         };
+    if (history.compactActive()) {
+      history.forEachRetained(0, now, appendRecord);
+    } else {
     const uint32_t minuteSince =
         now > 48UL * 3600UL ? now - 48UL * 3600UL : 0;
     const uint32_t quarterSince =
@@ -614,6 +735,7 @@ void handleHistoryCsv() {
                     [&](const HistoryStore::Record &record) {
                       return appendRecord(record, 60);
                     });
+    }
     const uint32_t currentMinute = now - now % 60;
     const size_t first = liveCount < kLiveSamples ? 0 : liveWriteIndex;
     for (size_t i = 0; i < liveCount; ++i) {
@@ -673,7 +795,7 @@ void handleHistoryCsv() {
       "timestamp,average_w,minimum_w,maximum_w,import_kwh,export_kwh\n");
   String chunk;
   chunk.reserve(1200);
-  history.forEach(query.tier, query.since, query.until,
+  forEachHistoryQuery(query,
                   [&](const HistoryStore::Record &record) {
                     chunk += String(record.timestamp) + "," +
                              String(record.averageW, 2) + "," +

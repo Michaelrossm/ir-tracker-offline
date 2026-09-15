@@ -2,6 +2,34 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 2.0.0 - 2026-09-15
+
+- Migrationspuffer sind begrenzt, nur temporär angelegt und auf Zuteilungsfehler
+  geprüft; iterative Sortierung ohne rekursive Stack-Aufrufe. Bei Speichermangel
+  bleiben Originaldaten erhalten und die Migration kann erneut starten.
+- Nachweislich ungültige Altdatensätze werden bei der geprüften Konvertierung
+  ausgelassen, ohne Ersatzwerte zu erfinden. Lesefehler und beschädigte
+  Dateiheader führen weiterhin zum Abbruch statt zum Löschen.
+- Compact-History mit 0,1-W-Leistung und unveränderten übernommenen Energie-Floatwerten;
+  1 Minute bis 24 h, 5 Minuten am zweiten Tag, 15 Minuten bis 460 Tage,
+  30 Minuten bis 825 Tage, Stundenwerte bis 1.190 Tage, Tagesring mit 3.650 Einträgen.
+- Automatische, geprüfte Migration erst bei identischen validierten App-Slots;
+  sichere Wiederaufnahme von Blockschreiben und Minuten-/Stunden-Platzfreigabe.
+- Eindeutige Zeitstempelduplikate anhand der Nachbar-Zählerstände auflösen.
+  Mehrdeutigkeit, große Zeitrücksprünge oder unzureichender Platz erhalten das
+  Originalarchiv; keine erfundenen Werte, Zeitverschiebungen oder Lückenfüllung.
+- Dashboard, Backup, Wiederherstellung und CSV berücksichtigen die neue Stufe.
+- Asset-Backup und Transaktionsjournal im reservierten App-Slot-Ende, geprüfte
+  Wiederherstellung beim Boot, verzögerte App-Bestätigung; Partitionen unverändert.
+  SDK-Schreibschutz-Ausnahme ausschließlich für den geprüften Journalbereich.
+- MQTT-Streaming mit kleinerem Paketpuffer; häufige UART-Bedienung, SML-/JSON-
+  Speicheroptimierung, Modbus-TCP-Framing, mDNS-Fehlerpfade und Flash-Schreibfehler gehärtet.
+- WLAN-Zeitplan-NVS-Schlüssel sowie Sicherung/Wiederherstellung korrigiert.
+- Upgrade-Anleitung: dasselbe vollständige IRUP zweimal installieren, damit die
+  neue History erst startet, wenn beide Slots sie sicher lesen können.
+- Keine Garantie für unbekannte alte Hardware, Flashdefekte oder beliebige
+  Stromunterbrechungen; physische Power-Cut-Tests bleiben separat erforderlich.
+
 ## 1.3.9 - 2026-09-10
 
 ### Deutsch

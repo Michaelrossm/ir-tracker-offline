@@ -8,11 +8,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import zipfile
+from update_limits import APP_MAX_BYTES
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_PARTITION_BYTES = 0x150000
+APP_PARTITION_BYTES = APP_MAX_BYTES
 
 
 def validate_firmware(usb_path: Path) -> None:
@@ -65,6 +66,8 @@ def main() -> None:
         ROOT / "tools" / "restore-original.ps1",
         ROOT / "tools" / "sign-firmware.py",
         ROOT / "tools" / "verify-firmware-package.py",
+        ROOT / "tools" / "update_limits.py",
+        ROOT / "src" / "app" / "update" / "AssetRollback.h",
         ROOT / "tools" / "build-asset-image.py",
         ROOT / "tools" / "asset_manifest.py",
         ROOT / "tools" / "soak-test.py",

@@ -155,6 +155,9 @@ String settingsBackupJson() {
   device["eco_led_off"] = config.ecoLedOff;
   device["adaptive_wifi_power"] = config.adaptiveWifiPower;
   device["wifi_power_save"] = config.wifiPowerSave;
+  device["wifi_schedule_off"] = config.wifiScheduleOff;
+  device["wifi_schedule_start_minutes"] = config.wifiScheduleStartMinutes;
+  device["wifi_schedule_end_minutes"] = config.wifiScheduleEndMinutes;
   device["github_update_check"] = config.githubUpdateCheck;
   device["github_auto_install"] = config.githubAutoInstall;
   JsonObject mqttConfig = document.createNestedObject("mqtt");
@@ -261,6 +264,14 @@ void handleSettingsRestore() {
   config.ecoLedOff = device["eco_led_off"] | true;
   config.adaptiveWifiPower = device["adaptive_wifi_power"] | true;
   config.wifiPowerSave = device["wifi_power_save"] | false;
+  // Old backups have no schedule: preserve the current configuration then.
+  config.wifiScheduleOff = device["wifi_schedule_off"] | config.wifiScheduleOff;
+  config.wifiScheduleStartMinutes = constrain(
+      device["wifi_schedule_start_minutes"] | config.wifiScheduleStartMinutes,
+      0, 1439);
+  config.wifiScheduleEndMinutes = constrain(
+      device["wifi_schedule_end_minutes"] | config.wifiScheduleEndMinutes,
+      0, 1439);
   config.githubUpdateCheck = device["github_update_check"] | true;
   config.githubAutoInstall = device["github_auto_install"] | false;
   config.timezone = String(
@@ -291,8 +302,12 @@ void handleSettingsRestore() {
 bool historyTierFromName(const String &name, HistoryStore::Tier &tier) {
   if (name == "minute")
     tier = HistoryStore::Tier::Minute;
+  else if (name == "five")
+    tier = HistoryStore::Tier::FiveMinute;
   else if (name == "quarter")
     tier = HistoryStore::Tier::QuarterHour;
+  else if (name == "half")
+    tier = HistoryStore::Tier::HalfHour;
   else if (name == "hour")
     tier = HistoryStore::Tier::Hour;
   else if (name == "day")
@@ -407,9 +422,11 @@ void handleHistoryClearAll() {
   }
   bool ok = true;
   ok &= history.clear(HistoryStore::Tier::Minute);
+  ok &= history.clear(HistoryStore::Tier::FiveMinute);
   ok &= history.clear(HistoryStore::Tier::QuarterHour);
   ok &= history.clear(HistoryStore::Tier::Hour);
   ok &= history.clear(HistoryStore::Tier::Day);
+  ok &= history.clear(HistoryStore::Tier::HalfHour);
   liveWriteIndex = 0;
   liveCount = 0;
   if (ok) eventLog.add("WARN", "HISTORY_CLEAR", "Gesamte Historie gelöscht");

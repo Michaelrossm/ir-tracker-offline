@@ -28,6 +28,7 @@ class DebugStorage {
   }
 
   bool begin(const char *firmwareVersion = nullptr);
+  void checkLayout() { inspectFixedLayout(); }
   bool existsAsset(const char *relativePath);
   File openAsset(const char *relativePath, const char *mode = "r");
   File openVerifiedAsset(const char *relativePath);

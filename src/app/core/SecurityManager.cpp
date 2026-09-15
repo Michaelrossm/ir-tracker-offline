@@ -10,9 +10,12 @@ String jsonEscape(const String &value) {
   out.reserve(value.length() + 8);
   for (char c : value) {
     if (c == '"' || c == '\\') out += '\\';
-    if (c == '\n') {
-      out += "\\n";
-    } else if (c != '\r') {
+    if (static_cast<uint8_t>(c) < 0x20) {
+      static const char hex[] = "0123456789abcdef";
+      out += "\\u00";
+      out += hex[static_cast<uint8_t>(c) >> 4];
+      out += hex[static_cast<uint8_t>(c) & 0x0f];
+    } else {
       out += c;
     }
   }
@@ -28,6 +31,7 @@ String htmlEscape(String value) {
 }
 
 bool tryServeDebugAsset(const char *relativePath, const char *mimeType) {
+  if (assetRollbackBlocked) return false;
   String compressedPath = relativePath;
   compressedPath += ".gz";
   if (debugStorage.assetManifestReady()) {
