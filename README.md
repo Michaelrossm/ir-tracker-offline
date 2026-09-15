@@ -2,7 +2,7 @@
 
 **Deutsch** | [English](#english)
 
-Lokale, cloudfreie Firmware für einen **ESP32-C3-basierten IR-Stromzähler-Tracker**. SML- und OBIS-Daten werden direkt auf dem Gerät ausgewertet – ohne Cloud-Zwang und ohne externen Server.
+Lokale, cloudfreie Firmware für einen **ESP32-C3-basierten IR-Stromzähler-Tracker**. SML-, OBIS- sowie IEC-62056-21/D0-Daten werden direkt auf dem Gerät ausgewertet – ohne Cloud-Zwang und ohne externen Server.
 
 Erstellt und gepflegt von **Michael Roßmann**.
 
@@ -10,158 +10,178 @@ Erstellt und gepflegt von **Michael Roßmann**.
 
 ## Warum IR Tracker Offline?
 
-Der Tracker soll Messwerte nicht nur anzeigen, sondern sie möglichst einfach für bestehende lokale Systeme bereitstellen. Deshalb stehen mehrere Schnittstellen parallel zur Verfügung.
+Der Tracker verarbeitet Messwerte vollständig lokal und stellt sie gleichzeitig mehreren lokalen Systemen bereit. Unterstützt werden unter anderem Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/OpenMetrics, Influx Line Protocol, optionale read-only Modbus-TCP-Abfragen sowie Shelly-/EcoTracker-kompatible lokale Leseendpunkte.
 
-Besonders praktisch sind die **Shelly- und EcoTracker-Kompatibilität**: Der Tracker stellt nur lesende Shelly-EM-, Shelly-Pro-EM- und EcoTracker-kompatible Endpunkte bereit. Systeme, die entsprechende Energiemessgeräte abfragen können, können dadurch unter Umständen ohne eine speziell für den IR Tracker entwickelte Integration auf die Messwerte zugreifen.
-
-Zusätzlich stehen **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/OpenMetrics und Influx Line Protocol** zur Verfügung. Die komplette SML-/OBIS-Auswertung findet lokal auf dem ESP32-C3 statt.
-
-> **Wichtig:** Shelly- und EcoTracker-Kompatibilität bezeichnet ausschließlich kompatibles lokales API- und Netzwerkverhalten. Der IR Tracker gibt sich niemals als Originalgerät eines Fremdherstellers aus: Modell `IRTRACKER-C3`, API-Modell `IRTRACKER-C3-3EM`, Seriennummer `IRT-XXXXXX`, Hostname `irtracker-XXXXXX` und die echte ESP32-MAC bleiben eindeutig neutral. Systeme, die zwingend eine fremde Produktkennung oder Cloud-Bindung verlangen, werden bewusst nicht durch Identitätsfälschung unterstützt.
+> **Wichtig:** Shelly- und EcoTracker-Kompatibilität bezeichnet ausschließlich kompatibles lokales API- und Netzwerkverhalten. Der IR Tracker gibt sich niemals als Originalgerät eines Fremdherstellers aus. Modell `IRTRACKER-C3`, API-Modell `IRTRACKER-C3-3EM`, Seriennummer `IRT-XXXXXX`, Hostname `irtracker-XXXXXX` und die echte ESP32-MAC bleiben neutral.
 
 ## Funktionen
 
-- **vollständig lokale SML-/OBIS- sowie IEC-62056-21/D0-Auswertung** ohne Cloud-Abhängigkeit
-- Livewerte für Gesamtleistung, Netzbezug, Einspeisung sowie verfügbare L1/L2/L3-Werte
-- **Shelly-EM- und Shelly-Pro-EM-kompatible Leseendpunkte** für eine möglichst einfache Einbindung in bestehende Systeme
-- **EcoTracker-kompatible lokale API** unter `/v1/json` einschließlich Messwertalter
-- **Neutrale Integrations-API** unter `/api/v1/meter`, dasselbe stabile Schema unter MQTT `irtracker/<id>/meter` und optionales read-only Modbus TCP
-- neutrale mDNS-Erkennung über `_shelly._tcp` und `_everhome._tcp`; der standardmäßig ausgeschaltete Speicher-Kompatibilitätsmodus öffnet nur die zugehörigen lokalen Leseendpunkte
-- **Home Assistant über MQTT Discovery**
-- lokale Schnittstellen über **JSON/HTTP, CSV, Prometheus/OpenMetrics und Influx Line Protocol**
-- lokale Historie mit Stunde, Tag, Woche, Monat, Jahr und Langzeitansicht
-- Spannungs- und Stromwerte nur im RAM, nicht in der Historie
-- interaktive Diagramme für Maus und Touch
-- bis zu drei WLANs; automatischer zeitbegrenzter Setup-Hotspot als Rückfall
-- eine Universal-Firmware für WLAN und optionales W5500-LAN; LAN wird bei
-  vorhandenem Link bevorzugt, WLAN bleibt als automatischer Rückfall verbunden
-- signierte manuelle WLAN-Updates sowie sichere GitHub-Prüfung mit optionaler automatischer Installation
-- vollständige signierte Ein-Datei-Updates (`.irup`) für Firmware und Weboberfläche
-- Einstellungs-/Historienbackup, Selbsttest und Diagnose
-- geschützte GPIO-/Baudraten-Diagnose zur Unterstützung unterschiedlicher Hardware
-- browserlokale Farbauswahl und Sprache Deutsch/Englisch
-- Eco-Modus, adaptiver WLAN-Sendepegel und automatische Leistungs-Boosts für
-  Verbindungsaufbau, Updates, Exporte und Prüfungen
+- vollständig lokale SML-/OBIS- sowie IEC-62056-21/D0-Auswertung
+- Livewerte für Gesamtleistung, Netzbezug, Einspeisung und verfügbare L1/L2/L3-Werte
+- Home Assistant MQTT Discovery
+- JSON/HTTP, CSV, Prometheus/OpenMetrics und Influx Line Protocol
+- Shelly-EM-/Shelly-Pro-EM-kompatible read-only Endpunkte
+- EcoTracker-kompatible lokale API unter `/v1/json`
+- neutrale Integrations-API unter `/api/v1/meter`
+- optionales read-only Modbus TCP
+- lokale History mit Kurzzeit- und Langzeitansichten
+- signierte vollständige `.irup`-Updates für Firmware und Weboberfläche
+- kompakte Recovery-Oberfläche bei fehlenden oder beschädigten Webassets
+- Einstellungs- und History-Backup
+- Setup-Hotspot als Rückfall
+- bis zu drei WLANs
+- optionale W5500-LAN-Unterstützung mit WLAN-Fallback
+- geschützte GPIO-/Baudraten-Diagnose
+- Eco-Modus, adaptiver WLAN-Sendepegel und automatische Leistungs-Boosts
 - automatische UART-/Parser-Wiederherstellung bei ausbleibenden Zählerdaten
-- gesonderter Werksprüfungs-Build mit PASS/FAIL-Prüfung für die eigene LAN-/PoE-Platine
-- Produktions-Build ausschließlich mit lesenden Speicher-/Smart-Home-Schnittstellen
-- alle acht aktuellen statischen Webassets in einem manifest- und SHA-256-geprüften
-  64-kB-Container; kompakte Recovery-Oberfläche bei fehlenden Assets
 
-## Schnittstellen und Integration
+## Neu in 2.0.0
+
+Version 2.0.0 führt die neue **Compact-History** sowie einen deutlich sichereren Migrations- und Updatepfad ein.
+
+### Compact-History und Aufbewahrung
+
+- 1-Minuten-Werte für 24 Stunden
+- 5-Minuten-Werte für den zweiten Tag
+- 15-Minuten-Werte bis 460 Tage
+- 30-Minuten-Werte bis 825 Tage
+- 60-Minuten-Werte bis 1.190 Tage
+- anschließend Tageswerte in einem Ringpuffer mit 3.650 Einträgen
+- gespeicherte Leistung im Compact-Format mit 0,1-W-Auflösung
+- übernommene Energiezählerstände behalten ihre vorhandenen Floatwerte
+
+Die Stufen arbeiten als Ringpuffer. Ist eine Stufe voll, wird nur deren ältester Eintrag ersetzt. Die nachgelagerten gröberen History-Stufen bleiben davon unabhängig erhalten.
+
+### Sichere Migration alter History
+
+- Migration startet erst, wenn **beide OTA-App-Slots dieselbe validierte 2.0.0-Firmware** enthalten
+- Schreibvorgänge und Platzfreigabe sind wiederaufnehmbar
+- eindeutige doppelte Zeitstempel können anhand plausibler Nachbar- und Energiezählerstände aufgelöst werden
+- nachweislich beschädigte Datensätze werden nicht durch erfundene Werte ersetzt und Zeitstempel werden nicht verschoben
+- bei Mehrdeutigkeit, Lesefehlern oder unzureichendem Platz bleibt das Originalarchiv erhalten
+- History, NVS und Einstellungen werden durch die neue Asset-Rollback-Struktur nicht verschoben
+
+### Update- und Laufzeitverbesserungen
+
+- Asset-Backup und Transaktionsjournal im reservierten Ende des inaktiven App-Slots
+- häufigere UART-Bedienung während längerer Netzwerkoperationen
+- kleinerer MQTT-Paketpuffer und Streaming-Ausgabe
+- SML-/JSON-Speicheroptimierungen
+- robusteres Modbus-TCP-Framing
+- gehärtete mDNS- und Flash-Fehlerpfade
+- WLAN-Zeitplan-NVS-Schlüssel und dessen Backup/Wiederherstellung korrigiert
+- Dashboard, CSV und Backups unterstützen die zusätzliche History-Stufe
+
+## Update auf 2.0.0
+
+### Tracker mit „Vollständiges Update (.irup)“
+
+1. Einstellungen und vollständige Historie sichern.
+2. `ir-tracker-update-2.0.0.irup` unter **Wartung → Vollständiges Update** installieren.
+3. Neustart abwarten und Messung/Weboberfläche prüfen.
+4. **Dieselbe IRUP-Datei ein zweites Mal manuell installieren.**
+5. Nach dem zweiten Neustart die automatische History-Migration vollständig durchlaufen lassen und das Gerät währenddessen nicht abschalten.
+
+Der zweite Durchgang ist für den Wechsel auf die Compact-History nötig: Erst wenn beide validierten App-Slots dieselbe neue Firmware enthalten, kann ein OTA-Rollback nicht auf einen alten History-Reader zurückfallen.
+
+### Ältere Geräte
+
+- Geräte, die nur `.irfw` anbieten, benötigen zuerst eine nachweislich kompatible IRUP-Brückenversion oder einen datenerhaltenden USB-Installer.
+- `.irup` niemals in `.irfw` umbenennen.
+- Ein echter Coredump-Partitionssubtyp muss vor dem aktuellen Asset-Layout per USB migriert werden.
+- Ein historisches `coredump`-Label mit bereits passendem SPIFFS-Subtyp ist zulässig.
+- WLAN-Updates ändern keine Partitionstabelle.
+
+Das normale WLAN-Update benötigt nur `ir-tracker-update-2.0.0.irup`. Das separate Asset-Image und die Partitionstabelle sind nur für Diagnose, Recovery bzw. den passenden USB-Installer vorgesehen.
+
+## Prüfung von 2.0.0
+
+- **80 automatisierte Tests bestanden**
+- alle drei PlatformIO-Profile erfolgreich gebaut
+- vollständiges signiertes IRUP-Paket erfolgreich verifiziert
+- WLAN-Installation auf einem lokalen ESP32-C3 in beide App-Slots durchgeführt
+- Weboberfläche, Assets, Messung, Einstellungen und archivierte Werte danach geprüft
+- App-BIN: **1.237.680 Byte**
+- statisches RAM: **97.004 Byte**
+- nutzbare OTA-Reserve nach Asset-Backup-/Journalreservierung: **68.944 Byte**
+- gemessener freier Heap nach Start: **139.836 Byte**
+- gemessener Minimum-Heap: **122.328 Byte**
+- größte freie Region: **114.676 Byte**
+- Stack-High-Water-Mark: **3.624 Byte**
+
+Der neue Asset-Rollback-Schutz kann den allerersten Übergang von alter Firmware nicht rückwirkend absichern. Simulationen und Hosttests ersetzen keine echten Power-Cut-Tests auf jeder Hardware. Backups bleiben empfohlen.
+
+## Schnittstellen
 
 | Schnittstelle | Verwendung |
 | --- | --- |
-| Shelly-kompatible Endpunkte | Einbindung in Systeme, die Shelly EM / Pro EM abfragen können |
-| EcoTracker-kompatible API | Einbindung über das lokale EcoTracker-Format `/v1/json` |
-| MQTT Discovery | automatische Sensoren in Home Assistant |
-| JSON/HTTP | eigene Integrationen, Automatisierung und lokale Abfragen |
-| CSV | einfache Weiterverarbeitung aktueller Werte |
+| Shelly-kompatible Endpunkte | lokale read-only Einbindung in Systeme mit Shelly-EM-/Pro-EM-Unterstützung |
+| EcoTracker-kompatible API | lokale Einbindung über `/v1/json` |
+| MQTT Discovery | automatische Home-Assistant-Sensoren |
+| JSON/HTTP | eigene Integrationen und Automatisierung |
+| CSV | einfache Weiterverarbeitung |
 | Prometheus / OpenMetrics | Monitoring und Zeitreihen-Erfassung |
 | Influx Line Protocol | Übergabe an Influx-kompatible Systeme |
+| Modbus TCP | optionales read-only Registerschema |
 
-Der Tracker arbeitet dabei ausschließlich als **lesender Stromzähler**. Regelungen wie Nulleinspeisung, Ladegrenzen oder Zeitpläne gehören weiterhin in Speicher, Wechselrichter, Wallbox oder das jeweilige Automatisierungssystem.
+Der Tracker arbeitet ausschließlich als **lesender Stromzähler**. Nulleinspeisung, Ladegrenzen und Regelungen gehören weiterhin in Speicher, Wechselrichter, Wallbox oder das jeweilige Automatisierungssystem.
 
-Die konkreten URLs und API-Endpunkte stehen in [INTERFACES.md](docs/INTERFACES.md).
+Siehe [INTERFACES.md](docs/INTERFACES.md) für die konkreten Endpunkte.
 
-## Unterstützte Messwerte und Stromzähler
+## Unterstützte Stromzähler
 
-Welche Werte verfügbar sind, hängt vom angeschlossenen Stromzähler und dessen freigeschalteten OBIS-Daten ab. L1/L2/L3, Spannung oder Strom können nur ausgegeben werden, wenn der Zähler diese Werte tatsächlich über seine optische Schnittstelle überträgt.
-
-Neben SML unterstützt die Firmware passive und aktive IEC-62056-21/D0-Zähler.
-Die aktive Abfrage verwendet `/?!` und `ACK 000`. Für Hardware mit unbekannter
-RX-Belegung steht eine geschützte GPIO-/Baudraten-Diagnose zur Verfügung; ein
-Eingang wird erst nach einem frischen, gültigen Telegramm bestätigt.
+Welche Werte verfügbar sind, hängt vom angeschlossenen Stromzähler und dessen freigeschalteten OBIS-Daten ab. Neben SML unterstützt die Firmware passive und aktive IEC-62056-21/D0-Zähler. Die aktive Abfrage verwendet `/?!` und `ACK 000`.
 
 Die aktuelle Übersicht steht unter [Kompatibilität](docs/compatibility/README.md).
 
-## Erster Zugang – Standardpasswort
+## Erster Zugang
 
 Nach einer frischen Installation startet der Tracker das WLAN `IR-Tracker-Setup-XXXX`.
-Die vier Zeichen `XXXX` werden direkt aus diesem WLAN-Namen übernommen:
 
 | Zugang | Benutzername | Passwort |
 | --- | --- | --- |
 | Setup-WLAN `IR-Tracker-Setup-XXXX` | – | `IRTracker-XXXX` |
 | Weboberfläche | `admin` | `IRTracker-XXXX` |
 
-Beispiel: Heißt das WLAN `IR-Tracker-Setup-F2A0`, lautet das Passwort `IRTracker-F2A0`. Groß-/Kleinschreibung und Bindestrich müssen exakt stimmen. Nach einer eigenen Passwortänderung gilt stattdessen das selbst gewählte Admin-Passwort.
+Beispiel: `IR-Tracker-Setup-F2A0` → Passwort `IRTracker-F2A0`.
 
 ## Sicherheit
 
 Die Oberfläche verwendet HTTP und gehört ausschließlich in ein vertrauenswürdiges Heim- oder getrenntes IoT-Netz. **Keine Ports ins Internet freigeben.** Für Fernzugriff VPN verwenden. Details: [SECURITY.md](.github/SECURITY.md).
 
-## Installation
-
-Siehe [INSTALLATION.md](docs/INSTALLATION.md). Vor jedem Flashvorgang vollständige Gerätesicherung, Einstellungen und Historie sichern. Die persönliche Original-Firmware darf nicht öffentlich verteilt werden.
-
-### Update auf 2.0.0 – richtige Reihenfolge
-
-- **Tracker mit „Vollständiges Update (.irup)“:** Direkt
-  `ir-tracker-update-2.0.0.irup` unter **Wartung** installieren. Firmware und
-  Weboberfläche werden gemeinsam geprüft und aktualisiert. Nach dem Neustart
-  dieselbe Datei ein zweites Mal manuell installieren: Erst wenn beide App-Slots
-  dieselbe geprüfte Firmware enthalten, beginnt die automatische History-Migration.
-- **Älterer Tracker, der nur `.irfw` anbietet:** IRUP nicht umbenennen oder als
-  IRFW hochladen. Eine passende ältere Brückenversion oder ein vorher geprüftes,
-  datenerhaltendes USB-Update ist erforderlich; siehe Installationsanleitung.
-- **Sehr alter Stand ohne signiertes WLAN-Update oder ohne kompatible
-  64-kB-Partition:** Zuerst den aktuellen USB-Installer verwenden. Er sichert
-  und prüft das Gerät, migriert ausschließlich den bisherigen 64-kB-
-  `coredump`-Bereich zu `debugfs` und erhält NVS, Einstellungen und Historie.
-
-Das einzelne Asset-Image ist nur für Diagnose und manuelle Wiederherstellung
-gedacht. Für normale Updates ab 1.3.8 wird ausschließlich die `.irup` benötigt.
-
-Die neue Compact-Historie hält 24 Stunden mit Minutenwerten, den zweiten Tag mit
-5-Minuten-Werten, 460 Tage mit Viertelstundenwerten und anschließend je 365 Tage
-mit Halbstunden- und Stundenwerten. Der Tagesring fasst 3.650 Einträge. Ringblöcke
-können etwas zusätzliche Randabdeckung enthalten. Mehrdeutige Altarchive bleiben
-unverändert; die neue Staffel gilt erst nach erfolgreicher Umwandlung.
-
 ## Dokumentation
 
-- [Installation und Rückkehr / Installation and recovery](docs/INSTALLATION.md)
-- [Kompatibilität / Compatibility](docs/compatibility/README.md)
-- [Sicherheit / Security](.github/SECURITY.md)
-- [Schnittstellen / Interfaces](docs/INTERFACES.md)
-- [USB-Umschaltung / USB switching](docs/USB_SWITCHING.md)
-- [Hardwaretest / Hardware test](docs/HARDWARE_TEST.md)
-- [Dauertest / Soak test](docs/SOAK_TEST.md)
-- [Release-Prüfung / Release checklist](docs/RELEASE_CHECKLIST.md)
-- [Rechteprüfung / Rights review](docs/legal/RIGHTS_REVIEW.md)
-- [Markenhinweis / Trademarks](docs/legal/TRADEMARKS.md)
-- [Hinweise zu Drittsoftware / Third-party notices](docs/legal/THIRD_PARTY_NOTICES.md)
-- [Firmware-Architektur / Firmware architecture](docs/ARCHITECTURE.md)
-- [Webasset-Partition / Web asset partition](docs/ASSET_PARTITION.md)
+- [Release Notes 2.0.0](release/RELEASE_NOTES-2.0.0.md)
+- [Installation und Wiederherstellung](docs/INSTALLATION.md)
+- [Kompatibilität](docs/compatibility/README.md)
+- [Sicherheit](.github/SECURITY.md)
+- [Schnittstellen](docs/INTERFACES.md)
+- [Modbus TCP](docs/MODBUS.md)
+- [USB-Umschaltung](docs/USB_SWITCHING.md)
+- [Hardwaretest](docs/HARDWARE_TEST.md)
+- [Dauertest](docs/SOAK_TEST.md)
+- [Release-Prüfliste](docs/RELEASE_CHECKLIST.md)
+- [Firmware-Architektur](docs/ARCHITECTURE.md)
+- [Webasset-Partition](docs/ASSET_PARTITION.md)
+- [Rechteprüfung](docs/legal/RIGHTS_REVIEW.md)
+- [Markenhinweis](docs/legal/TRADEMARKS.md)
+- [Drittsoftware](docs/legal/THIRD_PARTY_NOTICES.md)
 
 ## Projektstatus
 
-Version **1.3.8** akzeptiert beim signierten Firmwareupdate auch einen
-vollständig geprüften älteren Asset-Container. Dadurch bleibt ein Gerät nach
-einem normalen `.irfw`-Update bedienbar, auch wenn die separate 64-kB-
-Asset-Partition erst später aktualisiert wird. Fehlende oder manipulierte
-benötigte Dateien führen weiterhin sicher zur Recovery-Oberfläche. Die
-Schnittstellenkonfiguration ist jetzt übersichtlich unter „Schnittstellen“
-gebündelt; Partitionen, History und Messwertschnittstellen bleiben unverändert.
-Rückmeldungen zu unterschiedlichen Stromzählern und lokalen Integrationen sind willkommen.
+**2.0.0 ist der aktuelle stabile Stand.** Die Compact-History und die zweistufig abgesicherte WLAN-Migration wurden auf dem lokalen ESP32-C3 geprüft. Die Universal-Firmware enthält W5500-LAN mit WLAN-Fallback; die eigene LAN-/PoE-Platine wurde mit diesem Stand noch nicht auf echter Hardware validiert.
 
-Neue USB-Installationen verwenden für den optionalen 64-kB-Debugspeicher das
-Label `debugfs`. Dieselbe Firmware erkennt bei bestehenden OTA-Geräten
-automatisch das frühere Label `coredump`; OTA-Slots, Offsets und Historie sind
-unverändert. Für die reine Umbenennung ist daher kein USB-Neuflash nötig.
-
-Die Universal-Firmware enthält bereits W5500-LAN mit WLAN-Fallback. Die
-LAN-/PoE-Platine ist noch nicht auf echter Hardware validiert.
+Neue USB-Installationen verwenden für den optionalen 64-kB-Debugspeicher das Label `debugfs`. Bestehende Geräte mit historischem `coredump`-Label und passendem SPIFFS-Subtyp bleiben kompatibel. Ein echter Coredump-Subtyp muss vor Verwendung als Asset-Bereich per USB migriert werden.
 
 ## Lizenz
 
-Copyright © 2026 Michael Roßmann. Lizenz: PolyForm Noncommercial 1.0.0. Private und sonstige nichtkommerzielle Nutzung ist gemäß Lizenz erlaubt; gewerbliche Nutzung ist nicht gestattet. Verbindlich sind [LICENSE.md](LICENSE.md), der [Urheberhinweis](AUTHORS.md), die [Rechteprüfung](docs/legal/RIGHTS_REVIEW.md) und der [Markenhinweis](docs/legal/TRADEMARKS.md).
+Copyright © 2026 Michael Roßmann. Lizenz: PolyForm Noncommercial 1.0.0. Private und sonstige nichtkommerzielle Nutzung ist gemäß Lizenz erlaubt; gewerbliche Nutzung ist nicht gestattet. Verbindlich sind [LICENSE.md](LICENSE.md), [AUTHORS.md](AUTHORS.md), [RIGHTS_REVIEW.md](docs/legal/RIGHTS_REVIEW.md) und [TRADEMARKS.md](docs/legal/TRADEMARKS.md).
 
 ---
 
 ## English
 
-Local, cloud-free firmware for an **ESP32-C3-based IR electricity meter tracker**. SML and OBIS data is processed directly on the device without requiring a cloud service or external server.
+Local, cloud-free firmware for an **ESP32-C3-based IR electricity meter tracker**. SML, OBIS, and IEC 62056-21/D0 data is processed directly on the device without a mandatory cloud service or external server.
 
 Created and maintained by **Michael Roßmann**.
 
@@ -169,126 +189,172 @@ Created and maintained by **Michael Roßmann**.
 
 ### Why IR Tracker Offline?
 
-The tracker is designed not only to display readings but also to expose them to existing local systems through several interfaces.
+IR Tracker Offline keeps meter processing and history local while exposing readings through several local interfaces. It supports Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/OpenMetrics, Influx Line Protocol, optional read-only Modbus TCP, and local read-only Shelly/EcoTracker-compatible endpoints.
 
-Particularly useful are **Shelly and EcoTracker compatibility**. The tracker provides read-only Shelly EM, Shelly Pro EM and EcoTracker compatible endpoints. Systems capable of reading corresponding energy meters may therefore be able to consume IR Tracker measurements without a dedicated IR Tracker integration.
+> **Note:** Shelly and EcoTracker compatibility refers only to compatible local API and network behavior. IR Tracker does not impersonate third-party hardware. Model `IRTRACKER-C3`, API model `IRTRACKER-C3-3EM`, serial `IRT-XXXXXX`, hostname `irtracker-XXXXXX`, and the genuine ESP32 MAC remain neutral.
 
-It also provides **Home Assistant MQTT Discovery, JSON/HTTP, CSV, Prometheus/OpenMetrics and Influx Line Protocol**. SML/OBIS processing remains completely local on the ESP32-C3.
+### Main features
 
-> **Note:** Shelly and EcoTracker compatibility refers exclusively to compatible local API and network behavior. IR Tracker never identifies itself as an original third-party device: model `IRTRACKER-C3`, API model `IRTRACKER-C3-3EM`, serial `IRT-XXXXXX`, hostname `irtracker-XXXXXX`, and the genuine ESP32 MAC remain neutral. Systems that require a third-party product identity or cloud binding are deliberately not supported through identity spoofing.
+- fully local SML/OBIS and IEC 62056-21/D0 processing
+- live total power, grid import/export, and available L1/L2/L3 readings
+- Home Assistant MQTT Discovery
+- JSON/HTTP, CSV, Prometheus/OpenMetrics, and Influx Line Protocol
+- read-only Shelly EM / Shelly Pro EM compatible endpoints
+- EcoTracker-compatible local API at `/v1/json`
+- neutral integration API at `/api/v1/meter`
+- optional read-only Modbus TCP
+- local short- and long-term history
+- signed complete `.irup` updates containing firmware and web assets
+- compact recovery UI if web assets are missing or damaged
+- settings/history backup
+- fallback setup hotspot
+- up to three Wi-Fi networks
+- optional W5500 Ethernet with Wi-Fi fallback
+- protected GPIO/baud-rate diagnostics
+- automatic UART/parser recovery when meter traffic stops
 
-### Features
+### What is new in 2.0.0?
 
-- **fully local SML/OBIS and IEC 62056-21/D0 processing** without cloud dependency
-- live total power, grid import/export and available L1/L2/L3 readings
-- **read-only Shelly EM and Shelly Pro EM compatible endpoints** for easier integration with existing systems
-- **EcoTracker-compatible local API** at `/v1/json`, including reading age
-- **Neutral integration API** at `/api/v1/meter`, the same stable schema at MQTT `irtracker/<id>/meter`, and optional read-only Modbus TCP
-- neutral mDNS discovery through `_shelly._tcp` and `_everhome._tcp`; the storage compatibility mode is disabled by default and opens only the corresponding local read endpoints
-- **Home Assistant MQTT Discovery**
-- local **JSON/HTTP, CSV, Prometheus/OpenMetrics and Influx Line Protocol** interfaces
-- local history for hour, day, week, month, year and long-term views
-- voltage and current kept in RAM only, never in history
-- interactive mouse and touch charts
-- up to three Wi-Fi networks; automatic time-limited setup hotspot fallback
-- one universal firmware for Wi-Fi and optional W5500 Ethernet; Ethernet is
-  preferred while linked and Wi-Fi remains connected as automatic fallback
-- signed manual Wi-Fi updates plus secure GitHub checks and optional automatic installation
-- settings/history backup, guided self-test and diagnostics
-- protected GPIO/baud-rate diagnostics for different hardware variants
-- browser-local colors and German/English language selection
-- Eco mode, adaptive Wi-Fi transmit power and automatic performance boosts for
-  association, updates, exports and tests
-- automatic UART/parser recovery when meter data stops
-- separate factory-test build with PASS/FAIL checks for the custom LAN/PoE board
-- production build contains read-only battery and smart-home interfaces only
-- all eight current static web assets in a manifest- and SHA-256-verified 64-kB
-  container, with a compact recovery UI if assets are unavailable
+Version 2.0.0 introduces the new **compact history** and a substantially safer migration/update path.
 
-### Interfaces and integration
+#### Compact history and retention
+
+- 1-minute values for 24 hours
+- 5-minute values for the second day
+- 15-minute values up to 460 days
+- 30-minute values up to 825 days
+- 60-minute values up to 1,190 days
+- daily values afterwards in a 3,650-entry ring buffer
+- stored compact power values use 0.1 W resolution
+- migrated cumulative energy counters retain their existing floating-point values
+
+Each stage is a ring buffer. When a stage reaches capacity, only its oldest record is replaced; downstream coarser stages remain independent.
+
+#### Safe legacy-history migration
+
+- migration starts only after **both OTA app slots contain the same validated 2.0.0 firmware**
+- migration writes and space-release operations are resumable
+- unambiguous duplicate timestamps can be resolved from plausible neighboring data and cumulative energy counters
+- clearly corrupted records are not replaced with invented measurements and timestamps are not shifted
+- ambiguous archives, read errors, or insufficient space preserve the original archive
+- history, NVS, and settings partitions are not moved by the new asset rollback layout
+
+#### Update and runtime improvements
+
+- asset backup and transaction journal stored in reserved space at the end of the inactive app slot
+- more frequent UART servicing during longer network operations
+- smaller MQTT packet buffer and streaming output
+- SML/JSON memory optimizations
+- hardened Modbus TCP framing
+- more robust mDNS and flash-error paths
+- fixed Wi-Fi schedule NVS key and backup/restore handling
+- dashboard, CSV exports, and backups support the additional history stage
+
+### Upgrading to 2.0.0
+
+#### Devices with “Complete update (.irup)”
+
+1. Back up settings and the complete history.
+2. Install `ir-tracker-update-2.0.0.irup` under **Maintenance → Complete update**.
+3. Wait for the reboot and verify meter readings and the web interface.
+4. **Manually install the same IRUP file a second time.**
+5. After the second reboot, allow the automatic history migration to finish and do not power the tracker off while it is running.
+
+The second installation is required for the compact-history transition. Migration starts only when both validated OTA app slots contain the same new firmware, preventing an OTA rollback from falling back to an old history reader.
+
+#### Older devices
+
+- IRFW-only devices first need a verified compatible IRUP bridge or a data-preserving USB installer.
+- Never rename `.irup` to `.irfw`.
+- A true coredump partition subtype must be migrated over USB before using the current asset layout.
+- A legacy `coredump` label that already uses the expected SPIFFS subtype is acceptable.
+- Wi-Fi updates do not modify the partition table.
+
+Normal Wi-Fi upgrades only require `ir-tracker-update-2.0.0.irup`. The separate asset image and partition table are intended for diagnostics/recovery and the matching USB installer.
+
+### 2.0.0 verification
+
+- **80 automated tests passed**
+- all three PlatformIO profiles built successfully
+- signed complete IRUP package verified successfully
+- 2.0.0 installed over Wi-Fi into both app slots on a local ESP32-C3 test tracker
+- web UI, assets, meter acquisition, settings, and archived readings checked afterwards
+- app binary: **1,237,680 bytes**
+- static RAM: **97,004 bytes**
+- usable OTA reserve after asset-backup/journal reservation: **68,944 bytes**
+- measured free heap after boot: **139,836 bytes**
+- measured minimum free heap: **122,328 bytes**
+- largest free block: **114,676 bytes**
+- stack high-water mark: **3,624 bytes**
+
+The new asset rollback protection cannot retroactively protect the very first transition from older firmware. Simulations and host tests are not a replacement for real power-cut testing on every hardware revision. Keep backups.
+
+### Interfaces
 
 | Interface | Use |
 | --- | --- |
-| Shelly-compatible endpoints | integration with systems capable of reading Shelly EM / Pro EM |
-| EcoTracker-compatible API | integration through the local EcoTracker `/v1/json` format |
+| Shelly-compatible endpoints | local read-only integration with systems supporting Shelly EM / Pro EM |
+| EcoTracker-compatible API | local integration through `/v1/json` |
 | MQTT Discovery | automatic Home Assistant sensors |
-| JSON/HTTP | custom integrations, automation and local queries |
-| CSV | simple processing of current readings |
+| JSON/HTTP | custom integrations and automation |
+| CSV | simple data export |
 | Prometheus / OpenMetrics | monitoring and time-series collection |
 | Influx Line Protocol | output to Influx-compatible systems |
+| Modbus TCP | optional read-only register schema |
 
-The tracker operates exclusively as a **read-only electricity meter**. Zero-export control, charge limits and schedules remain the responsibility of the battery, inverter, wallbox or automation system.
+The tracker operates exclusively as a **read-only electricity meter**. Zero-export control, charge limits, and control loops remain the responsibility of the battery, inverter, wallbox, or automation system.
 
-See [INTERFACES.md](docs/INTERFACES.md) for the actual URLs and API endpoints.
+See [INTERFACES.md](docs/INTERFACES.md) for the exact endpoints.
 
-### Supported readings and meters
+### Supported meters
 
-Available readings depend on the connected electricity meter and the OBIS values it exposes. L1/L2/L3, voltage and current can only be provided when the meter actually transmits those values through its optical interface.
-
-In addition to SML, the firmware supports passive and active IEC 62056-21/D0
-meters. Active polling uses `/?!` and `ACK 000`. A protected GPIO/baud-rate
-diagnostic is available for hardware with an unknown RX pin; an input is only
-accepted after a fresh, valid telegram.
+Available readings depend on the connected meter and the OBIS values it exposes. In addition to SML, the firmware supports passive and active IEC 62056-21/D0 meters. Active polling uses `/?!` and `ACK 000`.
 
 See the current [compatibility overview](docs/compatibility/README.md).
 
-### First access – default password
+### First access
 
-After a fresh installation, the tracker starts the Wi-Fi network `IR-Tracker-Setup-XXXX`. Copy the four `XXXX` characters directly from that network name:
+After a fresh installation, the tracker starts `IR-Tracker-Setup-XXXX`.
 
 | Access | User name | Password |
 | --- | --- | --- |
 | Setup Wi-Fi `IR-Tracker-Setup-XXXX` | – | `IRTracker-XXXX` |
 | Web interface | `admin` | `IRTracker-XXXX` |
 
-Example: If the Wi-Fi network is named `IR-Tracker-Setup-F2A0`, the password is `IRTracker-F2A0`. Capitalization and the hyphen must match exactly. After setting a custom password, use that chosen administrator password instead.
+Example: `IR-Tracker-Setup-F2A0` → password `IRTracker-F2A0`.
 
 ### Security
 
-The interface uses HTTP and must only be operated in a trusted home network or isolated IoT network. **Never expose its ports to the internet.** Use a VPN for remote access. See [SECURITY.md](.github/SECURITY.md).
-
-### Installation
-
-See [INSTALLATION.md](docs/INSTALLATION.md). Before flashing, back up the complete device, settings and history. The personal original firmware must never be distributed publicly.
+The interface uses HTTP and should only be operated on a trusted home network or isolated IoT network. **Do not expose its ports directly to the internet.** Use a VPN for remote access. See [SECURITY.md](.github/SECURITY.md).
 
 ### Documentation
 
+- [Release notes 2.0.0](release/RELEASE_NOTES-2.0.0.md)
 - [Installation and recovery](docs/INSTALLATION.md)
 - [Compatibility](docs/compatibility/README.md)
 - [Security](.github/SECURITY.md)
 - [Interfaces](docs/INTERFACES.md)
+- [Modbus TCP](docs/MODBUS.md)
 - [USB switching](docs/USB_SWITCHING.md)
 - [Hardware test](docs/HARDWARE_TEST.md)
 - [Soak test](docs/SOAK_TEST.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
+- [Firmware architecture](docs/ARCHITECTURE.md)
+- [Web asset partition](docs/ASSET_PARTITION.md)
 - [Rights review](docs/legal/RIGHTS_REVIEW.md)
 - [Trademarks](docs/legal/TRADEMARKS.md)
 - [Third-party notices](docs/legal/THIRD_PARTY_NOTICES.md)
-- [Firmware architecture](docs/ARCHITECTURE.md)
-- [Web asset partition](docs/ASSET_PARTITION.md)
 
 ### Project status
 
-Version **1.3.8** accepts a fully verified older asset container during a
-signed firmware update. The tracker therefore remains usable after a normal
-`.irfw` update even when the separate 64-kB asset partition is updated later.
-Missing or modified required files still safely enter recovery. Interface
-configuration is grouped under “Interfaces”; partitions, history and meter
-interfaces remain unchanged. Feedback about different meters and local
-integrations is welcome.
+**2.0.0 is the current stable release.** Compact-history migration and the two-slot Wi-Fi migration path were verified on the local ESP32-C3 test tracker. The universal firmware contains W5500 Ethernet with Wi-Fi fallback; the custom LAN/PoE board has not yet been validated on real hardware with this release.
 
-New USB installations use the `debugfs` label for optional 64-kB debug
-storage. The same firmware automatically detects the previous `coredump` label
-on existing OTA devices; OTA slots, offsets and history remain unchanged. A
-USB reflash is therefore not required merely for the renamed label.
-
-The universal firmware already contains W5500 Ethernet with Wi-Fi fallback.
-The Ethernet/PoE board has not yet been validated on real hardware.
+New USB installations use the `debugfs` label for optional 64 KiB debug storage. Existing devices using the historical `coredump` label remain compatible when that partition already has the expected SPIFFS subtype. A true coredump subtype must be migrated over USB before it can be used as the asset area.
 
 ### License
 
-Copyright © 2026 Michael Roßmann. Licensed under PolyForm Noncommercial 1.0.0. Private and other noncommercial use is permitted under the license; commercial use is not permitted. See the authoritative [license](LICENSE.md), [authorship notice](AUTHORS.md), [rights review](docs/legal/RIGHTS_REVIEW.md), and [trademark notice](docs/legal/TRADEMARKS.md).
+Copyright © 2026 Michael Roßmann. Licensed under PolyForm Noncommercial 1.0.0. Private and other noncommercial use is permitted; commercial use is not permitted. See [LICENSE.md](LICENSE.md), [AUTHORS.md](AUTHORS.md), [RIGHTS_REVIEW.md](docs/legal/RIGHTS_REVIEW.md), and [TRADEMARKS.md](docs/legal/TRADEMARKS.md).
 
 ---
 
-<small>Hinweis / Note: Die LAN-Unterstützung wurde noch nicht an echter Hardware getestet. / Ethernet support has not yet been tested on real hardware.</small>
+<small>Hinweis / Note: Die LAN-/PoE-Platine wurde mit 2.0.0 noch nicht auf echter Hardware validiert. / The LAN/PoE board has not yet been validated on real hardware with 2.0.0.</small>
