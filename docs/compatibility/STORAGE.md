@@ -1,6 +1,6 @@
 # Kompatibilität – Batteriespeicher & Energiemanagement
 
-**Stand: 02.09.2026 · Firmware 1.3.2**
+**Stand: 16.09.2026 · Firmware 2.0.0**
 
 Diese Übersicht zeigt Batteriespeicher und Energiemanagementsysteme, die grundsätzlich mit **IR Tracker Offline** als externe Netzmessquelle verwendet werden können.
 
@@ -10,26 +10,27 @@ Die Bewertung basiert auf den aktuell implementierten lokalen Schnittstellen des
 
 | Status | Bedeutung |
 |---|---|
-| 🟢 **Kompatibel** | Die benötigte lokale Zähler-Schnittstelle wird vom IR Tracker bereitgestellt und es gibt belastbare Hinweise bzw. Praxistests, dass keine relevante Originalmodell-, Cloud- oder Account-Prüfung die Nutzung einer Emulation verhindert. Ein abschließender Feldtest mit IR Tracker kann trotzdem noch ausstehen. |
-| 🟡 **Kandidat** | Shelly, EcoTracker oder eine andere grundsätzlich passende Fremdzähler-Schnittstelle wird unterstützt, aber Originalmodell-, Discovery-, Cloud-, Account-, Onboarding- oder Stabilitätsprobleme sind noch nicht sicher ausgeschlossen. |
-| ✅ **Getestet** | Das konkrete Speicher-/EMS-System wurde mit IR Tracker Offline auf realer Hardware erfolgreich geprüft. |
-| ⬜ **Nicht getestet** | Technische Kompatibilität ist gegeben oder wahrscheinlich, ein realer Feldtest mit IR Tracker steht jedoch noch aus. |
+| 🟢 **Kompatibel** | **Grundsätzlich technisch kompatibel.** Der IR Tracker stellt die benötigte lokale Zähler-Schnittstelle bereit und es gibt belastbare Hinweise, Herstellerangaben oder Fremdgeräte-/Emulationstests, dass dieser Integrationsweg funktioniert. Das konkrete Speicher-/EMS-Modell muss dafür noch nicht mit IR Tracker selbst getestet worden sein. |
+| 🟡 **Kandidat** | Eine grundsätzlich passende Fremdzähler-Schnittstelle ist vorhanden, aber Discovery, Onboarding, Cloud-/Accountbindung, Geräteidentität oder Stabilität sind noch nicht ausreichend geklärt. |
+| ✅ **Getestet** | **Praktisch bestätigt.** Das konkrete Speicher-/EMS-System wurde mit IR Tracker Offline auf realer Hardware erfolgreich als Gesamtsystem geprüft. |
+| ⬜ **Nicht getestet** | Für dieses konkrete Modell wurde noch kein realer Feldtest mit IR Tracker durchgeführt. Das widerspricht einem grünen Status nicht: 🟢 bewertet die grundsätzliche technische Kompatibilität, ✅ den tatsächlich bestandenen IR-Tracker-Feldtest. |
 
 ## Vom IR Tracker bereitgestellte Schnittstellen
 
-Firmware **1.3.2** stellt unter anderem folgende lokale Integrationen bereit:
+Firmware **2.0.0** stellt unter anderem folgende lokale Integrationen bereit:
 
+- herstellerneutrale API `/api/v1/meter`
 - Shelly-EM-kompatible Endpunkte
 - Shelly-Pro-EM-/Pro-3EM-kompatible Endpunkte
 - Shelly-Geräteerkennung und nur lesende JSON-RPC-Zugriffe
 - EcoTracker-kompatible API unter `/v1/json`
+- optionales read-only Modbus TCP auf Port 502
 - HTTP / JSON
-- MQTT
-- Home Assistant MQTT Discovery
+- MQTT und Home Assistant MQTT Discovery
 - Prometheus / OpenMetrics
 - Influx Line Protocol
 
-> **Wichtig:** „Kompatibel“ bedeutet nicht automatisch „auf realer Hardware mit IR Tracker getestet“. Grün wird nur vergeben, wenn zusätzlich keine relevante Originalgeräte-/Modellprüfung erkennbar ist oder eine Fremdgeräte-/Emulationslösung praktisch nachgewiesen wurde.
+> **Wichtig:** 🟢 „Kompatibel“ ist bewusst **keine Feldtest-Garantie**. Es bedeutet, dass der lokale Integrationsweg technisch passt und ausreichend belegt ist. Erst ✅ „Getestet“ bedeutet, dass IR Tracker selbst mit dem konkreten Speicher/EMS auf realer Hardware erfolgreich geprüft wurde. Hersteller können Firmware, Apps und Onboarding später ändern; ein Test gilt daher immer für den getesteten Stand.
 
 ## Kompatibilitätsübersicht
 
@@ -92,15 +93,15 @@ Firmware **1.3.2** stellt unter anderem folgende lokale Integrationen bereit:
 
 **52 relevante Balkonkraftwerk-Speicher-/EMS-Systeme**
 
-- 🟢 **Kompatibel:** 24
+- 🟢 **Grundsätzlich kompatibel:** 24
 - 🟡 **Kandidaten:** 28
-- ✅ **Auf realer Speicher-Hardware mit IR Tracker getestet:** 0
+- ✅ **Mit IR Tracker auf realer Speicher-Hardware getestet:** 0
 
 ## Quellenlage und Bewertungsprinzip
 
 Ein grüner Eintrag wird nur gesetzt, wenn mindestens eine belastbare Quelle eine für den IR Tracker relevante **lokale** Fremdzähler-Schnittstelle bestätigt und zusätzlich keine relevante Originalmodell-, Cloud-, Account- oder Geräteidentitätsprüfung erkennbar ist **oder** wenn eine nicht originale Shelly-/EcoTracker-Emulation bzw. ein kompatibler Drittanbieter-Zähler am betreffenden Speicher praktisch nachgewiesen ist.
 
-Besonders aussagekräftig sind Tests mit ESP32/Tasmota, uni-meter und IOmeter-Kompatibilitätsmodus, weil diese Lösungen genau wie IR Tracker Messwerte über nachgebildete lokale Fremdzähler-Schnittstellen bereitstellen.
+Besonders aussagekräftig sind Tests mit ESP32/Tasmota, uni-meter und IOmeter-Kompatibilitätsmodus, weil diese Lösungen wie IR Tracker Messwerte über nachgebildete lokale Fremdzähler-Schnittstellen bereitstellen.
 
 Die bloße Unterstützung von Shelly oder EcoTracker reicht nicht automatisch für Grün. Wenn zwar eine passende API vorhanden ist, aber Discovery, Onboarding, Cloud-/Account-Zuordnung oder Stabilität noch ungeklärt sind, bleibt das System gelb.
 
@@ -119,4 +120,4 @@ Ein Modell erhält erst den Status ✅ **Getestet**, wenn auf echter Hardware mi
 7. Nach Wiederherstellung der Verbindung startet die Regelung automatisch erneut.
 8. Dauerbetrieb über mehrere Stunden verursacht keine Kommunikationsabbrüche.
 
-Damit wird klar zwischen **technischer Protokollkompatibilität**, **nachgewiesener Fremdgeräte-/Emulationsfähigkeit** und **praktisch bestätigter IR-Tracker-Produktkompatibilität** unterschieden.
+Damit wird klar zwischen **grundsätzlicher technischer Kompatibilität**, **nachgewiesener Fremdgeräte-/Emulationsfähigkeit** und **praktisch bestätigter IR-Tracker-Produktkompatibilität** unterschieden.
