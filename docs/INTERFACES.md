@@ -2,105 +2,58 @@
 
 ## Deutsch
 
-Der Tracker arbeitet als **nur lesender Stromzähler**. Null-Einspeisung, Ladegrenzen und Zeitpläne werden im Speicher oder Wechselrichter konfiguriert.
+Der Tracker arbeitet als **nur lesender Stromzähler**. Null-Einspeisung, Ladegrenzen und Zeitpläne werden im Speicher, Wechselrichter oder Automatisierungssystem konfiguriert.
 
 | Schnittstelle | Zweck |
 |---|---|
-| `/api/v1/status` | aktuelle JSON-Messwerte |
-| `/api/v1/meter` | stabiles herstellerneutrales Schema `irtracker.meter.v1` |
-| `/api/v1/history` | lokale Historie nach Zeitraum |
+| `/api/v1/meter` | bevorzugtes stabiles, herstellerneutrales Schema `irtracker.meter.v1` |
+| `/api/v1/status` | ausführlicher Laufzeit-/Diagnosestatus einschließlich Messwerten |
+| `/api/v1/obis` | aktuell dekodierte OBIS-Daten |
+| `/api/v1/history`, `/api/v1/history.csv` | lokale Historie / CSV-Export |
 | `/api/v1/values.csv` | aktuelle CSV-Werte |
 | `/metrics`, `/openmetrics` | Prometheus/OpenMetrics |
 | `/api/v1/influx` | Influx Line Protocol |
 | `/v1/json` | EcoTracker-kompatible lokale Messwertabfrage (nur lesend) |
 | `/shelly`, `/status`, `/emeter/0` | Shelly-EM-kompatible Erkennung und Abfrage |
-| `/rpc`, `/rpc/EM.GetStatus?id=0`, `/rpc/EMData.GetStatus?id=0` | Nur lesende Shelly-Pro-3EM-kompatible RPC-Abfrage |
+| `/rpc`, `/rpc/EM.GetStatus?id=0`, `/rpc/EMData.GetStatus?id=0` | nur lesende Shelly-Pro-3EM-kompatible RPC-Abfrage |
 | MQTT Discovery | automatische Home-Assistant-Sensoren |
 | Modbus TCP, Port 502 | optionales, nur lesendes IR-Tracker-Registerschema; standardmäßig aus |
 
-Weitere lokale Systeme: ioBroker, Node-RED, openHAB und jede Anwendung mit HTTP/JSON oder MQTT. L1/L2/L3 werden nur ausgegeben, wenn der Stromzähler diese OBIS-Werte sendet.
+Für neue eigene Integrationen sollte `/api/v1/meter` verwendet werden. `/api/v1/status` ist bewusst umfangreicher und für Oberfläche, Support und Diagnose gedacht. L1/L2/L3 werden nur ausgegeben, wenn der Stromzähler die entsprechenden Werte liefert. Weitere Details einschließlich Admin-/Wartungsrouten stehen in [API.md](API.md); das Modbus-Registerschema steht in [MODBUS.md](MODBUS.md).
 
-### Speicher-Kompatibilitätsmodus und Erkennung
+### Speicher-Kompatibilitätsmodus
 
-Der Modus ist standardmäßig ausgeschaltet. Wird er unter **Schnittstellen**
-aktiviert, sind ausschließlich `/v1/json`, `/shelly`, `/status`, `/emeter/0`
-und die oben genannten nur lesenden RPC-Methoden aus privaten lokalen Netzen
-ohne Anmeldung erreichbar. OTA, Einstellungen, GPIO, Diagnose, Historienänderung
-und alle sonstigen Schreibzugriffe bleiben geschützt. mDNS kündigt
-`_irtracker._tcp`, `_shelly._tcp` und `_everhome._tcp` mit der neutralen IR-Tracker-Identität und
-der aktiven WLAN- oder LAN-IP an. Fremde Modell-, Serien-, OUI- oder
-Produktkennungen werden nicht nachgebildet. Proprietäre UDP- oder Cloud-Bindung
-ist ohne offen dokumentiertes, neutral implementierbares Protokoll absichtlich
-nicht enthalten.
+Der Modus ist standardmäßig ausgeschaltet. Wird er unter **Schnittstellen** aktiviert, stellt der Tracker die implementierten EcoTracker-/Shelly-kompatiblen **Leseendpunkte** nach der lokalen Kompatibilitäts-Zugriffsregel bereit. OTA, Einstellungen, GPIO-Diagnose, History-Änderungen und sonstige Schreibzugriffe gehören nicht zu dieser Kompatibilitätsschnittstelle. Der Tracker behält dabei seine neutrale IR-Tracker-Identität; fremde Seriennummern, OUI-, Cloud- oder Produktidentitäten werden nicht nachgebildet.
 
-### Geschützte GPIO-Diagnose
+### Geschützte Diagnose
 
-`POST /api/v1/gpio-scan/start` startet eine flüchtige Suche über die im aktiven
-Universalprofil verfügbaren GPIOs und gängige Baudraten. Wird ein W5500 über
-sein Versionsregister erkannt, werden dessen GPIOs 0, 1, 4, 7 und 10 niemals
-umgeschaltet. Ohne W5500 bleiben diese Pins für bestehende WLAN-Hardware
-verfügbar. `GET /api/v1/gpio-scan` liefert Fortschritt und Ergebnis,
-`POST /api/v1/gpio-scan/cancel` bricht ab. Ein Pin wird ausschließlich nach
-einem frischen, CRC-gültigen SML-Telegramm bestätigt. Die Suche speichert keine
-GPIO-Einstellung und stellt den normalen UART anschließend wieder her. Alle drei
-Endpunkte benötigen Admin-Anmeldung; POST-Aufrufe zusätzlich das CSRF-Token aus
-`GET /api/v1/admin-session`.
+GPIO-/Baudraten-Suche, Selbsttest, Rohtelegramme, Supportberichte und Updatefunktionen sind Wartungs-/Adminfunktionen und keine stabile Integrations-API. Die tatsächlich implementierten Methoden und Pfade sind in [API.md](API.md) getrennt dokumentiert.
 
 ## English
 
-The tracker operates as a **read-only electricity meter**. Zero export, charge limits and schedules are configured in the battery or inverter.
+The tracker operates as a **read-only electricity meter**. Zero-export control, charge limits, and schedules are configured in the battery, inverter, or automation system.
 
 | Interface | Purpose |
 |---|---|
-| `/api/v1/status` | current JSON readings |
-| `/api/v1/meter` | stable vendor-neutral `irtracker.meter.v1` schema |
-| `/api/v1/history` | local history by period |
+| `/api/v1/meter` | preferred stable vendor-neutral `irtracker.meter.v1` schema |
+| `/api/v1/status` | detailed runtime/diagnostic status including readings |
+| `/api/v1/obis` | currently decoded OBIS data |
+| `/api/v1/history`, `/api/v1/history.csv` | local history / CSV export |
 | `/api/v1/values.csv` | current CSV values |
 | `/metrics`, `/openmetrics` | Prometheus/OpenMetrics |
 | `/api/v1/influx` | Influx Line Protocol |
 | `/v1/json` | EcoTracker-compatible local meter request (read-only) |
-| `/shelly`, `/status`, `/emeter/0` | Shelly EM compatible discovery and request |
-| `/rpc`, `/rpc/EM.GetStatus?id=0`, `/rpc/EMData.GetStatus?id=0` | Read-only Shelly Pro 3EM compatible RPC request |
+| `/shelly`, `/status`, `/emeter/0` | Shelly EM-compatible discovery and request |
+| `/rpc`, `/rpc/EM.GetStatus?id=0`, `/rpc/EMData.GetStatus?id=0` | read-only Shelly Pro 3EM-compatible RPC request |
 | MQTT Discovery | automatic Home Assistant sensors |
 | Modbus TCP, port 502 | optional read-only IR Tracker register map; disabled by default |
 
-Other local systems include ioBroker, Node-RED, openHAB and any HTTP/JSON or MQTT application. L1/L2/L3 are exposed only when the electricity meter transmits those OBIS values.
+New custom integrations should use `/api/v1/meter`. `/api/v1/status` is deliberately broader and intended for the UI, support, and diagnostics. L1/L2/L3 are exposed only when supplied by the meter. See [API.md](API.md) for the developer HTTP reference including administrative routes and [MODBUS.md](MODBUS.md) for the register map.
 
-### Storage compatibility mode and discovery
+### Storage compatibility mode
 
-This mode is disabled by default. When enabled under **Interfaces**, only `/v1/json`,
-`/shelly`, `/status`, `/emeter/0`, and the read-only RPC methods listed above
-are available without authentication from private local networks. OTA,
-settings, GPIO, diagnostics, history mutation, and every other write operation
-remain protected. mDNS advertises `_irtracker._tcp`, `_shelly._tcp`, and `_everhome._tcp` using the
-neutral IR Tracker identity and the active Wi-Fi or Ethernet IP. No third-party
-model, serial, OUI, or product identity is imitated. Proprietary UDP or cloud
-binding is deliberately omitted unless it can be implemented from an openly
-documented protocol without identity spoofing.
+This mode is disabled by default. When enabled under **Interfaces**, the tracker exposes the implemented EcoTracker-/Shelly-compatible **read-only endpoints** according to the local compatibility access policy. OTA, settings, GPIO diagnostics, history mutation, and other write operations are not part of this compatibility interface. The tracker retains its neutral IR Tracker identity and does not imitate third-party serial numbers, OUIs, cloud identities, or product identities.
 
-### Protected GPIO diagnostics
+### Protected diagnostics
 
-`POST /api/v1/gpio-scan/start` starts a volatile scan across the GPIOs available
-in the universal hardware profile and common baud rates. Once a W5500 is
-confirmed through its version register, GPIOs 0, 1, 4, 7 and 10 are never
-toggled. Without a W5500 those pins remain available to existing Wi-Fi-only
-hardware. `GET /api/v1/gpio-scan` returns progress and results, while
-`POST /api/v1/gpio-scan/cancel` aborts it. A pin is accepted only after a fresh,
-CRC-valid SML telegram. The scan stores no GPIO setting and restores the normal
-UART afterwards. All three endpoints require admin authentication; POST calls
-also require the CSRF token obtained from `GET /api/v1/admin-session`.
-
-## Entwickler-Build / Developer build
-
-DE: Der universelle Produktions-Build enthält keine schreibende
-Speicher-/Wechselrichtersteuerung und keine WebSocket-Bibliothek. Der rohe
-IR-Sniffer (Port 81) und die authentifizierte, schreibende IR-Bridge (Port 82)
-werden ausschließlich mit dem nicht standardmäßig gebauten PlatformIO-Profil
-`solakon_tracker_developer` eingebunden. Dieses Profil ist für Labor- und
-Protokolltests gedacht, nicht für normale Tracker-Installationen.
-
-EN: The universal production build contains neither writable
-battery/inverter control nor the WebSocket library. The raw IR sniffer (port
-81) and authenticated writable IR bridge (port 82) are included exclusively by
-the non-default PlatformIO profile `solakon_tracker_developer`. This profile is
-intended for lab and protocol testing, not normal tracker installations.
+GPIO/baud-rate scanning, self-test, raw telegrams, support reports, and update functions are maintenance/admin features rather than a stable integration API. Their actually implemented methods and paths are documented separately in [API.md](API.md).

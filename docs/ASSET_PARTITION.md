@@ -2,59 +2,28 @@
 
 ## Deutsch
 
-Version 1.3.8 legt alle acht aktuellen statischen Webassets in der vorhandenen
-64-kB-Partition `debugfs` beziehungsweise dem alten Label `coredump` ab. Ein
-kompakter Rohdatencontainer funktioniert unabhängig davon,
-ob die bestehende Partition den alten Core-Dump- oder den neuen SPIFFS-Subtype
-trägt. Die Firmware prüft Schema, benötigte Dateien, Dateigröße und SHA-256.
-Ein älterer Container bleibt verwendbar, wenn sämtliche aktuell benötigten
-Dateien geprüft vorhanden sind; zusätzliche frühere Dateien werden ignoriert.
-Nur vollständig geprüfte Dateien werden ausgeliefert. Bei fehlender, falscher
-oder beschädigter Partition wird ohne Absturz eine kleine, eigenständige
-Recovery-Oberfläche aus der Firmware verwendet. Messung, History und lokale
-Schnittstellen laufen dabei weiter.
+Die aktuelle Firmware hält die statischen Webassets in der vorhandenen 64-KiB-Asset-Partition bei `0x2B0000`. Neue Partitionstabellen verwenden das Label `debugfs`; bestehende Geräte mit historischem Label `coredump` bleiben kompatibel, **wenn der vorhandene Partitionssubtyp bereits zum erwarteten Asset-/SPIFFS-Layout passt**. Ein echter Coredump-Partitionssubtyp muss vor der Verwendung als Asset-Bereich über den datenerhaltenden USB-Migrationsweg auf das aktuelle Layout gebracht werden. WLAN-Updates verändern die Partitionstabelle nicht.
 
-Der Container enthält `common.css.gz`, `common.js.gz`, `i18n.js.gz`,
-`dashboard.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
-`setup.html.gz` und `setup.js.gz`. Das Image ist immer exakt 65.536 Byte groß;
-29.944 Byte sind belegt und 35.592 Byte bleiben frei. Weder Partitionstabelle
-noch History werden dafür verändert.
+Die Firmware validiert Asset-Container und benötigte Dateien vor der Auslieferung. Fehlen Assets oder sind sie beschädigt, bleibt eine kleine Recovery-Oberfläche aus der Firmware verfügbar; Messwerterfassung, History und lokale Integrationsschnittstellen sollen davon unabhängig weiterlaufen.
 
-Das signierte IRFW-Paket aktualisiert weiterhin ausschließlich die App. Das
-separate Asset-Image kann kontrolliert per USB oder über die geschützte
-WLAN-Wartungsschnittstelle installiert werden. Vor einem WLAN-Schreibvorgang
-prüft die Firmware die tatsächlich vorhandene Partitionstabelle, verlangt die
-Bestätigung einer geprüften Sicherung und akzeptiert ausschließlich den
-bestehenden Bereich bei `0x2B0000` mit exakt 65.536 Byte. Die Partitionstabelle
-wird dabei weder geschrieben noch verändert. Der bisherige Inhalt muss vor dem
-Überschreiben vollständig gesichert werden. Ohne gültiges Asset-Image bleibt
-die Recovery-Seite mit Status, Diagnose, signiertem Firmwareupdate,
-Asset-Wiederherstellung und Neustart verfügbar.
+Seit 2.0.0 gehört die Weboberfläche zum signierten vollständigen `.irup`-Updatepfad. Für den normalen WLAN-Upgradeweg wird `ir-tracker-update-2.0.0.irup` verwendet. Das separate `ir-tracker-assets-2.0.0.bin` dient Diagnose/Recovery bzw. dem passenden USB-Installer und ist **nicht** der normale Updateweg.
+
+### Rollback-Schutz in 2.0.0
+
+2.0.0 reserviert im Ende des inaktiven OTA-App-Slots Platz für Asset-Backup und Transaktionsjournal. Dadurch können Asset-Aktualisierungen transaktional abgesichert werden, ohne History-, NVS- oder Einstellungsbereiche zu verschieben. Dieser Schutz kann den allerersten Übergang von einer älteren Firmware nicht rückwirkend absichern; deshalb bleiben Backups vor dem Upgrade empfohlen.
+
+Die History liegt weiterhin getrennt vom Asset-Bereich. Die Compact-History-Migration startet erst, wenn beide validierten OTA-App-Slots die passende 2.0.0-Firmware enthalten. Details stehen in den [Release Notes 2.0.0](../release/RELEASE_NOTES-2.0.0.md) und in der [Installation](INSTALLATION.md).
 
 ## English
 
-Version 1.3.8 stores all eight current static web assets in the existing 64-kB
-partition labelled `debugfs`, with `coredump` retained as the legacy label. A
-compact raw container works with both the legacy core-dump subtype and
-the newer SPIFFS subtype. Firmware verifies the schema, required files, file
-size and SHA-256. An older container remains usable when all currently
-required files are verified; retired extra files are ignored. Only fully
-verified files are served. A missing,
-incompatible or damaged partition safely falls back to a small self-contained
-recovery UI. Meter acquisition, history and local interfaces continue running.
+The current firmware stores its static web assets in the existing 64 KiB asset partition at `0x2B0000`. New partition tables use the `debugfs` label. Existing devices with the historical `coredump` label remain compatible **when the existing partition subtype already matches the expected asset/SPIFFS layout**. A true coredump partition subtype must be migrated to the current layout through the data-preserving USB migration path before it is used for assets. Wi-Fi updates never modify the partition table.
 
-The container holds `common.css.gz`, `common.js.gz`, `i18n.js.gz`,
-`dashboard.js.gz`, `maintenance.js.gz`, `diagnostics.js.gz`,
-`setup.html.gz` and `setup.js.gz`. The image is always exactly 65,536 bytes;
-29,944 bytes are used and 35,592 bytes remain free. Neither the partition table
-nor history is changed.
+Firmware validates the asset container and required files before serving them. If assets are missing or damaged, a small firmware-resident recovery UI remains available; meter acquisition, history, and local integration interfaces are intended to continue independently.
 
-The signed IRFW package still updates the application only. The separate asset
-image can be installed in a controlled operation over USB or through the
-protected Wi-Fi maintenance endpoint. Before a Wi-Fi write, firmware validates
-the partition table actually present on the device, requires confirmation of a
-verified backup, and accepts only the existing 65,536-byte region at
-`0x2B0000`. This operation never writes or changes the partition table. Existing
-contents must be backed up completely before they are overwritten. Without a
-valid asset image, the recovery page remains available with status, diagnostics,
-signed firmware update, asset restoration and restart functions.
+Starting with 2.0.0, the web interface is part of the signed complete `.irup` update path. Normal Wi-Fi upgrades use `ir-tracker-update-2.0.0.irup`. The separate `ir-tracker-assets-2.0.0.bin` is intended for diagnostics/recovery or the matching USB installer and is **not** the normal update path.
+
+### Rollback protection in 2.0.0
+
+2.0.0 reserves space at the end of the inactive OTA app slot for the asset backup and transaction journal. This protects asset updates transactionally without moving history, NVS, or settings areas. The protection cannot retroactively cover the very first transition from older firmware, so a backup before upgrading remains recommended.
+
+History remains separate from the asset area. Compact-history migration starts only after both validated OTA app slots contain the matching 2.0.0 firmware. See [Release Notes 2.0.0](../release/RELEASE_NOTES-2.0.0.md) and [Installation](INSTALLATION.md) for the upgrade procedure.
