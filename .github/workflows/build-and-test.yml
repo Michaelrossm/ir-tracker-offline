@@ -23,8 +23,8 @@ jobs:
       - name: Tests ausführen / Run tests
         run: python -m unittest discover -s tests -p "test_*.py"
       - name: Universal-Firmware bauen / Build universal firmware
-        run: platformio run -e solakon_tracker_offline
+        run: platformio run -e ir_tracker_offline
       - name: Werksprüfung bauen / Build factory test
-        run: platformio run -e solakon_tracker_factory
+        run: platformio run -e ir_tracker_factory
       - name: Entwicklerprofil bauen / Build developer profile
-        run: platformio run -e solakon_tracker_developer
+        run: platformio run -e ir_tracker_developer
