@@ -1,6 +1,6 @@
 param(
     [string]$Port = "COM3",
-    [string]$Version = "1.3.5-beta.1",
+    [string]$Version = "2.0.0",
     [string]$ConfirmCustomOnly = ""
 )
 
@@ -33,13 +33,13 @@ if (-not $resolvedFirmware.StartsWith($resolvedWorkspace,
     throw "Dateipfad außerhalb des Projekts. / Resolved path is outside the project."
 }
 
-Write-Host "Installiere Custom-Firmware $Version redundant. / Installing custom firmware redundantly."
+Write-Host "Installiere IR Tracker Firmware $Version redundant. / Installing IR Tracker firmware redundantly."
 python -m esptool --port $Port write-flash `
     0x8000 $resolvedPartitions `
     0x10000 $resolvedFirmware `
     0x160000 $resolvedFirmware
 if ($LASTEXITCODE -ne 0) {
-    throw "Custom-Installation fehlgeschlagen. / Custom installation failed."
+    throw "Installation fehlgeschlagen. / Installation failed."
 }
 
-Write-Host "Custom-only $Version wurde redundant installiert. / Custom-only $Version was installed redundantly."
+Write-Host "IR Tracker $Version wurde redundant installiert. / IR Tracker $Version was installed redundantly."
