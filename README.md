@@ -49,10 +49,6 @@ Es ist kein Cloudkonto erforderlich. Der normale Betrieb bleibt auch ohne MQTT, 
 
 Die Weboberfläche läuft vollständig lokal auf dem Tracker. Sie zeigt Live-Leistung und Phasenwerte, Energieübersichten, historische Verläufe, Datenlücken sowie die verfügbaren lokalen Schnittstellen. Für die Anzeige ist weder ein Cloudkonto noch ein externer Webserver erforderlich.
 
-### Dashboard
-
-![IR Tracker Offline Dashboard](docs/images/web-ui/dashboard.webp)
-
 ### Verlauf und Messdetails
 
 ![IR Tracker Offline Tagesverlauf](docs/images/web-ui/history-day.webp)
