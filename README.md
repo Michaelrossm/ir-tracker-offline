@@ -45,6 +45,28 @@ Digitaler Stromzähler
 
 Es ist kein Cloudkonto erforderlich. Der normale Betrieb bleibt auch ohne MQTT, Home Assistant oder Internetverbindung lokal funktionsfähig.
 
+## Weboberfläche
+
+Die Weboberfläche läuft vollständig lokal auf dem Tracker. Sie zeigt Live-Leistung und Phasenwerte, Energieübersichten, historische Verläufe, Datenlücken sowie die verfügbaren lokalen Schnittstellen. Für die Anzeige ist weder ein Cloudkonto noch ein externer Webserver erforderlich.
+
+### Dashboard
+
+![IR Tracker Offline Dashboard](docs/images/web-ui/dashboard.webp)
+
+### Verlauf und Messdetails
+
+![IR Tracker Offline Tagesverlauf](docs/images/web-ui/history-day.webp)
+
+Datenlücken bzw. Ausfälle werden im Verlauf sichtbar markiert. Beim Überfahren mit der Maus oder Antippen eines Messpunkts werden die zugehörigen Messwerte angezeigt.
+
+![IR Tracker Offline Verlauf mit Datenlücke und Messdetail](docs/images/web-ui/history-gap-tooltip.webp)
+
+### Lokale Schnittstellen
+
+![IR Tracker Offline Schnittstellen](docs/images/web-ui/interfaces.webp)
+
+> Die Screenshots zeigen reale lokale Messwerte eines Testsystems. Werte, Zeiträume und verfügbare Phasen hängen vom jeweiligen Stromzähler ab.
+
 ## Schnittstellen auf einen Blick
 
 | Schnittstelle | Zweck | Verhalten |
@@ -161,6 +183,10 @@ Maintained by **Michael Roßmann**. This is an independent community project and
 - recovery UI, settings/history backup and protected diagnostics
 
 Compatibility refers only to implemented local API/network behavior. IR Tracker keeps its own neutral identity and does not impersonate third-party devices.
+
+### Web UI
+
+The browser UI runs entirely on the tracker and provides live values, energy summaries, history including visible data gaps, and an overview of the local interfaces. See the [Web UI screenshots](#weboberfläche) above.
 
 ### Version 2.0.0
 
