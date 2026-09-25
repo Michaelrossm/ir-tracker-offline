@@ -5,7 +5,7 @@ type: software
 authors:
   - family-names: "Roßmann"
     given-names: "Michael"
-version: "2.0.0"
+version: "2.1.1"
 date-released: 2026-09-15
 repository-code: "https://github.com/Michaelrossm/ir-tracker-offline"
 url: "https://github.com/Michaelrossm/ir-tracker-offline"
