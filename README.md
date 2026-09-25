@@ -1,4 +1,4 @@
-# IR Tracker Offline — 2.0.0
+# IR Tracker Offline — 2.1.1
 
 **Deutsch** | [English](#english)
 
@@ -90,35 +90,38 @@ Aktueller Firmware-Referenzstand:
 - native USB-CDC-Unterstützung
 - optional W5500 Ethernet
 
-Die Universal-Firmware enthält W5500-LAN mit WLAN-Fallback. Die eigene LAN-/PoE-Platine ist mit Version 2.0.0 softwareseitig vorgesehen, wurde für diesen Release jedoch noch nicht auf echter Hardware validiert.
+Die Universal-Firmware enthält W5500-LAN mit WLAN-Fallback. In 2.1.1 läuft der W5500 mit 30 MHz SPI; bei nicht erkanntem Ethernet wird der SPI-Bus wieder freigegeben, damit WLAN-only-Hardware ihre GPIOs weiter nutzen kann.
 
-## Neu in 2.0.0
+## Neu in 2.1.1
 
-Version 2.0.0 führt die Compact-History und einen abgesicherten Migrations-/Updatepfad ein. Die Aufbewahrung wird stufenweise verdichtet:
+Version 2.1.1 baut auf der Compact-History von 2.0.0 auf und verbessert vor allem Inbetriebnahme, Diagnose, Netzwerk und Update-Zuverlässigkeit:
 
-- 1-Minuten-Werte für 24 Stunden
-- 5-Minuten-Werte für den zweiten Tag
-- 15-Minuten-Werte bis 460 Tage
-- 30-Minuten-Werte bis 825 Tage
-- 60-Minuten-Werte bis 1.190 Tage
-- anschließend Tageswerte in einem Ringpuffer mit 3.650 Einträgen
+- automatische Zähler-Inbetriebnahme mit mehreren seriellen Kandidaten unter Wiederverwendung der bestehenden SML-/D0-Parser
+- Safe-Recovery nach wiederholten frühen Panic-/Watchdog-/Brownout-Starts
+- Mess- und History-Service auch während des eigentlichen HTTP-OTA-Uploads
+- Captive-Portal-Erkennung für den Setup-Hotspot auf Android, iOS/macOS und Windows
+- gemeinsames Admin-Konto für LAN und WLAN; das aktuell wirksame Admin-Passwort wird in den geschützten Einstellungen 1:1 angezeigt
+- neue Admin-Passwörter: 6–64 Zeichen; WPA2-Setup-Hotspot weiterhin technisch mindestens 8 Zeichen
+- W5500 mit 30 MHz SPI als stabiler Durchsatz-/Signalintegritäts-Kompromiss
+- erweiterte geführte Diagnose, Produktstatus und datensparsamer Supportbericht
+- zusätzlicher isolierter NVS-Schreib-/Lesetest im Factory-Test
+- klarere Modultrennung für Product Runtime, Product Safety, Product Experience, Runtime Health und automatische Zählererkennung
 
-Gespeicherte Leistung verwendet 0,1-W-Auflösung; übernommene Energiezählerstände behalten ihre vorhandenen Floatwerte.
+Die vollständige Liste steht in den [Release Notes 2.1.1](release/RELEASE_NOTES-2.1.1.md).
 
-Die Migration startet erst, wenn **beide validierten OTA-App-Slots dieselbe 2.0.0-Firmware** enthalten. Asset-Backup und Transaktionsjournal liegen im reservierten Ende des inaktiven App-Slots, ohne History, NVS oder Einstellungen zu verschieben.
+## Update auf 2.1.1
 
-## Update auf 2.0.0
+Vor dem Upgrade Einstellungen und vollständige History sichern.
 
-Vor dem Upgrade Einstellungen und vollständige History sichern. Wenn der Tracker bereits **Vollständiges Update (.irup)** anbietet:
+1. `ir-tracker-update-2.1.1.irup` unter **Wartung → Vollständiges Update** installieren.
+2. Neustart abwarten und Messung, Weboberfläche und Asset-Version prüfen.
+3. Geräte, die bereits erfolgreich auf 2.0.0 Compact-History migriert wurden, benötigen normalerweise nur dieses vollständige 2.1.1-IRUP.
+4. Bei einem direkten Sprung von einer älteren, noch nicht migrierten Version gelten weiterhin die 2.0.0-Schutzregeln: beide validierten App-Slots müssen einen kompatiblen Reader enthalten, bevor die History-Migration starten darf.
+5. Ein Mischstand aus Firmware 2.1.1 und Webassets 2.0.0 ist kein vollständiger 2.1.1-Releasezustand; in diesem Fall das vollständige 2.1.1-IRUP erneut installieren.
 
-1. `ir-tracker-update-2.0.0.irup` installieren.
-2. Neustart abwarten und Messung sowie Weboberfläche prüfen.
-3. **Dieselbe IRUP-Datei ein zweites Mal manuell installieren.**
-4. Während der anschließenden Compact-History-Migration das Gerät nicht abschalten.
+WLAN-Updates verändern die Partitionstabelle nicht. `.irup` niemals in `.irfw` umbenennen.
 
-Ältere Geräte, die nur `.irfw` anbieten, benötigen zuerst eine nachweislich kompatible IRUP-Brückenversion oder den datenerhaltenden USB-Installer. `.irup` niemals in `.irfw` umbenennen. Ein echter Coredump-Partitionssubtyp muss vor Verwendung als Asset-Bereich per USB migriert werden; ein historisches `coredump`-Label mit bereits passendem SPIFFS-Subtyp ist zulässig. WLAN-Updates verändern die Partitionstabelle nicht.
-
-Die vollständigen Hinweise stehen in den [Release Notes 2.0.0](release/RELEASE_NOTES-2.0.0.md) und unter [Installation](docs/INSTALLATION.md).
+Die vollständigen Hinweise stehen in den [Release Notes 2.1.1](release/RELEASE_NOTES-2.1.1.md) und unter [Installation](docs/INSTALLATION.md).
 
 ## Erster Zugang
 
@@ -129,6 +132,7 @@ Die Weboberfläche verwendet HTTP und gehört ausschließlich in ein vertrauensw
 ## Dokumentation
 
 - [Installation und Wiederherstellung](docs/INSTALLATION.md)
+- [Release Notes 2.1.1](release/RELEASE_NOTES-2.1.1.md)
 - [Release Notes 2.0.0](release/RELEASE_NOTES-2.0.0.md)
 - [HTTP-API](docs/API.md)
 - [Schnittstellen](docs/INTERFACES.md)
@@ -147,7 +151,7 @@ Die Weboberfläche verwendet HTTP und gehört ausschließlich in ein vertrauensw
 
 ## Projektstatus
 
-**2.0.0 ist der dokumentierte aktuelle stabile Stand.** Compact-History und der zweistufig abgesicherte WLAN-Migrationsweg wurden auf einem lokalen ESP32-C3 geprüft. Messwerte des geprüften Builds, Testumfang, Binärgröße, RAM-/Heap-Werte und OTA-Reserve stehen versionsgebunden in den [Release Notes 2.0.0](release/RELEASE_NOTES-2.0.0.md).
+**2.1.1 ist der dokumentierte aktuelle Stand.** Die Änderungen gegenüber 2.0.0 sind in den [Release Notes 2.1.1](release/RELEASE_NOTES-2.1.1.md) vollständig zusammengefasst. Die 2.0.0-Dokumentation bleibt für Compact-History-Migration und ältere Upgradepfade erhalten.
 
 ## Lizenz
 
@@ -184,15 +188,17 @@ Compatibility refers only to implemented local API/network behavior. IR Tracker 
 
 The browser UI runs entirely on the tracker and provides live values, energy summaries, history including visible data gaps, and an overview of the local interfaces. See the [Web UI screenshots](#weboberfläche) above.
 
-### Version 2.0.0
+### Version 2.1.1
 
-2.0.0 introduces Compact History and a safer migration/update path. History migration starts only when both validated OTA application slots contain the matching 2.0.0 firmware. Install the same complete 2.0.0 IRUP twice as described in the [Release Notes](release/RELEASE_NOTES-2.0.0.md) and [Installation guide](docs/INSTALLATION.md), and keep a backup before upgrading.
+2.1.1 builds on the 2.0.0 Compact History foundation and focuses on commissioning, diagnostics, networking and update reliability. It adds conservative automatic meter commissioning, Safe Recovery after repeated early crash-like boots, meter/history servicing during HTTP OTA uploads, captive-portal setup support, a shared LAN/Wi-Fi administrator account with the currently effective password visible in protected Settings, 30 MHz W5500 SPI, guided diagnostics, a privacy-reduced support report, and an isolated NVS factory test.
+
+See the complete [2.1.1 Release Notes](release/RELEASE_NOTES-2.1.1.md) for all changes and compatibility details.
 
 ### Interfaces and documentation
 
 New integrations should prefer `/api/v1/meter`; `/api/v1/status` is the larger runtime/diagnostic object. The tracker acts as a read-only electricity-meter gateway: battery/inverter control remains outside the normal integration contract.
 
-See [HTTP API](docs/API.md), [Interfaces](docs/INTERFACES.md), [Modbus](docs/MODBUS.md), [Architecture](docs/ARCHITECTURE.md), [Asset partition](docs/ASSET_PARTITION.md), [Compatibility](docs/compatibility/README.md), [Security](.github/SECURITY.md), and the [2.0.0 Release Notes](release/RELEASE_NOTES-2.0.0.md).
+See [HTTP API](docs/API.md), [Interfaces](docs/INTERFACES.md), [Modbus](docs/MODBUS.md), [Architecture](docs/ARCHITECTURE.md), [Asset partition](docs/ASSET_PARTITION.md), [Compatibility](docs/compatibility/README.md), [Security](.github/SECURITY.md), the [2.1.1 Release Notes](release/RELEASE_NOTES-2.1.1.md), and the historical [2.0.0 Release Notes](release/RELEASE_NOTES-2.0.0.md).
 
 ## License
 
