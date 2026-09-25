@@ -2,6 +2,94 @@
 
 ## Unveröffentlicht / Unreleased
 
+## 2.1.1 - 2026-09-25
+
+### Deutsch
+
+- Automatische Zähler-Inbetriebnahme ergänzt. Sie verwendet die bestehenden
+  SML-/IEC-62056-21/D0-Parser und prüft konservativ mehrere UART-Kandidaten:
+  9600 8N1, 9600 7E1, 300 7E1, 2400 7E1 und 115200 8N1.
+- Ein UART-Kandidat wird erst nach mehreren gültigen Telegrammen übernommen.
+  Bei keinem eindeutigen Ergebnis bleibt die vorhandene Konfiguration bestehen.
+- GPIO-Suche, Factory-Test und IR-Sendeabläufe greifen während der automatischen
+  Zählererkennung nicht gleichzeitig auf die Zähler-UART zu.
+- Safe-Recovery für wiederholte frühe Panic-, Watchdog- und Brownout-Starts
+  ergänzt. Nach drei frühen Fehlerstarts bleiben Messung und Webzugang aktiv,
+  automatische Updates und History-Migration werden für diese Laufzeit gesperrt.
+- Nach 60 Sekunden stabilem Betrieb wird der frühe Fehlerzähler zurückgesetzt;
+  absichtliche Software-/OTA-Neustarts zählen nicht als Crashloop.
+- OTA-Messmodus erweitert: Zähler-UART, IR-Jobs und laufende Mess-/History-
+  Servicepfade werden nun auch während des blockierenden HTTP-Uploadcallbacks
+  regelmäßig bedient.
+- OTA-Modus wird bei Fehlern und abgebrochenen Uploads kontrolliert zurückgesetzt.
+  Vor dem finalen Commit wird der offene History-Puffer gespeichert.
+- Setup-Hotspot unterstützt die üblichen Captive-Portal-Endpunkte von Android,
+  iOS/macOS und Windows.
+- LAN und WLAN verwenden dasselbe Admin-Konto. Das aktuell wirksame
+  Admin-Passwort wird in den geschützten Einstellungen 1:1 angezeigt.
+- Neue Admin-Passwörter müssen 6 bis 64 Zeichen lang sein. Für den WPA2-
+  Setup-Hotspot gelten weiterhin mindestens 8 Zeichen; bei einem 6- oder
+  7-stelligen Admin-Passwort bleibt dort das ursprüngliche gerätespezifische
+  `IRTracker-XXXX`-Passwort aktiv.
+- WLAN-Passwörter werden nach WPA/WPA2-Regeln validiert: leer für offenes WLAN,
+  8–63 Zeichen oder exakt 64 hexadezimale Zeichen.
+- W5500-SPI-Takt auf 30 MHz festgelegt. Wird kein W5500 erkannt, wird der SPI-
+  Bus wieder freigegeben.
+- Produktstatus `/api/v1/product-state`, geführte Diagnose
+  `/api/v1/guided-diagnosis` und datensparsamer Supportbericht
+  `/api/v1/support-report-safe` ergänzt.
+- Normaler Diagnosebericht zeigt zusätzlich Safe-Recovery und Status der
+  automatischen Zählererkennung.
+- Factory-Test um einen isolierten NVS-Schreib-/Lesetest mit anschließendem
+  Löschen des Testwertes erweitert.
+- Produktlogik in eigene Module für Product Runtime, Product Safety,
+  Product Experience, Runtime Health und Meter Auto Commissioning aufgeteilt.
+  Die bestehende Messwert-, Parser- und History-Logik wird weiterverwendet.
+- Firmwareversion auf 2.1.1 angehoben. Firmware und Webasset-Version müssen
+  zusammenpassen; ein Mischstand 2.1.1/2.0.0 ist kein vollständiger
+  2.1.1-Releasezustand.
+
+### English
+
+- Added automatic meter commissioning that reuses the existing SML and
+  IEC 62056-21/D0 parsers and conservatively tests 9600 8N1, 9600 7E1,
+  300 7E1, 2400 7E1 and 115200 8N1 candidates.
+- A UART candidate is accepted only after multiple valid telegrams. Existing
+  configuration is retained when no unambiguous result is found.
+- GPIO scanning, factory testing and IR transmit operations no longer compete
+  for the meter UART while automatic commissioning is active.
+- Added Safe Recovery for repeated early panic, watchdog and brownout boots.
+  After three early crash-like starts, measurement and web access remain
+  available while automatic updates and history migration are blocked for the
+  current runtime.
+- The early-crash counter is cleared after 60 seconds of stable runtime;
+  intentional software/OTA restarts are not counted as crash loops.
+- Extended OTA measurement servicing so meter UART, IR jobs and measurement/
+  history service paths are also called during the blocking HTTP upload callback.
+- OTA measurement mode is cleared on failures and aborted uploads. The open
+  history buffer is flushed before the final update commit.
+- Added common Android, iOS/macOS and Windows captive-portal endpoints to the
+  setup access point.
+- LAN and Wi-Fi now use the same administrator account. The currently effective
+  administrator password is displayed exactly in protected Settings.
+- Newly configured administrator passwords must contain 6–64 characters.
+  WPA2 still requires at least 8 characters for the setup AP; with a 6- or
+  7-character administrator password the original per-device
+  `IRTracker-XXXX` password remains in use for the AP.
+- Wi-Fi passphrases are validated according to WPA/WPA2 rules: empty for an
+  open network, 8–63 characters, or exactly 64 hexadecimal characters.
+- W5500 SPI is fixed at 30 MHz. The SPI bus is released when no W5500 is found.
+- Added `/api/v1/product-state`, `/api/v1/guided-diagnosis` and the
+  privacy-reduced `/api/v1/support-report-safe`.
+- The regular support report now also exposes Safe Recovery and automatic
+  commissioning status.
+- Factory testing now includes an isolated NVS write/read probe with cleanup.
+- Product behavior was split into Product Runtime, Product Safety,
+  Product Experience, Runtime Health and Meter Auto Commissioning modules while
+  reusing the existing meter, parser and history implementations.
+- Firmware version is now 2.1.1. Firmware and web-asset versions must match;
+  a mixed 2.1.1/2.0.0 state is not a complete 2.1.1 release state.
+
 ## 2.0.0 - 2026-09-15
 
 - Migrationspuffer sind begrenzt, nur temporär angelegt und auf Zuteilungsfehler
