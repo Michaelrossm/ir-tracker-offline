@@ -185,9 +185,20 @@ void handleSetup() {
   setupConfig += F(",\"developer_io\":false");
 #endif
   setupConfig += F("};");
-  const String body =
-      F("<div id='setupRoot' class='card'><p class='muted'>"
-        "Einstellungen werden geladen …</p></div>");
+  // Render the effective password directly from the firmware, independent of
+  // the external web assets. This guarantees that even an older cached/asset
+  // setup.js cannot hide the actual password. The setup page is admin-protected.
+  String body;
+  body.reserve(900);
+  body = F("<div class='card'><h2>Admin-Zugang</h2>"
+           "<label>Aktuelles Admin-Passwort (LAN/WLAN)</label>"
+           "<input id='currentAdminPassword' type='text' readonly "
+           "autocomplete='off' value='");
+  body += htmlEscape(localAdminPassword());
+  body += F("'><p class='muted'>Dieses Passwort wird 1:1 angezeigt und gilt "
+            "für die geschützte Web-Anmeldung über LAN und WLAN.</p></div>"
+            "<div id='setupRoot' class='card'><p class='muted'>"
+            "Einstellungen werden geladen …</p></div>");
   server.send(200, "text/html; charset=utf-8",
               page("Einstellungen", body, setupConfig,
                    String("/assets/setup.js?v=") + kFirmwareVersion));
@@ -208,14 +219,38 @@ int parseClockMinutes(const String &value) {
 
 void handleSetupSave() {
   if (!requireAdmin()) return;
+
+  // Validate the effective WLAN credentials. Existing passwords are not sent
+  // back to the browser; an empty password field therefore means "keep the
+  // stored password" while the SSID is unchanged.
   for (uint8_t i = 0; i < kWifiSlots; ++i) {
-    if (!safeSingleLine(server.arg("ssid" + String(i)), 32) ||
-        !validWifiPassword(server.arg("pass" + String(i)))) {
+    String requestedSsid = server.arg("ssid" + String(i));
+    const String requestedPassword = server.arg("pass" + String(i));
+    requestedSsid.trim();
+
+    if (!safeSingleLine(requestedSsid, 32) ||
+        !safeSingleLine(requestedPassword, 64)) {
       server.send(400, "application/json",
-                  "{\"error\":\"invalid_wifi_credentials\"}");
+                  "{\"error\":\"invalid_wifi_credentials\",\"slot\":" +
+                      String(i + 1) + "}");
+      return;
+    }
+
+    // Empty SSID = unused slot.
+    if (!requestedSsid.length()) continue;
+
+    String effectivePassword = requestedPassword;
+    if (!requestedPassword.length() && requestedSsid == config.ssid[i])
+      effectivePassword = config.password[i];
+
+    if (!validWifiPassword(effectivePassword)) {
+      server.send(400, "application/json",
+                  "{\"error\":\"invalid_wifi_credentials\",\"slot\":" +
+                      String(i + 1) + "}");
       return;
     }
   }
+
   String requestedHostname = server.arg("hostname");
   requestedHostname.trim();
   if (!validHostname(requestedHostname) ||
@@ -246,13 +281,23 @@ void handleSetupSave() {
                 "{\"error\":\"admin_password_confirmation_mismatch\"}");
     return;
   }
+
   for (uint8_t i = 0; i < kWifiSlots; ++i) {
     String newSsid = server.arg("ssid" + String(i));
     String newPassword = server.arg("pass" + String(i));
     newSsid.trim();
-    if (newPassword.length() || newSsid != config.ssid[i]) config.password[i] = newPassword;
+
+    if (!newSsid.length()) {
+      // Deleting a WLAN entry also removes its stored password.
+      config.password[i] = "";
+    } else if (newPassword.length() || newSsid != config.ssid[i]) {
+      // New password supplied, or SSID changed: use the submitted value.
+      config.password[i] = newPassword;
+    }
+    // Same SSID + empty password field: keep the stored password.
     config.ssid[i] = newSsid;
   }
+
   config.hostname = requestedHostname;
   String timezone = server.arg("timezone");
   timezone.trim();
@@ -261,12 +306,12 @@ void handleSetupSave() {
   config.setupApMinutes =
       constrain(server.arg("ap_minutes").toInt(), 5, 60);
   const String newAdminPassword = requestedAdminPassword;
-  if (newAdminPassword.length() && newAdminPassword.length() < 4) {
+  if (newAdminPassword.length() && newAdminPassword.length() < 6) {
     server.send(400, "application/json",
                 "{\"error\":\"admin_password_too_short\"}");
     return;
   }
-  if (newAdminPassword.length() >= 4 && newAdminPassword.length() <= 64)
+  if (newAdminPassword.length() >= 6 && newAdminPassword.length() <= 64)
     config.adminPassword = newAdminPassword;
   config.rxPin = constrain(server.arg("rx_pin").toInt(), 0, 10);
   config.txPin = constrain(server.arg("tx_pin").toInt(), -1, 10);

@@ -480,14 +480,21 @@ void appendDiagnosticPhase(String &report, uint8_t phase) {
   report += "\n";
 }
 
-String supportReportText(bool technical) {
+String supportReportText(bool technical, bool privacySafe = false) {
   const MeterDiagnosis diagnosis = meterDiagnosis();
   String report;
   report.reserve(technical ? 3200 : 1800);
   report = "IR Tracker Offline – Diagnosebericht\n";
   report += "Firmware: " + String(kFirmwareVersion) + "\n";
-  report += "Device: " + String(DeviceIdentity::kModel) + " / " +
-            String(deviceIdentity.serial) + " / " + config.hostname + "\n";
+  report += "Device: " + String(DeviceIdentity::kModel);
+  if (!privacySafe)
+    report += " / " + String(deviceIdentity.serial) + " / " + config.hostname;
+  report += "\n";
+  report += "Safe-Recovery: " + String(productSafeRecoveryActive() ? "ja" : "nein") + "\n";
+  report += "Automatische Zaehlererkennung: ";
+  report += meterCommissioning.active ? "aktiv" : meterCommissioning.found ? "erkannt" :
+            meterCommissioning.finished ? "ohne Ergebnis" : "nicht gestartet";
+  report += "\n";
   report += "Laufzeit: " + diagnosticDuration(millis() / 1000U) + "\n\n";
 
   report += "=== ZÄHLER ===\n";
@@ -523,11 +530,11 @@ String supportReportText(bool technical) {
     report += "Verbindungen: " + String(modbusMeterConnections()) + "\n";
     report += "Gültige Requests: " + String(modbusMeterValidRequests()) + "\n";
     report += "Ungültige Requests: " + String(modbusMeterInvalidRequests()) + "\n";
-    const String modbusLastClient = modbusMeterLastClient();
-    report += "Letzter Client: " +
-              (modbusLastClient.length() ? modbusLastClient
-                                         : "nicht verfügbar") +
-              "\n";
+    if (!privacySafe) {
+      const String modbusLastClient = modbusMeterLastClient();
+      report += "Letzter Client: " +
+                (modbusLastClient.length() ? modbusLastClient : "nicht verfügbar") + "\n";
+    }
   }
 
   report += "\n=== NETZWERK ===\n";

@@ -5,6 +5,9 @@
 #error "Compile this module through main.cpp"
 #endif
 
+bool meterCommissioningOwnsSerial();
+MeterProtocol meterCommissioningProtocol();
+
 bool commitMeterCandidate(MeterData &candidate, MeterProtocol protocol,
                           bool integrityPresent, bool integrityValid) {
   if (!std::isfinite(candidate.powerW) &&
@@ -141,6 +144,8 @@ static_assert(shouldFeedD0ParserFor(MeterProtocol::Auto, MeterProtocol::Sml,
               "stale Auto lock must release both parsers");
 
 bool shouldFeedD0Parser() {
+  if (meterCommissioningOwnsSerial())
+    return meterCommissioningProtocol() == MeterProtocol::Iec62056;
   // In Auto mode, binary SML bytes must no longer create false D0/BCC
   // candidates after SML has been identified. Staleness releases this soft
   // lock automatically, allowing both protocol families to be discovered.
@@ -150,6 +155,8 @@ bool shouldFeedD0Parser() {
 }
 
 bool shouldFeedSmlParser() {
+  if (meterCommissioningOwnsSerial())
+    return meterCommissioningProtocol() == MeterProtocol::Sml;
   // Passive D0 locks out SML only while the last valid D0 telegram is fresh.
   // Active-D0 retry/ACK handling remains owned by updateActiveD0().
   return shouldFeedSmlParserFor(
@@ -240,7 +247,7 @@ void finishActiveD0Attempt() {
 }
 
 void beginActiveD0Attempt() {
-  if (activeD0.active || config.txPin < 0 || irPulse.active ||
+  if (meterCommissioningOwnsSerial() || activeD0.active || config.txPin < 0 || irPulse.active ||
       gpioScan.active || apatorUnlock.active)
     return;
   meterSerial.end();
@@ -286,7 +293,7 @@ void updateActiveD0() {
 }
 
 void updateMeterRecovery() {
-  if (activeD0.active || gpioScan.active || irPulse.active ||
+  if (meterCommissioningOwnsSerial() || activeD0.active || gpioScan.active || irPulse.active ||
       apatorUnlock.active)
     return;
   const uint32_t now = millis();

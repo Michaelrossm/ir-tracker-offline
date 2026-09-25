@@ -15,5 +15,18 @@ el('safeShutdown').onclick=async()=>{if(!confirm('Tracker wirklich sicher herunt
 const waitForUpdatedTracker=async previous=>{const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));await pause(5000);for(let attempt=0;attempt<60;attempt++){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),2500);try{const response=await fetch('/api/v1/status',{cache:'no-store',signal:controller.signal});if(response.ok){const current=await response.json();if(current.uptime_s<previous.uptime_s||current.firmware!==previous.firmware){location.replace('/maintenance?updated='+Date.now());return}}}catch(_){}finally{clearTimeout(timer)}await pause(2000)}status('Update übertragen. Tracker noch nicht erreichbar. Bitte die Seite später neu laden.')};
 const uploadUpdatePart=async(url,file)=>{const form=new FormData();form.append('file',file);const response=await fetch(url,{method:'POST',body:form}),text=await response.text();if(!response.ok)throw Error(text);return text};
 el('combinedUpdate').onsubmit=async event=>{event.preventDefault();const form=el('combinedUpdate'),button=form.querySelector('button'),bundle=el('combinedBundle').files[0];if(button.disabled)return;if(!bundle)return status('Bitte das signierte Gesamtupdate auswählen');if(!confirm('Firmware und Weboberfläche gemeinsam installieren? Der Tracker startet danach neu.'))return;button.disabled=true;try{const response=await fetch('/api/v1/status',{cache:'no-store'});if(!response.ok)throw Error('Tracker-Status nicht erreichbar');const previous=await response.json();status('Signiertes Gesamtupdate wird geprüft und installiert …');await uploadUpdatePart('/api/v1/update/bundle',bundle);status('Update erfolgreich. Warte auf Neustart – die Seite wird automatisch aktualisiert …');await waitForUpdatedTracker(previous)}catch(error){status('Vollständiges Update fehlgeschlagen: '+error.message)}finally{button.disabled=false}};
+const productStatus=document.createElement('p');
+productStatus.className='muted';
+el('maintenanceStatus').before(productStatus);
+async function loadProductState(){
+  try{
+    const response=await fetch('/api/v1/product-state',{cache:'no-store'});
+    if(!response.ok)return;
+    const p=await response.json();
+    productStatus.textContent=p.message||'Bereit';
+  }catch(_){}
+}
+loadProductState();
+setInterval(loadProductState,5000);
 loadUpdate();loadEvents();
 })();

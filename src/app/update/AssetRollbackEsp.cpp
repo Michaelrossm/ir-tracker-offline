@@ -102,7 +102,9 @@ class AssetRollbackIo : public AssetRollback::Io {
   void service() override {
     esp_task_wdt_reset();
     if (uartReady) serviceMeterInput();
-    delay(0);
+    // ESP32-C3 is single-core. Yield a full RTOS tick so the TCP/IP task can
+    // drain the socket during asset hashing/backup/rollback work.
+    delay(1);
   }
   bool uartReady = false;
  private:

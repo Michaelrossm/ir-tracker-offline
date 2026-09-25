@@ -85,7 +85,12 @@ bool safeSingleLine(const String &value, size_t maximumLength) {
 
 bool validWifiPassword(const String &value) {
   if (!safeSingleLine(value, 64)) return false;
-  if (value.length() <= 63) return true;
+  // Empty password means an open WLAN.
+  if (!value.length()) return true;
+  // WPA/WPA2 passphrases use 8..63 characters.
+  if (value.length() >= 8 && value.length() <= 63) return true;
+  // Exactly 64 characters are permitted only as a hexadecimal PSK.
+  if (value.length() != 64) return false;
   // DE: WPA2 erlaubt alternativ zu einer Passphrase exakt 64 Hex-Zeichen.
   // EN: WPA2 permits exactly 64 hexadecimal characters instead of a passphrase.
   for (const char character : value)

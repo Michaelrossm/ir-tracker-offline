@@ -18,7 +18,10 @@ extern "C" {
 namespace {
 
 constexpr spi_host_device_t kSpiHost = SPI2_HOST;
-constexpr int kSpiClockHz = 20 * 1000 * 1000;
+// 30 MHz is the deliberate long-term compromise for this tracker:
+ // clearly more headroom for OTA/backups than 20 MHz, while retaining more
+ // signal-integrity margin than 40 MHz.
+constexpr int kSpiClockHz = 30 * 1000 * 1000;
 constexpr int kEthernetRoutePriority = 150;  // Wi-Fi STA default is 100.
 
 spi_device_handle_t spiHandle = nullptr;
@@ -94,7 +97,7 @@ bool EthernetManager::begin(const char *hostname) {
   busConfig.sclk_io_num = HardwareProfile::kW5500SckPin;
   busConfig.quadwp_io_num = -1;
   busConfig.quadhd_io_num = -1;
-  busConfig.max_transfer_sz = 1600;
+  busConfig.max_transfer_sz = 4096;
   esp_err_t result = spi_bus_initialize(kSpiHost, &busConfig, SPI_DMA_CH_AUTO);
   if (result != ESP_OK && result != ESP_ERR_INVALID_STATE) {
     lastError_ = "spi_bus_init_failed:" + String(esp_err_to_name(result));
@@ -107,7 +110,7 @@ bool EthernetManager::begin(const char *hostname) {
   deviceConfig.mode = 0;
   deviceConfig.clock_speed_hz = kSpiClockHz;
   deviceConfig.spics_io_num = HardwareProfile::kW5500CsPin;
-  deviceConfig.queue_size = 20;
+  deviceConfig.queue_size = 32;
   result = spi_bus_add_device(kSpiHost, &deviceConfig, &spiHandle);
   if (result != ESP_OK) {
     lastError_ = "spi_device_failed:" + String(esp_err_to_name(result));

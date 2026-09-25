@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class NativeRuntimeTests(unittest.TestCase):
+    def test_product_runtime(self):
+        self._run_source("product_runtime.cpp")
+
     def test_history_minute_shrink(self):
         self._run_source("history_minute_shrink.cpp")
 
@@ -62,6 +65,11 @@ class NativeRuntimeTests(unittest.TestCase):
             selected = security[security.index("String jsonEscape("):security.index("String htmlEscape(")]
             selected += mqtt[mqtt.index("void publishMqttValues()"):mqtt.index("void manageMqtt()")]
             (Path(temp) / "runtime_selected.inc").write_text(selected, encoding="utf-8")
+            manager = (ROOT / "src/app/meter/MeterManager.cpp").read_text(encoding="utf-8")
+            uart = manager[manager.index("bool shouldFeedD0Parser()"):manager.index("void acceptParserEvent(")]
+            uart += manager[manager.index("void beginActiveD0Attempt()"):manager.index("void updateActiveD0()")]
+            uart += manager[manager.index("void updateMeterRecovery()"):]
+            (Path(temp) / "product_uart.inc").write_text(uart, encoding="utf-8")
             if shutil.which("g++"):
                 command = ["g++", "-std=c++17", "-O2", "-I", str(includes), "-I", temp,
                            str(source), "-o", str(executable)]

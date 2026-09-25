@@ -45,7 +45,7 @@ void beginGpioScanCandidate() {
 }
 
 void startGpioScan() {
-  if (gpioScan.active) return;
+  if (meterCommissioningOwnsSerial() || gpioScan.active) return;
   if (activeD0.active) finishActiveD0Attempt();
   irPulse.active = false;
   apatorUnlock.active = false;

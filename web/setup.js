@@ -4,6 +4,9 @@ const response=await fetch('/assets/setup.html?v='+window.IR_TRACKER_CONFIG.firm
 if(!response.ok){root.textContent='Einstellungen konnten nicht geladen werden.';return}
 root.innerHTML=await response.text();
 const form=root.querySelector('form'),field=name=>form.elements[name],set=(name,value)=>{field(name).value=value??''},check=(name,value)=>{field(name).checked=!!value};
+// Newly entered admin passwords: 6-64 characters; existing shorter passwords remain valid.
+for(const name of ['admin_pass','admin_pass_confirm']) field(name).minLength=6;
+for(const p of root.querySelectorAll('p')) if(p.textContent.includes('Erlaubt sind 4 bis 64 Zeichen')) p.textContent=p.textContent.replace('Erlaubt sind 4 bis 64 Zeichen','Neue Admin-Passwörter: 6 bis 64 Zeichen');
 config.ssids.forEach((ssid,index)=>{const row=document.createElement('div');row.className='inline';row.innerHTML=`<div><label>WLAN ${index+1}</label><input name="ssid${index}" maxlength="32" placeholder="Netzwerkname"></div><div><label>Passwort</label><input type="password" name="pass${index}" maxlength="64" autocomplete="off" data-lpignore="true" placeholder="${ssid?'gespeichert':'offenes WLAN'}"></div>`;row.querySelector(`[name=ssid${index}]`).value=ssid;document.getElementById('wifiSlots').appendChild(row)});
 const addPins=(name,selected,off)=>{const select=field(name);if(off)select.add(new Option('Aus','-1'));config.gpios.forEach(pin=>select.add(new Option(pin,pin)));select.value=String(selected)};
 addPins('rx_pin',config.rx_pin,false);addPins('tx_pin',config.tx_pin,true);addPins('led_pin',config.led_pin,true);

@@ -47,6 +47,43 @@ void setupRoutes() {
     servePartitionAsset("/assets/setup.js",
                         "application/javascript; charset=utf-8");
   });
+  // Captive-portal discovery must only affect clients of the tracker setup AP.
+  // In station/LAN mode, return 404 and do not hijack connectivity tests.
+  auto isSetupApClient = []() -> bool {
+    if (!accessPointMode) return false;
+    const IPAddress apIp = WiFi.softAPIP();
+    const IPAddress remote = server.client().remoteIP();
+    return remote[0] == apIp[0] && remote[1] == apIp[1] &&
+           remote[2] == apIp[2] && remote[3] != apIp[3];
+  };
+  auto captiveLanding = [isSetupApClient]() {
+    if (!isSetupApClient()) {
+      server.send(404, "text/plain", "not_found");
+      return;
+    }
+    server.sendHeader("Cache-Control", "no-store");
+    // Do not challenge Basic Auth in the captive mini-browser: many OS portal
+    // views suppress its password dialog. Offer a normal-browser URL.
+    server.send(200, "text/html; charset=utf-8",
+      "<!doctype html><html lang='de'><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+      "<title>IR-Tracker Einrichtung</title></head><body>"
+      "<h2>IR-Tracker Einrichtung</h2><p>Mit dem Tracker verbunden.</p>"
+      "<p>Bitte <a href='http://192.168.4.1/setup'>Einstellungen öffnen</a>. "
+      "Wenn kein Anmeldedialog erscheint, diese Adresse in Chrome/Safari öffnen.</p>"
+      "<p>Benutzername: admin. Das anfängliche Gerätepasswort lautet "
+      "IRTracker-XXXX (XXXX sind die letzten vier Zeichen der Tracker-Kennung). "
+      "Nach einer Passwortänderung gilt das eingestellte Admin-Passwort.</p>"
+      "</body></html>");
+  };
+  server.on("/generate_204", HTTP_GET, captiveLanding);
+  server.on("/gen_204", HTTP_GET, captiveLanding);
+  server.on("/hotspot-detect.html", HTTP_GET, captiveLanding);
+  server.on("/library/test/success.html", HTTP_GET, captiveLanding);
+  server.on("/connecttest.txt", HTTP_GET, captiveLanding);
+  server.on("/ncsi.txt", HTTP_GET, captiveLanding);
+  server.on("/redirect", HTTP_GET, captiveLanding);
+  server.on("/fwlink", HTTP_GET, captiveLanding);
   server.on("/", HTTP_GET, handleRoot);
   server.on("/interfaces", HTTP_GET, handleInterfacesPage);
   server.on("/interfaces/save", HTTP_POST, handleInterfacesSave);
@@ -137,7 +174,7 @@ void setupRoutes() {
   });
   server.on("/api/v1/gpio-scan/start", HTTP_POST, [] {
     if (!requireAdmin()) return;
-    if (gpioScan.active) {
+    if (meterCommissioningOwnsSerial() || gpioScan.active) {
       server.send(409, "application/json", gpioScanJson());
       return;
     }
@@ -269,8 +306,8 @@ void setupRoutes() {
   server.on("/api/v1/asset-partition/backup", HTTP_GET,
             handleAssetPartitionBackup);
   server.on("/system/shutdown", HTTP_POST, handleSafeShutdown);
-  server.onNotFound([] {
-    if (accessPointMode) {
+  server.onNotFound([isSetupApClient] {
+    if (isSetupApClient()) {
       server.sendHeader("Location", "http://" + WiFi.softAPIP().toString() + "/setup", true);
       server.send(302, "text/plain", "");
     } else {

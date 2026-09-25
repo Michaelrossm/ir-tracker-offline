@@ -17,13 +17,14 @@ void finishFactoryLoopback(const bool passed) {
 }
 
 bool startFactoryTest() {
-  if (factoryTest.running || gpioScan.active || irPulse.active ||
+  if (meterCommissioningOwnsSerial() || factoryTest.running || gpioScan.active || irPulse.active ||
       apatorUnlock.active)
     return false;
   if (activeD0.active) finishActiveD0Attempt();
   requestCpuBoost("factory_test");
   factoryTest = {};
   factoryTest.running = true;
+  runFactoryNvsProbe();
   factoryTest.startedMs = millis();
   meterSerial.end();
   resetSmlCapture();
@@ -60,7 +61,7 @@ void updateFactoryTest() {
 }
 
 bool factoryAutomatedChecksPass() {
-  return String(ESP.getChipModel()) == "ESP32-C3" &&
+  return factoryNvsProbePassed() && String(ESP.getChipModel()) == "ESP32-C3" &&
          ESP.getFlashChipSize() >= 4UL * 1024UL * 1024UL &&
          ESP.getFreeHeap() >= kHeapWarningBytes && history.ready() &&
          wifiConnected() && ethernet.hardwareDetected() &&
@@ -92,6 +93,9 @@ String factoryTestJson() {
             "\",\"detail\":\"" + jsonEscape(detail) + "\"}";
   };
   bool first = true;
+  test("nvs", !factoryNvsProbe.tested ? "pending" : factoryNvsProbePassed() ? "pass" : "fail",
+       factoryNvsProbePassed() ? "Isolierter NVS Schreib-/Lesetest bestanden"
+                              : "NVS Scratch-Test ausstehend oder fehlgeschlagen", first);
   test("chip", String(ESP.getChipModel()) == "ESP32-C3" ? "pass" : "fail",
        String(ESP.getChipModel()) + ", Revision " + ESP.getChipRevision(), first);
   test("flash", ESP.getFlashChipSize() >= 4UL * 1024UL * 1024UL ? "pass" : "fail",

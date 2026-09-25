@@ -65,7 +65,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.0.0";
+constexpr char kFirmwareVersion[] = "2.1.1";
 constexpr char kGithubReleasesApi[] =
     "https://api.github.com/repos/Michaelrossm/ir-tracker-offline/releases?per_page=5";
 constexpr char kGithubAssetPrefix[] =
@@ -103,6 +103,7 @@ DNSServer dns;
 Preferences prefs;
 HardwareSerial meterSerial(1);
 void serviceMeterInput();
+void serviceOtaMeasurementTick();
 ServicedNetworkClient<WiFiClient, serviceMeterInput> mqttNetwork;
 PubSubClient mqtt(mqttNetwork);
 HistoryStore history;
@@ -178,6 +179,9 @@ uint8_t wifiTried = 0;
 uint32_t wifiCandidateStartedMs = 0;
 bool ntpConfigured = false;
 String updateCommitError;
+// True only while a manual/GitHub combined IRUP transfer is in progress.
+// Measurement + history stay active; nonessential interfaces pause.
+bool otaMeasurementMode = false;
 bool autoPinAttempted = false;
 uint32_t lastHistorySampleMs = 0;
 uint32_t lastLiveSampleMs = 0;
@@ -351,7 +355,10 @@ String modbusMeterLastClient();
 void manageModbusMeterServer();
 
 #include "app/meter/MeterManager.cpp"
+#include "app/core/ProductSafety.cpp"
+#include "app/meter/MeterAutoCommissioning.cpp"
 
+#include "app/diagnostics/FactoryNvsProbe.cpp"
 #include "app/diagnostics/FactoryTest.cpp"
 
 #include "app/diagnostics/GpioScanner.cpp"
@@ -360,6 +367,8 @@ uint32_t largestFreeHeapBlockBytes();
 uint32_t loopStackHighWaterMarkBytes();
 
 #include "app/diagnostics/DiagnosticsApi.cpp"
+#include "app/diagnostics/ProductExperience.cpp"
+#include "app/core/ProductRuntime.cpp"
 
 #include "app/web/StatusApi.cpp"
 
@@ -391,46 +400,44 @@ uint32_t loopStackHighWaterMarkBytes();
 
 #include "app/web/WebApi.cpp"
 
-void updateLed() {
-  static uint32_t lastToggle = 0;
-  static bool state = false;
-  if (gpioScan.active) return;
-#if IR_TRACKER_ENABLE_FACTORY_TEST
-  // Keep the LED steadily lit until the operator has completed the visual FCT.
-  if ((factoryTest.running || factoryTest.finished) &&
-      !factoryTest.ledConfirmed)
-    return;
-#endif
-  if (config.ledPin < 0) return;
-  if (ecoLedSuppressed()) {
-    if (state) {
-      state = false;
-      digitalWrite(config.ledPin, config.ledInverted);
-    }
-    return;
-  }
-  const uint32_t intervalMs = trackerFaultActive() ? 150U : 1000U;
-  if (millis() - lastToggle < intervalMs) return;
-  lastToggle = millis();
-  state = !state;
-  digitalWrite(config.ledPin, state ^ config.ledInverted);
-}
+#include "app/core/RuntimeHealth.cpp"
 
-void monitorHeap() {
-  static uint32_t lastCheckMs = 0;
-  if (millis() - lastCheckMs < 30000) return;
-  lastCheckMs = millis();
-  const uint32_t freeHeap = ESP.getFreeHeap();
-  const bool low = freeHeap < kHeapWarningBytes;
-  if (low && !heapWarningActive) {
-    eventLog.add("WARN", "HEAP_LOW",
-                 "Freier RAM unter Sicherheitsgrenze: " +
-                     String(freeHeap) + " Bytes");
-  } else if (!low && heapWarningActive) {
-    eventLog.add("INFO", "HEAP_RECOVERED",
-                 "Freier RAM wieder im sicheren Bereich");
+// Called both from loop() and from the synchronous HTTP/flash update callback.
+// Never calls the web server itself: handleClient() is not re-entrant.
+void serviceOtaMeasurementTick() {
+  // History storage can call its meter service hook during flash I/O; prevent
+  // recursive history updates if that hook changes in the future.
+  static bool inside = false;
+  if (inside) { serviceMeterInput(); return; }
+  inside = true;
+  esp_task_wdt_reset();
+  serviceMeterInput();
+  updateIrPulseJob();
+  updateApatorUnlock();
+  updateActiveD0();
+  updateMeterRecovery();
+  serviceMeterInput();
+  const bool meterFresh = valueFresh(meter.powerUpdatedMs);
+  if (millis() - lastHistorySampleMs >= 1000) {
+    lastHistorySampleMs = millis();
+    if (meterFresh && !gpioScan.active)
+      history.update(time(nullptr), meter.powerW, meter.importKwh,
+                     meter.exportKwh);
   }
-  heapWarningActive = low;
+  if (millis() - lastLiveSampleMs >= 5000 && time(nullptr) >= 1700000000 &&
+      meterFresh && !gpioScan.active && std::isfinite(meter.powerW)) {
+    lastLiveSampleMs = millis();
+    liveSamples[liveWriteIndex].timestamp =
+        static_cast<uint32_t>(time(nullptr));
+    liveSamples[liveWriteIndex].powerW = static_cast<float>(meter.powerW);
+    liveSamples[liveWriteIndex].importKwh =
+        static_cast<float>(meter.importKwh);
+    liveSamples[liveWriteIndex].exportKwh =
+        static_cast<float>(meter.exportKwh);
+    liveWriteIndex = (liveWriteIndex + 1) % kLiveSamples;
+    liveCount = std::min(liveCount + 1, kLiveSamples);
+  }
+  inside = false;
 }
 
 }  // DE: Namensraum | EN: namespace
@@ -440,6 +447,7 @@ void setup() {
   delay(100);
   createCsrfToken();
   bootResetReason = resetReasonText(esp_reset_reason());
+  beginProductRuntimeEarly(esp_reset_reason());
   const esp_err_t watchdogInit = esp_task_wdt_init(15, true);
   if (watchdogInit == ESP_OK || watchdogInit == ESP_ERR_INVALID_STATE)
     esp_task_wdt_add(nullptr);
@@ -503,6 +511,7 @@ void setup() {
   mqtt.setBufferSize(1024);
   mqtt.setSocketTimeout(1);
   setupRoutes();
+  finishProductRuntimeSetup();
   if (assetRecoveryReady && debugStorageReady) {
     // Confirm the pair only after local initialization, never on MQTT/Internet availability.
     if (esp_ota_mark_app_valid_cancel_rollback() == ESP_OK &&
@@ -520,7 +529,8 @@ void setup() {
   // A rollback must never boot a firmware unable to read the new history.
   // First install the bridge into one slot; a second identical IRUP puts the
   // same verified reader/writer into the other slot before conversion starts.
-  if (history.ready() && !history.compactActive() && !assetRollbackBlocked &&
+  if (productRuntimeAllowsHistoryMigration() &&
+      history.ready() && !history.compactActive() && !assetRollbackBlocked &&
       assetRecoveryReady && debugStorageReady &&
       assetRollback.sameVerifiedAppPair(assetRollbackIo.running()))
     history.migrateCompact();
@@ -531,23 +541,33 @@ void setup() {
 
 void loop() {
   esp_task_wdt_reset();
-  // Meter input has priority over potentially blocking MQTT/Web/network work.
   serviceMeterInput();
   ethernet.loop();
-  manageWifi();
-  manageModbusMeterServer();
-  manageAdaptiveWifiPower();
-  manageMqtt();
-  serviceMeterInput();
-  manageGithubFirmwareUpdate();
+  if (!otaMeasurementMode) {
+    manageWifi();
+    manageModbusMeterServer();
+    manageAdaptiveWifiPower();
+    manageMqtt();
+    serviceMeterInput();
+    manageGithubFirmwareUpdate();
+  }
   if (accessPointMode) dns.processNextRequest();
   server.handleClient();
+
+  // The same meter/IR/history code runs during the upload callback itself;
+  // do not leave a gap while WebServer::handleClient() blocks the loop.
+  serviceOtaMeasurementTick();
+  if (otaMeasurementMode) {
+    // Eco mode must not down-clock the CPU during long updates.
+    manageCpuPowerMode();
+    delay(1);
+    return;
+  }
+
 #if IR_TRACKER_ENABLE_DEVELOPER_IO
   if (config.snifferEnabled) snifferSocket.loop();
   if (config.bridgeEnabled) bridgeSocket.loop();
 #endif
-  updateIrPulseJob();
-  updateApatorUnlock();
   manageAutoPin();
 #if IR_TRACKER_ENABLE_FACTORY_TEST
   updateFactoryTest();
@@ -558,31 +578,6 @@ void loop() {
   }
 #endif
   updateGpioScan();
-  updateMeterRecovery();
-  updateActiveD0();
-  serviceMeterInput();
-  updateActiveD0();
-  updateGpioScan();
-  const bool meterFresh = valueFresh(meter.powerUpdatedMs);
-  if (millis() - lastHistorySampleMs >= 1000) {
-    lastHistorySampleMs = millis();
-    if (meterFresh && !gpioScan.active)
-      history.update(time(nullptr), meter.powerW, meter.importKwh,
-                     meter.exportKwh);
-  }
-  if (millis() - lastLiveSampleMs >= 5000 && time(nullptr) >= 1700000000 &&
-      meterFresh && !gpioScan.active && std::isfinite(meter.powerW)) {
-    lastLiveSampleMs = millis();
-    liveSamples[liveWriteIndex].timestamp =
-        static_cast<uint32_t>(time(nullptr));
-    liveSamples[liveWriteIndex].powerW = static_cast<float>(meter.powerW);
-    liveSamples[liveWriteIndex].importKwh =
-        static_cast<float>(meter.importKwh);
-    liveSamples[liveWriteIndex].exportKwh =
-        static_cast<float>(meter.exportKwh);
-    liveWriteIndex = (liveWriteIndex + 1) % kLiveSamples;
-    liveCount = std::min(liveCount + 1, kLiveSamples);
-  }
   updateLed();
   monitorHeap();
   manageCpuPowerMode();

@@ -252,7 +252,7 @@ class ProjectSecurityTests(unittest.TestCase):
             encoding="utf-8"
         )
         report = diagnostics[
-            diagnostics.index("String supportReportText(bool technical)") :
+            diagnostics.index("String supportReportText(bool technical, bool privacySafe = false)") :
         ]
         for forbidden in (
             "config.ssid",
@@ -267,6 +267,7 @@ class ProjectSecurityTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, report)
         self.assertIn('report.reserve(technical ? 3200 : 1800);', report)
+        self.assertIn('if (!privacySafe)', report)
         normal_report = report[: report.index("if (technical)")]
         for technical_only in (
             "SML-Parser-Modus", "Vergleichsabweichungen", "Kontrollvergleiche",

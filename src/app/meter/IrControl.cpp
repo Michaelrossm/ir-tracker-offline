@@ -31,7 +31,7 @@ bool beginIrPulseJob(const uint8_t digits[4], uint16_t pulseMs,
                      uint16_t digitGapMs, bool inverted,
                      int8_t outputPin = -1) {
   const int8_t selectedPin = outputPin >= 0 ? outputPin : config.txPin;
-  if (selectedPin < 0 || selectedPin > 10 || irPulse.active ||
+  if (meterCommissioningOwnsSerial() || selectedPin < 0 || selectedPin > 10 || irPulse.active ||
       gpioScan.active || selectedPin == config.rxPin)
     return false;
   if (activeD0.active) finishActiveD0Attempt();
@@ -52,7 +52,7 @@ bool beginIrPulseJob(const uint8_t digits[4], uint16_t pulseMs,
 }
 
 bool beginIrPulseCount(uint8_t count, uint16_t pulseMs, bool inverted) {
-  if (!count || config.txPin < 0 || irPulse.active) return false;
+  if (meterCommissioningOwnsSerial() || !count || config.txPin < 0 || irPulse.active) return false;
   meterSerial.end();
   pinMode(config.txPin, OUTPUT);
   irPulse = {};
@@ -72,7 +72,7 @@ bool beginIrPulseCount(uint8_t count, uint16_t pulseMs, bool inverted) {
 
 void handleApatorUnlock() {
   if (!requireAdmin()) return;
-  if (apatorUnlock.active || irPulse.active) {
+  if (meterCommissioningOwnsSerial() || apatorUnlock.active || irPulse.active) {
     server.send(409, "application/json",
                 "{\"error\":\"ir_sequence_already_running\"}");
     return;
@@ -294,7 +294,7 @@ DigitalSample sampleDigitalPin(int8_t pin, uint32_t durationUs = 50000) {
 void handleGpioTxScan() {
   if (!requireAdmin()) return;
   const int rx = server.arg("rx").toInt();
-  if (!server.hasArg("rx") || !trackerGpioAvailable(rx) || gpioScan.active ||
+  if (meterCommissioningOwnsSerial() || !server.hasArg("rx") || !trackerGpioAvailable(rx) || gpioScan.active ||
       irPulse.active) {
     server.send(400, "application/json", "{\"error\":\"invalid_rx_or_busy\"}");
     return;

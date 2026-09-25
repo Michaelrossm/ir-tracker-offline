@@ -18,7 +18,13 @@ void startAccessPoint() {
   char suffix[5];
   snprintf(suffix, sizeof(suffix), "%04X", static_cast<unsigned>(chip & 0xffff));
   String apName = "IR-Tracker-Setup-" + String(suffix);
+  // WPA2 requires >= 8 characters. A short (6-7 char) LAN/admin password
+  // must not break the original setup hotspot. The original per-device
+  // IRTracker-XXXX initial password remains valid for the hotspot in that case.
   String apPassword = localAdminPassword();
+  if (apPassword.length() < 8) {
+    apPassword = "IRTracker-" + String(suffix);
+  }
   if (!WiFi.softAP(apName.c_str(), apPassword.c_str())) {
     ++wifiModeErrors;
     return;
@@ -26,6 +32,11 @@ void startAccessPoint() {
   accessPointMode = true;
   accessPointStartedMs = millis();
   Serial.printf("Setup AP started: %s\n", apName.c_str());
+  // Local USB only; not exposed on unauthenticated HTTP/LAN.
+  if (config.adminPassword.isEmpty())
+    Serial.printf("Initial admin for LAN/WLAN: admin / %s\n", apPassword.c_str());
+  else if (config.adminPassword.length() < 8)
+    Serial.printf("Setup hotspot uses original WPA2 password: %s\n", apPassword.c_str());
   dns.start(53, "*", WiFi.softAPIP());
 }
 

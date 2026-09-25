@@ -9,6 +9,29 @@ bool otaRequestAuthorized() {
   return requireAdmin();
 }
 
+void serviceOtaUpload() {
+  // A large HTTP upload is processed inside WebServer::handleClient(), so the
+  // normal loop() watchdog reset is not reached for several seconds. Keep the
+  // task watchdog and meter input serviced while firmware/assets are streamed.
+  esp_task_wdt_reset();
+  // The HTTP upload callback blocks loop() for the entire body. Keep IR pulses,
+  // active D0 and the same 1-second history/5-second live sampling active here.
+  if (otaMeasurementMode) {
+    serviceOtaMeasurementTick();
+    // The eco CPU boost has a timeout: refresh it through long transfers.
+    static uint32_t lastBoostMs = 0;
+    if (millis() - lastBoostMs >= 3000U) {
+      lastBoostMs = millis();
+      requestCpuBoost("combined_update");
+    }
+  } else {
+    serviceMeterInput();
+  }
+  // ESP32-C3 is single-core: a real 1 ms delay yields time to lwIP/W5500
+  // while the WebServer upload callback is busy with flash work.
+  delay(1);
+}
+
 void abortCombinedUpdate() {
   Update.abort();
   if (!assetRollback.idle()) {
@@ -43,14 +66,17 @@ bool beginAssetRawUpload(const String &expectedSha256) {
     return false;
   }
   requestCpuBoost("asset_update");
+  serviceOtaUpload();
   assetRawUpload.ok = debugStorage.beginRawAssetUpdate() &&
                       mbedtls_sha256_starts_ret(&assetRawUpload.sha, 0) == 0;
+  serviceOtaUpload();
   assetRawUpload.shaStarted = assetRawUpload.ok;
   if (!assetRawUpload.ok) assetRawUpload.error = "asset_erase_failed";
   return assetRawUpload.ok;
 }
 
 bool writeAssetRawUpload(const uint8_t *data, size_t length) {
+  serviceOtaUpload();
   if (!assetRawUpload.ok || assetRawUpload.written > 0x10000U ||
       length > 0x10000U - assetRawUpload.written ||
       mbedtls_sha256_update_ret(&assetRawUpload.sha, data, length) != 0 ||
@@ -60,6 +86,7 @@ bool writeAssetRawUpload(const uint8_t *data, size_t length) {
     return false;
   }
   assetRawUpload.written += length;
+  serviceOtaUpload();
   return true;
 }
 
@@ -235,9 +262,11 @@ bool finishCombinedBundleFirmware(String &error) {
     assetsHash[i] = static_cast<uint8_t>(strtoul(pair, nullptr, 16));
   }
   const uint8_t running = assetRollbackIo.running();
+  serviceOtaUpload();
   if (!assetRollback.prepare(running, running ^ 1U, combinedUpdate.firmwareSize, appHash, assetsHash)) {
     error = "asset_backup_or_journal_failed"; return false;
   }
+  serviceOtaUpload();
   assetRollbackStatus = "backup_ready";
   combinedUpdate.firmwareStaged = true;
   resetAssetRawUpload();
@@ -248,6 +277,7 @@ bool finishCombinedBundleFirmware(String &error) {
 bool consumeCombinedBundle(const uint8_t *data, size_t length) {
   size_t offset = 0;
   while (offset < length) {
+    serviceOtaUpload();
     if (combinedBundleUpload.headerRead < sizeof(combinedBundleUpload.header)) {
       const size_t count = std::min(length - offset, sizeof(combinedBundleUpload.header) - combinedBundleUpload.headerRead);
       memcpy(combinedBundleUpload.header + combinedBundleUpload.headerRead, data + offset, count);
@@ -283,8 +313,10 @@ bool consumeCombinedBundle(const uint8_t *data, size_t length) {
     if (combinedBundleUpload.firmwareWritten < combinedUpdate.firmwareSize) {
       const size_t count = std::min(length - offset, static_cast<size_t>(combinedUpdate.firmwareSize) - combinedBundleUpload.firmwareWritten);
       if (!combinedBundleUpload.firmwareWritten && data[offset] != 0xE9) { combinedBundleUpload.error = "not_an_esp32_application"; return false; }
+      serviceOtaUpload();
       if (mbedtls_sha256_update_ret(&combinedBundleUpload.firmwareSha, data + offset, count) != 0 ||
           Update.write(const_cast<uint8_t *>(data + offset), count) != count) { combinedBundleUpload.error = "firmware_write_failed"; return false; }
+      serviceOtaUpload();
       combinedBundleUpload.firmwareWritten += count; offset += count;
       if (combinedBundleUpload.firmwareWritten == combinedUpdate.firmwareSize && !finishCombinedBundleFirmware(combinedBundleUpload.error)) return false;
       continue;
@@ -300,12 +332,17 @@ bool consumeCombinedBundle(const uint8_t *data, size_t length) {
 }
 
 void handleCombinedBundleUpload() {
+  serviceOtaUpload();
   HTTPUpload &upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
     resetAssetRawUpload(); resetCombinedBundleUpload(); combinedUpdate = CombinedUpdatePlan{};
     updateCommitError = "";
     combinedBundleUpload.authorized = otaRequestAuthorized();
     combinedBundleUpload.ok = combinedBundleUpload.authorized && upload.filename.endsWith(".irup");
+    if (combinedBundleUpload.ok) {
+      otaMeasurementMode = true;
+      requestCpuBoost("combined_update");
+    }
     if (!combinedBundleUpload.ok) combinedBundleUpload.error = !combinedBundleUpload.authorized ? "unauthorized" : "signed_irup_bundle_required";
   } else if (upload.status == UPLOAD_FILE_WRITE && combinedBundleUpload.ok) {
     if (!consumeCombinedBundle(upload.buf, upload.currentSize)) { combinedBundleUpload.ok = false; abortCombinedUpdate(); }
@@ -315,13 +352,16 @@ void handleCombinedBundleUpload() {
     if (combinedBundleUpload.ok) combinedUpdate.assetsStaged = true; else abortCombinedUpdate();
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
     combinedBundleUpload.ok = false; combinedBundleUpload.error = "update_bundle_upload_aborted"; abortCombinedUpdate();
+    otaMeasurementMode = false;
   }
 }
 
 void handleCombinedBundleFinished() {
+  serviceOtaUpload();
   if (!combinedBundleUpload.authorized || !combinedBundleUpload.ok || !combinedUpdate.assetsStaged || !commitVerifiedOta()) {
     if (combinedBundleUpload.authorized) abortCombinedUpdate();
     const String error = combinedBundleUpload.error.length() ? combinedBundleUpload.error : updateCommitError.length() ? updateCommitError : "update_bundle_invalid";
+    otaMeasurementMode = false;
     server.send(400, "application/json", "{\"error\":\"" + jsonEscape(error) + "\"}"); return;
   }
   eventLog.add("WARN", "COMBINED_UPDATE", "Signiertes Gesamtupdate installiert: " + String(combinedUpdate.version));
@@ -502,6 +542,10 @@ bool installGithubFirmwareUpdate() {
     return false;
   }
   githubUpdate.installing = true;
+  otaMeasurementMode = true;
+  struct RestoreOtaModeOnExit {
+    ~RestoreOtaModeOnExit() { otaMeasurementMode = false; }
+  } restoreOtaModeOnExit;
   githubUpdate.error = "";
   requestCpuBoost("github_update_install");
   ServicedNetworkClient<WiFiClientSecure, serviceMeterInput> client;
@@ -585,7 +629,8 @@ bool installGithubFirmwareUpdate() {
 }
 
 void manageGithubFirmwareUpdate() {
-  if (!config.githubUpdateCheck || githubUpdate.checking ||
+  if (!productRuntimeAllowsAutomaticUpdate() ||
+      !config.githubUpdateCheck || githubUpdate.checking ||
       githubUpdate.installing || gpioScan.active || irPulse.active ||
       !networkConnected())
     return;
