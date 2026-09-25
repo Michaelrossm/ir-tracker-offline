@@ -2,7 +2,47 @@
 
 ## Deutsch
 
-### Aktuelles Update auf 2.0.0
+### Aktuelles Update auf 2.1.1
+
+1. Einstellungen und vollständige Historie lokal sichern; Stromversorgung stabil halten.
+2. Unter **Wartung → Vollständiges Update** die Datei
+   `ir-tracker-update-2.1.1.irup` hochladen. Firmware und Weboberfläche gehören
+   zusammen; eine separate Asset-Datei ist für den normalen WLAN-Updateweg nicht nötig.
+3. Neustart abwarten und anschließend Firmwareversion, Weboberfläche, Messung und
+   Asset-Version prüfen.
+4. Geräte, die bereits erfolgreich auf 2.0.0 Compact-History migriert wurden,
+   benötigen normalerweise nur dieses vollständige 2.1.1-IRUP.
+5. Bei einem direkten Sprung von einer älteren, noch nicht auf Compact-History
+   migrierten Version gelten weiterhin die Schutzregeln aus 2.0.0: beide
+   validierten App-Slots müssen einen kompatiblen Reader enthalten, bevor die
+   Migration starten darf. Falls erforderlich, dasselbe vollständige IRUP nach
+   dem ersten erfolgreichen Neustart ein zweites Mal installieren.
+6. Ein Mischstand aus Firmware 2.1.1 und Webassets 2.0.0 ist kein vollständiger
+   2.1.1-Zustand. In diesem Fall das vollständige 2.1.1-IRUP erneut installieren.
+
+Neu in 2.1.1 sind unter anderem automatische Zähler-Inbetriebnahme, Safe-Recovery,
+Mess-/History-Service während HTTP-OTA-Uploads, Captive-Portal-Unterstützung,
+gemeinsamer LAN-/WLAN-Adminzugang, 30-MHz-W5500-SPI sowie erweiterte Diagnose.
+Die vollständige Liste steht in
+[RELEASE_NOTES-2.1.1.md](../release/RELEASE_NOTES-2.1.1.md).
+
+**Adminzugang:** LAN und WLAN verwenden dasselbe Admin-Konto. Das aktuell
+wirksame Passwort wird in den geschützten Einstellungen 1:1 angezeigt.
+Neu gesetzte Admin-Passwörter müssen 6–64 Zeichen lang sein. Der WPA2-
+Setup-Hotspot benötigt technisch weiterhin mindestens 8 Zeichen; bei einem
+6- oder 7-stelligen Admin-Passwort verwendet der Setup-Hotspot deshalb weiterhin
+das ursprüngliche gerätespezifische `IRTracker-XXXX`-Passwort.
+
+**Setup-Hotspot:** Gängige Captive-Portal-Erkennung von Android, iOS/macOS und
+Windows wird unterstützt. Falls kein automatisches Portal erscheint, bleibt
+`http://192.168.4.1/setup` der direkte lokale Einstieg.
+
+**Wichtig:** Ein normales WLAN-/IRUP-Update verändert die Partitionstabelle nicht.
+`.irup` niemals in `.irfw` umbenennen.
+
+### Historischer 2.0.0-Migrationshinweis
+
+
 
 1. Einstellungen und vollständige Historie lokal sichern; Stromversorgung stabil halten.
 2. Bei vorhandenem **Vollständiges Update (.irup)** die Datei
@@ -93,7 +133,44 @@ Dies überschreibt bewusst den vollständigen Flash und entfernt Custom-Firmware
 
 ## English
 
-### Current 2.0.0 upgrade
+### Current 2.1.1 upgrade
+
+1. Back up settings and the complete local history and keep power stable.
+2. Upload `ir-tracker-update-2.1.1.irup` under **Maintenance → Complete update**.
+   Firmware and web UI belong together; no separate asset file is required for
+   the normal Wi-Fi update path.
+3. Wait for reboot, then verify firmware version, web UI, meter operation and
+   asset version.
+4. Devices already successfully migrated to 2.0.0 Compact History normally need
+   only this one complete 2.1.1 IRUP update.
+5. When jumping directly from an older pre-Compact-History version, the 2.0.0
+   migration safety rule still applies: both validated application slots must
+   contain a compatible reader before migration may start. If required, install
+   the same complete IRUP a second time after the first successful reboot.
+6. A mixed firmware 2.1.1 / web-assets 2.0.0 state is not a complete 2.1.1
+   installation. Reinstall the complete 2.1.1 IRUP in that case.
+
+2.1.1 adds automatic meter commissioning, Safe Recovery, meter/history servicing
+during HTTP OTA uploads, captive-portal support, one shared LAN/Wi-Fi
+administrator account, 30 MHz W5500 SPI, and extended diagnostics. See
+[RELEASE_NOTES-2.1.1.md](../release/RELEASE_NOTES-2.1.1.md) for the full list.
+
+**Administrator access:** LAN and Wi-Fi use the same administrator account. The
+currently effective password is displayed exactly in protected Settings.
+New administrator passwords must contain 6–64 characters. WPA2 still requires
+at least 8 characters for the setup AP, so a 6- or 7-character administrator
+password leaves the original per-device `IRTracker-XXXX` setup-AP password in use.
+
+**Setup access point:** Common Android, iOS/macOS and Windows captive-portal
+detection is supported. If no automatic portal appears,
+`http://192.168.4.1/setup` remains the direct local setup address.
+
+**Important:** A normal Wi-Fi/IRUP update does not replace the partition table.
+Never rename `.irup` to `.irfw`.
+
+### Historical 2.0.0 migration note
+
+
 
 Back up settings and all history first. Upload `ir-tracker-update-2.0.0.irup`
 through **Complete update**, wait for a successful reboot, then manually upload
